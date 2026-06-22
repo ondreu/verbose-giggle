@@ -1,6 +1,6 @@
 import type { Actor, ActiveCondition, ConditionName, DamageType } from "@adm/schemas";
 import { roll, rollD20 } from "./dice.js";
-import type { Advantage } from "./checks.js";
+import { savingThrow, type Advantage } from "./checks.js";
 import { abilityMod, actorAc, getActor, log, type GameState } from "./state.js";
 
 function damageMultiplier(actor: Actor, type?: string): { mult: number; tag: string } {
@@ -55,6 +55,33 @@ export function applyDamage(
     tool: "apply_damage",
     result: { hp_before: hpBefore, hp_after: target.hp.current, resisted: mult === 0.5, dropped },
   });
+
+  // Concentration check on taking damage (§8.1). Dropping to 0 HP breaks it
+  // outright; otherwise a CON save vs DC = max(10, ⌊damage/2⌋).
+  if (target.concentration) {
+    if (dropped) {
+      log(state, {
+        kind: "concentration",
+        target: args.target,
+        detail: `${target.name} ztrácí soustředění na ${target.concentration.spell} (v bezvědomí)`,
+        tool: "apply_damage",
+      });
+      target.concentration = null;
+    } else if (amount > 0) {
+      const dc = Math.max(10, Math.floor(amount / 2));
+      const save = savingThrow(state, { actor: args.target, ability: "con", dc });
+      if (!save.success) {
+        log(state, {
+          kind: "concentration",
+          target: args.target,
+          detail: `${target.name} ztrácí soustředění na ${target.concentration.spell}`,
+          tool: "apply_damage",
+        });
+        target.concentration = null;
+      }
+    }
+  }
+
   return {
     hp_before: hpBefore,
     hp_after: target.hp.current,

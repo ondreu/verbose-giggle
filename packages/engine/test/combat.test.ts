@@ -31,6 +31,41 @@ describe("apply_damage", () => {
   });
 });
 
+describe("concentration on damage", () => {
+  it("breaks concentration outright when dropped to 0 HP", () => {
+    const a = makeActor({
+      id: "c",
+      name: "Caster",
+      hp: { max: 10, current: 4, temp: 0 },
+      concentration: { spell: "Bless", dc_to_maintain: 10 },
+    });
+    const state = makeState([a], "conc-drop");
+    applyDamage(state, { target: "c", amount: 9 });
+    expect(a.hp.current).toBe(0);
+    expect(a.concentration).toBeNull();
+    expect(state.session.log.some((l) => l.kind === "concentration")).toBe(true);
+  });
+
+  it("rolls a CON save on non-lethal damage (search a failing seed)", () => {
+    let broke = false;
+    for (let i = 0; i < 60 && !broke; i++) {
+      const a = makeActor({
+        id: "c",
+        name: "Caster",
+        hp: { max: 50, current: 50, temp: 0 },
+        abilities: { str: 10, dex: 10, con: 8, int: 10, wis: 10, cha: 10 },
+        concentration: { spell: "Bless", dc_to_maintain: 10 },
+      });
+      const state = makeState([a], `cs-${i}`);
+      applyDamage(state, { target: "c", amount: 30 }); // DC 15 save
+      const hasSave = state.session.log.some((l) => l.kind === "save");
+      expect(hasSave).toBe(true); // a save is always rolled
+      if (a.concentration === null) broke = true;
+    }
+    expect(broke).toBe(true);
+  });
+});
+
 describe("heal", () => {
   it("caps at max and revives from 0", () => {
     const a = makeActor({

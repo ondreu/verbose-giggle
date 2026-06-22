@@ -26,11 +26,19 @@ interface GameStore {
   narration: NarrationLine[];
   ttsEnabled: boolean;
   reachable: Cell[];
+  aoeCells: Cell[];
 
   hydrate: () => Promise<void>;
   connect: () => void;
   sendAction: (input: string) => Promise<void>;
   sendCommand: (tool: string, args: unknown) => Promise<void>;
+  castAoe: (args: {
+    shape: string;
+    origin: Cell;
+    size: number;
+    direction?: Cell;
+  }) => Promise<string[]>;
+  clearAoe: () => void;
   startEncounter: (id: string) => Promise<void>;
   fetchReachable: (actor: string) => Promise<void>;
   toggleTts: () => void;
@@ -52,6 +60,7 @@ export const useGame = create<GameStore>((set, get) => ({
   narration: [],
   ttsEnabled: false,
   reachable: [],
+  aoeCells: [],
 
   hydrate: async () => {
     const res = await fetch("/api/state");
@@ -145,6 +154,23 @@ export const useGame = create<GameStore>((set, get) => ({
       set({ busy: false });
     }
   },
+
+  castAoe: async (args) => {
+    try {
+      const res = await fetch("/api/command", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tool: "aoe", args }),
+      });
+      const data = await res.json();
+      const result = data?.result ?? {};
+      set({ aoeCells: Array.isArray(result.cells) ? result.cells : [] });
+      return Array.isArray(result.tokens) ? result.tokens : [];
+    } catch {
+      return [];
+    }
+  },
+  clearAoe: () => set({ aoeCells: [] }),
 
   startEncounter: async (id: string) => {
     set({ busy: true });
