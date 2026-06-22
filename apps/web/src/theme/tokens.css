@@ -42,8 +42,10 @@
       radial-gradient(80% 60% at 100% 110%, rgba(217, 122, 52, 0.04), transparent 60%);
     color: var(--text);
     font-family: "EB Garamond", Georgia, serif;
-    font-size: 17px;
-    line-height: 1.55;
+    /* #7 legibility: the display serif is pretty but light on a dark ground —
+       give body copy a touch more size and leading so prose stays readable. */
+    font-size: 18px;
+    line-height: 1.6;
     -webkit-font-smoothing: antialiased;
   }
   h1,

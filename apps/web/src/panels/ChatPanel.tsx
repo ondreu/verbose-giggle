@@ -89,7 +89,7 @@ export function ChatPanel() {
             key={line.id}
             className={
               line.role === "dm"
-                ? "mb-4 font-body text-[1.05rem] leading-relaxed text-text"
+                ? "mb-4 font-body text-[1.12rem] font-medium leading-relaxed text-text"
                 : "mb-4 border-l-2 border-gold/40 pl-3 font-body italic text-subtext1"
             }
           >
