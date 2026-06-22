@@ -16,11 +16,12 @@ export function loadConfig(): Config {
   const llmApiKey = process.env.LLM_API_KEY ?? "";
 
   const imageBaseUrl = process.env.IMAGE_BASE_URL ?? null;
+  const isMistral = imageBaseUrl?.includes("mistral.ai") ?? false;
   const image = imageBaseUrl
     ? {
         baseUrl: imageBaseUrl,
         apiKey: process.env.IMAGE_API_KEY || llmApiKey,
-        model: process.env.IMAGE_MODEL ?? "dall-e-3",
+        model: process.env.IMAGE_MODEL ?? (isMistral ? "mistral-medium-2505" : "dall-e-3"),
       }
     : null;
 

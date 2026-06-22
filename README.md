@@ -90,8 +90,8 @@ Read by `apps/server/src/config.ts`. See [`.env.example`](.env.example) for the 
 | `WEB_DIST` | `../../web/dist` | No | Path to the built web client. The Docker image sets `/app/apps/web/dist`. |
 | `PORT` | `3000` | No | HTTP port. |
 | `HOST` | `0.0.0.0` | No | Bind host. |
-| `IMAGE_BASE_URL` | _(unset → disabled)_ | No | Base URL of an OpenAI-compatible image generation endpoint. Enables on-demand portraits and scene images in the UI. |
-| `IMAGE_MODEL` | `dall-e-3` | No | Image model ID (e.g. `dall-e-3`, `black-forest-labs/FLUX.1-schnell-free`). |
+| `IMAGE_BASE_URL` | _(unset → disabled)_ | No | Image generation base URL. Set to `https://api.mistral.ai/v1` to use Mistral (Agents + image_generation tool), or any OpenAI-compatible endpoint (DALL-E, Together AI). |
+| `IMAGE_MODEL` | `mistral-medium-2505` / `dall-e-3` | No | Model ID. Defaults to `mistral-medium-2505` when base URL contains `mistral.ai`, otherwise `dall-e-3`. |
 | `IMAGE_API_KEY` | _(falls back to `LLM_API_KEY`)_ | No | API key for the image provider. |
 
 ## Docker / NAS deployment

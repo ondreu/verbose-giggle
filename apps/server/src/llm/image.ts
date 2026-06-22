@@ -11,11 +11,15 @@ export interface ImageResult {
   prompt: string;
 }
 
-interface ImagesResponse {
+// ---------------------------------------------------------------------------
+// OpenAI-compatible client (DALL-E, Together AI FLUX, etc.)
+// POST /images/generations → { data: [{ url?, b64_json? }] }
+// ---------------------------------------------------------------------------
+interface OpenAIImagesResponse {
   data: Array<{ url?: string; b64_json?: string }>;
 }
 
-export class ImageClient {
+class OpenAIImageClient {
   constructor(private cfg: NonNullable<Config["image"]>) {}
 
   async generate(prompt: string): Promise<ImageResult> {
@@ -31,7 +35,7 @@ export class ImageClient {
       const text = await res.text().catch(() => res.statusText);
       throw new Error(`Image API ${res.status}: ${text}`);
     }
-    const body = (await res.json()) as ImagesResponse;
+    const body = (await res.json()) as OpenAIImagesResponse;
     const item = body.data?.[0];
     if (!item) throw new Error("Prázdná odpověď z image API");
     const url =
@@ -42,7 +46,120 @@ export class ImageClient {
   }
 }
 
-/** Build a descriptive image prompt from structured game data. */
+// ---------------------------------------------------------------------------
+// Mistral client — uses Agents + Conversations + Files APIs
+// 1. POST /v1/agents  (lazy, created once per instance)
+// 2. POST /v1/conversations  → file_id in tool_file chunk
+// 3. GET  /v1/files/{file_id}/content  → binary → base64 data URL
+// ---------------------------------------------------------------------------
+interface MistralAgentResponse { id: string }
+interface MistralConversationOutput {
+  type: string;
+  content?: Array<{
+    type: string;
+    text?: string;
+    file_id?: string;
+    file_name?: string;
+  }>;
+}
+interface MistralConversationResponse {
+  outputs: MistralConversationOutput[];
+}
+
+class MistralImageClient {
+  private agentId: string | null = null;
+
+  constructor(private cfg: NonNullable<Config["image"]>) {}
+
+  private async ensureAgent(): Promise<string> {
+    if (this.agentId) return this.agentId;
+    const res = await fetch(`${this.cfg.baseUrl}/agents`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${this.cfg.apiKey}`,
+      },
+      body: JSON.stringify({
+        model: this.cfg.model,
+        name: "adm-image-gen",
+        instructions:
+          "You are an image generation assistant for a D&D game. " +
+          "When asked to create an image, always use the image_generation tool immediately.",
+        tools: [{ type: "image_generation" }],
+      }),
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => res.statusText);
+      throw new Error(`Mistral create agent ${res.status}: ${text}`);
+    }
+    const body = (await res.json()) as MistralAgentResponse;
+    this.agentId = body.id;
+    return this.agentId;
+  }
+
+  async generate(prompt: string): Promise<ImageResult> {
+    const agentId = await this.ensureAgent();
+
+    const convRes = await fetch(`${this.cfg.baseUrl}/conversations`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${this.cfg.apiKey}`,
+      },
+      body: JSON.stringify({ agent_id: agentId, inputs: prompt, stream: false }),
+    });
+    if (!convRes.ok) {
+      const text = await convRes.text().catch(() => convRes.statusText);
+      throw new Error(`Mistral conversations ${convRes.status}: ${text}`);
+    }
+    const conv = (await convRes.json()) as MistralConversationResponse;
+
+    // Find the first tool_file chunk across all outputs
+    let fileId: string | null = null;
+    for (const output of conv.outputs ?? []) {
+      for (const chunk of output.content ?? []) {
+        if (chunk.type === "tool_file" && chunk.file_id) {
+          fileId = chunk.file_id;
+          break;
+        }
+      }
+      if (fileId) break;
+    }
+    if (!fileId) throw new Error("Mistral nevrátil žádný obrázek (file_id nenalezeno)");
+
+    const fileRes = await fetch(`${this.cfg.baseUrl}/files/${encodeURIComponent(fileId)}/content`, {
+      headers: { Authorization: `Bearer ${this.cfg.apiKey}` },
+    });
+    if (!fileRes.ok) {
+      throw new Error(`Mistral files ${fileRes.status}: ${fileRes.statusText}`);
+    }
+    const buf = Buffer.from(await fileRes.arrayBuffer());
+    const mime = fileRes.headers.get("content-type") ?? "image/png";
+    const url = `data:${mime};base64,${buf.toString("base64")}`;
+    return { url, prompt };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Factory — picks the right client based on base URL
+// ---------------------------------------------------------------------------
+export class ImageClient {
+  private inner: OpenAIImageClient | MistralImageClient;
+
+  constructor(cfg: NonNullable<Config["image"]>) {
+    this.inner = cfg.baseUrl.includes("mistral.ai")
+      ? new MistralImageClient(cfg)
+      : new OpenAIImageClient(cfg);
+  }
+
+  generate(prompt: string): Promise<ImageResult> {
+    return this.inner.generate(prompt);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Prompt builder
+// ---------------------------------------------------------------------------
 export function buildPrompt(
   subject: ImageSubject,
   actors: Record<string, Actor>,
