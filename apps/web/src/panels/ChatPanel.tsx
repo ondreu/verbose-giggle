@@ -6,6 +6,7 @@ export function ChatPanel() {
   const narration = useGame((s) => s.narration);
   const busy = useGame((s) => s.busy);
   const thinking = useGame((s) => s.thinking);
+  const aiActing = useGame((s) => s.aiActing);
   const error = useGame((s) => s.error);
   const ttsEnabled = useGame((s) => s.ttsEnabled);
   const sendAction = useGame((s) => s.sendAction);
@@ -15,7 +16,7 @@ export function ChatPanel() {
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [narration.length, thinking]);
+  }, [narration.length, thinking, aiActing]);
 
   const submit = () => {
     const text = input.trim();
@@ -64,6 +65,12 @@ export function ChatPanel() {
             {line.text}
           </p>
         ))}
+        {aiActing && (
+          <p className="mb-2 flex items-center gap-1.5 font-display text-sm tracking-wide text-arcane">
+            <Icon name="d20" size={14} className="animate-pulse" />
+            {aiActing} koná svůj tah…
+          </p>
+        )}
         {thinking && (
           <p className="font-log text-xs text-arcane">
             <Icon name="d20" size={12} className="mr-1 inline animate-pulse" />

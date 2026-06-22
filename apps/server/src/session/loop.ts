@@ -127,6 +127,7 @@ async function runAiTurn(opts: {
   const { manager, llm, bus, gs, actorId } = opts;
   const actor = gs.actors[actorId];
   if (!actor) return;
+  bus.emit({ type: "actor_turn", actor: actorId, name: actor.name, controller: "ai" });
   const { enemies, allies } = factionLists(manager, gs, actorId);
 
   const messages: ChatMsg[] = [

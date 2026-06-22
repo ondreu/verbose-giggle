@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { aoe, distanceFt, move, startCombat } from "../src/index.js";
+import { aoe, distanceFt, move, reachableCells, startCombat } from "../src/index.js";
 import { makeActor, makeState } from "./helpers.js";
 
 describe("distance (5-5-5)", () => {
@@ -45,6 +45,20 @@ describe("move", () => {
     expect(r.ok).toBe(true);
     // Should not land on b's cell.
     expect(state.session.combat?.tokens["a"]).toEqual({ x: 2, y: 0 });
+  });
+});
+
+describe("reachableCells", () => {
+  it("includes cells within the movement budget and excludes far ones", () => {
+    const a = makeActor({ id: "a", name: "Mover", speed: 30, position: { x: 5, y: 5 } });
+    const state = makeState([a]);
+    startCombat(state, { participants: ["a"], grid: { w: 20, h: 20, cell_ft: 5 } });
+    const { cells, budget } = reachableCells(state, { actor: "a" });
+    expect(budget).toBe(30);
+    const has = (x: number, y: number) => cells.some((c) => c.x === x && c.y === y);
+    expect(has(6, 5)).toBe(true); // 5ft away
+    expect(has(11, 5)).toBe(true); // 6 cells = 30ft, exactly within budget
+    expect(has(12, 5)).toBe(false); // 35ft — out of budget
   });
 });
 

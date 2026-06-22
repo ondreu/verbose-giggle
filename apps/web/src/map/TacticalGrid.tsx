@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useGame } from "../store/store";
 import { Icon } from "../components/Icon";
 
@@ -15,7 +16,17 @@ export function TacticalGrid({ embedded = false }: { embedded?: boolean }) {
   const actors = useGame((s) => s.actors);
   const locations = useGame((s) => s.locations);
   const sendCommand = useGame((s) => s.sendCommand);
+  const reachable = useGame((s) => s.reachable);
+  const fetchReachable = useGame((s) => s.fetchReachable);
   const combat = session?.combat;
+  const activeForFetch = combat?.order[combat.turn_index]?.actor ?? null;
+  const tokenKey = combat ? JSON.stringify(combat.tokens) : "";
+
+  // Recompute reachable cells (engine-authoritative) whenever the active actor,
+  // round, or token layout changes.
+  useEffect(() => {
+    if (combat && activeForFetch) void fetchReachable(activeForFetch);
+  }, [combat ? 1 : 0, activeForFetch, combat?.round, tokenKey, fetchReachable]);
 
   if (!combat) {
     const loc = session ? locations[session.current_location] : null;
@@ -61,6 +72,21 @@ export function TacticalGrid({ embedded = false }: { embedded?: boolean }) {
               x2={w * CELL}
               y2={y * CELL}
               stroke="rgba(216,205,180,0.08)"
+            />
+          ))}
+
+          {/* Reachable cells for the active actor (engine-computed) */}
+          {reachable.map((c) => (
+            <rect
+              key={`r${c.x}-${c.y}`}
+              x={c.x * CELL + 2}
+              y={c.y * CELL + 2}
+              width={CELL - 4}
+              height={CELL - 4}
+              fill="var(--arcane)"
+              opacity={0.12}
+              rx={2}
+              pointerEvents="none"
             />
           ))}
 

@@ -155,6 +155,63 @@ export function move(state: GameState, args: { actor: string; to: Position }): M
   return { ok: true, path, cost, remaining };
 }
 
+/**
+ * All cells the actor can reach this turn within its remaining movement budget,
+ * respecting walls, occupied cells, and difficult terrain. Used by the UI to
+ * highlight legal destinations before a move (§10.2) — engine-computed, never
+ * guessed by the model.
+ */
+export function reachableCells(
+  state: GameState,
+  args: { actor: string },
+): { cells: Position[]; budget: number } {
+  const c = state.session.combat;
+  if (!c) return { cells: [], budget: 0 };
+  const actor = getActor(state, args.actor);
+  const from = c.tokens[args.actor] ?? actor.position;
+  if (!from) return { cells: [], budget: 0 };
+
+  const { w, h, cell_ft } = c.grid;
+  const { blocked, difficult } = buildCostMap(state, args.actor);
+  const budget = c.budget?.movement ?? actor.speed;
+  const rule = state.variant.diagonals;
+
+  const dist = new Map<string, number>();
+  dist.set(key(from.x, from.y), 0);
+  const queue: { pos: Position; cost: number; diagParity: number }[] = [
+    { pos: from, cost: 0, diagParity: 0 },
+  ];
+  const cells: Position[] = [];
+
+  while (queue.length > 0) {
+    queue.sort((a, b) => a.cost - b.cost);
+    const cur = queue.shift()!;
+    if (cur.cost > (dist.get(key(cur.pos.x, cur.pos.y)) ?? Infinity)) continue;
+    for (let dx = -1; dx <= 1; dx++) {
+      for (let dy = -1; dy <= 1; dy++) {
+        if (dx === 0 && dy === 0) continue;
+        const nx = cur.pos.x + dx;
+        const ny = cur.pos.y + dy;
+        if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+        const nk = key(nx, ny);
+        if (blocked.has(nk)) continue;
+        const diagonal = dx !== 0 && dy !== 0;
+        let stepFt = cell_ft;
+        if (diagonal && rule === "5-10-5") stepFt = cur.diagParity % 2 === 1 ? cell_ft * 2 : cell_ft;
+        if (difficult.has(nk)) stepFt *= 2;
+        const nextCost = cur.cost + stepFt;
+        if (nextCost > budget) continue;
+        if (nextCost < (dist.get(nk) ?? Infinity)) {
+          dist.set(nk, nextCost);
+          cells.push({ x: nx, y: ny });
+          queue.push({ pos: { x: nx, y: ny }, cost: nextCost, diagParity: cur.diagParity + (diagonal ? 1 : 0) });
+        }
+      }
+    }
+  }
+  return { cells, budget };
+}
+
 export type AoeShape = "sphere" | "cube" | "cone" | "line";
 
 export interface AoeResult {

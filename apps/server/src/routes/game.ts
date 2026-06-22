@@ -86,6 +86,13 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
     }
   });
 
+  /** Read-only: cells the actor can reach this turn (for grid highlighting). */
+  app.get<{ Params: { actor: string } }>("/api/reachable/:actor", async (req) => {
+    const gs = ctx.manager.buildGameState();
+    const result = await ctx.manager.applyTool(gs, "reachable", { actor: req.params.actor });
+    return result.ok ? result.result : { cells: [], budget: 0 };
+  });
+
   /** Player free-text action → the LLM/engine turn loop. */
   app.post<{ Body: { input: string } }>("/api/action", async (req, reply) => {
     const input = (req.body?.input ?? "").trim();

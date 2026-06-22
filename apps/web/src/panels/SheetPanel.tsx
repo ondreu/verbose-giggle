@@ -17,6 +17,7 @@ type Abilities = { str: number; dex: number; con: number; int: number; wis: numb
 export function SheetPanel() {
   const session = useGame((s) => s.session);
   const actors = useGame((s) => s.actors);
+  const sendCommand = useGame((s) => s.sendCommand);
   const activeId = session?.active_player ?? null;
   const actor = activeId ? actors[activeId] : null;
 
@@ -32,6 +33,8 @@ export function SheetPanel() {
   const overlayHp = session?.actors[actor.id]?.hp?.current ?? actor.hp.current;
   const conditions = session?.actors[actor.id]?.conditions ?? actor.conditions;
   const hpPct = Math.max(0, Math.min(100, (overlayHp / actor.hp.max) * 100));
+  const downed = overlayHp <= 0;
+  const ds = actor.death_saves ?? { success: 0, fail: 0 };
 
   return (
     <section className="parchment flex flex-col p-4 font-body">
@@ -101,6 +104,34 @@ export function SheetPanel() {
                 ))}
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Death saves — shown when the actor is down at 0 HP */}
+      {downed && (
+        <div className="mt-3 rounded-sm border border-blood/40 bg-blood/10 p-2">
+          <div className="mb-1 flex items-center gap-2">
+            <Icon name="skull" size={14} className="text-blood" />
+            <span className="text-[11px] uppercase tracking-wider text-blood">Záchrana před smrtí</span>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1" title="úspěchy">
+              {[0, 1, 2].map((i) => (
+                <span key={i} className="h-3 w-3 rounded-full border border-verdigris" style={{ background: i < ds.success ? "var(--verdigris)" : "transparent" }} />
+              ))}
+            </div>
+            <div className="flex items-center gap-1" title="neúspěchy">
+              {[0, 1, 2].map((i) => (
+                <span key={i} className="h-3 w-3 rounded-full border border-blood" style={{ background: i < ds.fail ? "var(--blood)" : "transparent" }} />
+              ))}
+            </div>
+            <button
+              className="btn-gold ml-auto px-2 py-0.5 text-[11px]"
+              onClick={() => void sendCommand("death_save", { actor: actor.id })}
+            >
+              Hodit
+            </button>
           </div>
         </div>
       )}

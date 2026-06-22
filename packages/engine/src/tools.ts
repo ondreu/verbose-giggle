@@ -7,11 +7,12 @@ import {
   applyCondition,
   applyDamage,
   attack,
+  deathSave,
   heal,
   removeCondition,
 } from "./combat.js";
 import { castSpell, concentrationCheck } from "./spells.js";
-import { aoe, move } from "./grid.js";
+import { aoe, move, reachableCells } from "./grid.js";
 import { endCombat, nextTurn, startCombat } from "./turns.js";
 import { longRest, shortRest } from "./rest.js";
 
@@ -280,6 +281,22 @@ export const TOOLS: ToolDef[] = [
       required: ["actor", "to"],
     },
     handler: (state, args) => move(state, args),
+  }),
+  def({
+    name: "death_save",
+    description: "Roll a death saving throw for a downed actor (DC 10 flat d20).",
+    readOnly: false,
+    schema: z.object({ actor: z.string() }),
+    parameters: { type: "object", properties: { actor: { type: "string" } }, required: ["actor"] },
+    handler: (state, args) => deathSave(state, args),
+  }),
+  def({
+    name: "reachable",
+    description: "Read-only: cells an actor can reach this turn within its movement budget.",
+    readOnly: true,
+    schema: z.object({ actor: z.string() }),
+    parameters: { type: "object", properties: { actor: { type: "string" } }, required: ["actor"] },
+    handler: (state, args) => reachableCells(state, args),
   }),
   def({
     name: "aoe",

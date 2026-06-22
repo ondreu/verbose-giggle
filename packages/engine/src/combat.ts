@@ -184,6 +184,81 @@ export function attack(
   };
 }
 
+export interface DeathSaveResult {
+  roll: number;
+  success: boolean;
+  successes: number;
+  failures: number;
+  outcome: "dying" | "stable" | "revived" | "dead";
+  detail: string;
+}
+
+/**
+ * A death saving throw (SRD): DC 10 flat d20. Nat 20 revives with 1 HP; nat 1
+ * counts as two failures. Three successes → stable; three failures → dead.
+ */
+export function deathSave(state: GameState, args: { actor: string }): DeathSaveResult {
+  const actor = getActor(state, args.actor);
+  // Death saves only apply to a creature at 0 HP that isn't yet stable/dead.
+  if (actor.hp.current > 0) {
+    return {
+      roll: 0,
+      success: false,
+      successes: actor.death_saves.success,
+      failures: actor.death_saves.fail,
+      outcome: "stable",
+      detail: `${actor.name} není v bezvědomí — záchrana před smrtí se neprovádí.`,
+    };
+  }
+  const d = rollD20(state.rng);
+  const ds = actor.death_saves;
+  let outcome: DeathSaveResult["outcome"] = "dying";
+  let success = false;
+
+  if (d.natural === 20) {
+    actor.hp.current = 1;
+    actor.conditions = actor.conditions.filter((c) => c.name !== "unconscious");
+    actor.death_saves = { success: 0, fail: 0 };
+    outcome = "revived";
+    success = true;
+  } else if (d.natural === 1) {
+    ds.fail = Math.min(3, ds.fail + 2);
+  } else if (d.natural >= 10) {
+    ds.success = Math.min(3, ds.success + 1);
+    success = true;
+  } else {
+    ds.fail = Math.min(3, ds.fail + 1);
+  }
+
+  if (outcome !== "revived") {
+    if (ds.success >= 3) {
+      outcome = "stable";
+      actor.death_saves = { success: 0, fail: 0 };
+    } else if (ds.fail >= 3) {
+      outcome = "dead";
+    }
+  }
+
+  const detail =
+    `${actor.name} záchrana před smrtí: d20 ${d.natural} → ` +
+    (outcome === "revived"
+      ? "NÁVRAT (1 HP)!"
+      : outcome === "stable"
+        ? "stabilizován"
+        : outcome === "dead"
+          ? "umírá"
+          : `${success ? "úspěch" : "neúspěch"} (${actor.death_saves.success}✓/${actor.death_saves.fail}✗)`);
+  log(state, { kind: "death-save", actor: args.actor, detail, tool: "death_save", result: { outcome } });
+  return {
+    roll: d.natural,
+    success,
+    successes: actor.death_saves.success,
+    failures: actor.death_saves.fail,
+    outcome,
+    detail,
+  };
+}
+
 export function applyCondition(
   state: GameState,
   args: { target: string; condition: ConditionName; source?: string; duration?: number | null },

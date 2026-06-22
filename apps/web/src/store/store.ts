@@ -7,10 +7,16 @@ interface NarrationLine {
   text: string;
 }
 
+interface Cell {
+  x: number;
+  y: number;
+}
+
 interface GameStore {
   connected: boolean;
   busy: boolean;
   thinking: string | null;
+  aiActing: string | null;
   error: string | null;
   campaign: Campaign | null;
   session: SessionState | null;
@@ -18,11 +24,13 @@ interface GameStore {
   locations: Record<string, Location>;
   narration: NarrationLine[];
   ttsEnabled: boolean;
+  reachable: Cell[];
 
   hydrate: () => Promise<void>;
   connect: () => void;
   sendAction: (input: string) => Promise<void>;
   sendCommand: (tool: string, args: unknown) => Promise<void>;
+  fetchReachable: (actor: string) => Promise<void>;
   toggleTts: () => void;
 }
 
@@ -32,6 +40,7 @@ export const useGame = create<GameStore>((set, get) => ({
   connected: false,
   busy: false,
   thinking: null,
+  aiActing: null,
   error: null,
   campaign: null,
   session: null,
@@ -39,6 +48,7 @@ export const useGame = create<GameStore>((set, get) => ({
   locations: {},
   narration: [],
   ttsEnabled: false,
+  reachable: [],
 
   hydrate: async () => {
     const res = await fetch("/api/state");
@@ -79,11 +89,18 @@ export const useGame = create<GameStore>((set, get) => ({
     });
     source.addEventListener("state", (e) => {
       const { state } = JSON.parse((e as MessageEvent).data) as { state: SessionState };
-      set({ session: state, thinking: null });
+      // Clear the "AI is acting" banner once the pointer rests on a human.
+      const active = state.combat?.order[state.combat.turn_index]?.actor;
+      const activeIsHuman = active ? get().actors[active]?.controller === "human" : true;
+      set({ session: state, thinking: null, aiActing: activeIsHuman ? null : get().aiActing });
     });
     source.addEventListener("thinking", (e) => {
       const { tool } = JSON.parse((e as MessageEvent).data);
       set({ thinking: tool });
+    });
+    source.addEventListener("actor_turn", (e) => {
+      const { name, controller } = JSON.parse((e as MessageEvent).data);
+      set({ aiActing: controller === "ai" ? name : null });
     });
     source.addEventListener("error", () => set({ connected: false }));
   },
@@ -122,6 +139,17 @@ export const useGame = create<GameStore>((set, get) => ({
       });
     } finally {
       set({ busy: false });
+    }
+  },
+
+  fetchReachable: async (actor: string) => {
+    try {
+      const res = await fetch(`/api/reachable/${encodeURIComponent(actor)}`);
+      if (!res.ok) return set({ reachable: [] });
+      const data = await res.json();
+      set({ reachable: Array.isArray(data.cells) ? data.cells : [] });
+    } catch {
+      set({ reachable: [] });
     }
   },
 

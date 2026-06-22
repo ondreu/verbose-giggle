@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyDamage, attack, heal } from "../src/index.js";
+import { applyDamage, attack, deathSave, heal } from "../src/index.js";
 import { makeActor, makeState } from "./helpers.js";
 
 describe("apply_damage", () => {
@@ -43,6 +43,40 @@ describe("heal", () => {
     const r = heal(state, { target: "t", amount: 20 });
     expect(r.hp_after).toBe(10);
     expect(a.conditions.some((c) => c.name === "unconscious")).toBe(false);
+  });
+});
+
+describe("death saves", () => {
+  it("resolve to a terminal outcome with valid counts", () => {
+    const a = makeActor({
+      id: "t",
+      name: "Downed",
+      hp: { max: 10, current: 0, temp: 0 },
+      conditions: [{ name: "unconscious", source: "0 hp", duration: null }],
+    });
+    const state = makeState([a], "death");
+    let outcome = "dying";
+    for (let i = 0; i < 12 && outcome === "dying"; i++) {
+      const r = deathSave(state, { actor: "t" });
+      outcome = r.outcome;
+      expect(a.death_saves.success).toBeLessThanOrEqual(3);
+      expect(a.death_saves.fail).toBeLessThanOrEqual(3);
+    }
+    expect(["stable", "dead", "revived"]).toContain(outcome);
+  });
+
+  it("nat 20 revives at 1 hp (search seeds; ~certain to hit a 20)", () => {
+    let revived = false;
+    for (let i = 0; i < 200 && !revived; i++) {
+      const a = makeActor({ id: "t", name: "D", hp: { max: 10, current: 0, temp: 0 }, conditions: [{ name: "unconscious", duration: null }] });
+      const r = deathSave(makeState([a], `seed-${i}`), { actor: "t" });
+      if (r.outcome === "revived") {
+        revived = true;
+        expect(a.hp.current).toBe(1);
+        expect(a.conditions.some((c) => c.name === "unconscious")).toBe(false);
+      }
+    }
+    expect(revived).toBe(true);
   });
 });
 
