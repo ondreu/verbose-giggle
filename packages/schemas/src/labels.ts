@@ -23,6 +23,29 @@ export const CONDITION_CS: Record<ConditionName, string> = {
   unconscious: "v bezvědomí",
 };
 
+/**
+ * Short Czech rules descriptions for each condition (#34). Surfaced as tooltips/
+ * popovers on the sheet's condition chips. (A fuller localization can later draw
+ * on the SRD Conditions dataset, #21.)
+ */
+export const CONDITION_DESC_CS: Record<ConditionName, string> = {
+  blinded: "Nevidíš: automaticky selháváš u zkoušek vyžadujících zrak. Útoky na tebe mají výhodu, tvé útoky nevýhodu.",
+  charmed: "Nemůžeš útočit na původce ani ho cílit škodlivými efekty. Původce má výhodu na společenské zkoušky vůči tobě.",
+  deafened: "Neslyšíš a automaticky selháváš u zkoušek vyžadujících sluch.",
+  exhaustion: "Vyčerpání: ve stupních přidává postihy ke zkouškám i rychlosti; nejvyšší stupeň znamená smrt.",
+  frightened: "Dokud vidíš zdroj strachu, máš nevýhodu na zkoušky i útoky a nemůžeš se k němu dobrovolně přiblížit.",
+  grappled: "Sevřen: tvá rychlost je 0, nemůžeš se pohybovat.",
+  incapacitated: "Neschopen jednat: nemůžeš provádět akce ani reakce.",
+  invisible: "Neviditelný: útoky na tebe mají nevýhodu, tvé útoky výhodu.",
+  paralyzed: "Ochromen: neschopen jednat, nehýbeš se ani nemluvíš. Útoky zblízka jsou automaticky kritické.",
+  petrified: "Zkamenělý: neschopen jednat, odolnost vůči zranění, imunita vůči jedu a nemoci.",
+  poisoned: "Otráven: nevýhoda na útoky a na zkoušky vlastností.",
+  prone: "Na zemi: pohyb jen plazením, nevýhoda na útoky. Útoky zblízka na tebe mají výhodu, na dálku nevýhodu.",
+  restrained: "Spoután: rychlost 0, nevýhoda na útoky a na záchrany Obratnosti. Útoky na tebe mají výhodu.",
+  stunned: "Omráčen: neschopen jednat, nehýbeš se, mluvíš zajíkavě. Útoky na tebe mají výhodu.",
+  unconscious: "V bezvědomí: neschopen jednat, nevnímáš okolí, upustíš co držíš a padneš. Útoky zblízka jsou kritické.",
+};
+
 export const DAMAGE_CS: Record<DamageType, string> = {
   acid: "kyselinové",
   bludgeoning: "drtivé",
@@ -95,6 +118,9 @@ export function csDamage(type?: string): string {
 }
 export function csCondition(name: string): string {
   return CONDITION_CS[name as ConditionName] ?? name;
+}
+export function csConditionDesc(name: string): string {
+  return CONDITION_DESC_CS[name as ConditionName] ?? "";
 }
 export function csAbility(k: string): string {
   return ABILITY_CS[k as AbilityKey] ?? k.toUpperCase();

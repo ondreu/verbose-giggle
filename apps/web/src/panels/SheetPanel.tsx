@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { csCondition, csAbility, csAbilityAbbr, type AbilityKey } from "@adm/schemas";
+import { csCondition, csConditionDesc, csAbility, csAbilityAbbr, type AbilityKey } from "@adm/schemas";
 import { useGame } from "../store/store";
 import { Icon } from "../components/Icon";
 import { LevelUpModal } from "../components/LevelUpModal";
@@ -35,6 +35,7 @@ export function SheetPanel() {
   const imageLoading = useGame((s) => s.imageLoading);
   const [levelUpOpen, setLevelUpOpen] = useState(false);
   const [castSpell, setCastSpell] = useState<string | null>(null);
+  const [openCond, setOpenCond] = useState<string | null>(null);
   const activeId = session?.active_player ?? null;
   const actor = activeId ? actors[activeId] : null;
 
@@ -244,17 +245,34 @@ export function SheetPanel() {
         </div>
       )}
 
-      {/* Conditions */}
+      {/* Conditions (#34): chips you can tap to read the rules effect. */}
       {conditions.length > 0 && (
-        <div className="mt-3 flex flex-wrap gap-1.5">
-          {conditions.map((c) => (
-            <span
-              key={c.name}
-              className="rounded-sm border border-blood/50 bg-blood/10 px-1.5 py-0.5 font-log text-[11px] text-blood"
-            >
-              {csCondition(c.name)}
-            </span>
-          ))}
+        <div className="mt-3">
+          <div className="flex flex-wrap gap-1.5">
+            {conditions.map((c) => {
+              const open = openCond === c.name;
+              return (
+                <button
+                  key={c.name}
+                  title={csConditionDesc(c.name)}
+                  onClick={() => setOpenCond(open ? null : c.name)}
+                  className={`rounded-sm border px-1.5 py-0.5 font-log text-[11px] transition-colors ${
+                    open
+                      ? "border-blood bg-blood/20 text-blood"
+                      : "border-blood/50 bg-blood/10 text-blood hover:bg-blood/20"
+                  }`}
+                >
+                  {csCondition(c.name)}
+                </button>
+              );
+            })}
+          </div>
+          {openCond && (
+            <p className="mt-1.5 rounded-sm border border-ink/20 bg-ink/5 px-2 py-1 font-body text-[12px] leading-snug text-ink/80">
+              <span className="font-semibold">{csCondition(openCond)}:</span>{" "}
+              {csConditionDesc(openCond) || "Popis není k dispozici."}
+            </p>
+          )}
         </div>
       )}
     </section>

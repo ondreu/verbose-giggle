@@ -232,10 +232,11 @@ on old code and items **#15, #17, #18** are likely already resolved by updating.
   animation on arrival (similar to the existing dice log animation). Coordinate
   with the existing dice animation work in `apps/web/src/components/DiceRoll.tsx`
   or equivalent.
-- **#34 — Character condition/status indicator on the sheet.** Show active
-  conditions (Bezvědomí, Otrávení, Zpomalení, Okouzlení, etc.) as labelled
-  chips or icon badges on the character sheet, not just in the log. Clicking a
-  chip should show the condition's description (from SRD #21 — Conditions).
+- **[x] #34 — Character condition/status indicator on the sheet.** Done. The
+  sheet's condition chips are now tappable: clicking one expands its Czech rules
+  description (and the text is also a hover tooltip). Descriptions live in
+  `CONDITION_DESC_CS` / `csConditionDesc` in `packages/schemas/src/labels.ts`
+  (can later be backfilled from the SRD Conditions dataset, #21).
   `apps/web/src/panels/SheetPanel.tsx`.
 - **#35 — Campaign management screen.** Allow players/DM to list saved
   campaigns, delete one, browse its vault files (read-only tree view), and
