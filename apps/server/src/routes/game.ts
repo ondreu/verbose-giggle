@@ -323,36 +323,78 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
   );
 
   /**
-   * TTS (§11). Returns audio/wav. Primary engine is Azure AI Speech (expressive
-   * Czech); Piper is the fallback when Azure is unconfigured or errors.
+   * Synthesize speech to WAV bytes. Primary engine is the given Azure config
+   * (expressive Czech); Piper is the fallback when Azure is absent or errors.
+   * Returns null only when no engine is configured at all.
+   */
+  async function synthesizeTts(text: string, azure: Config["azureTts"]): Promise<Buffer | null> {
+    if (azure) {
+      try {
+        return await synthesizeAzure(azure, text);
+      } catch (err) {
+        app.log.warn(
+          `Azure TTS failed${config.piperUrl ? ", falling back to Piper" : ""}: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+    }
+    if (config.piperUrl) {
+      const upstream = await fetch(`${config.piperUrl}/tts`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text }),
+      });
+      if (upstream.ok && upstream.body) return Buffer.from(await upstream.arrayBuffer());
+    }
+    return null;
+  }
+
+  /**
+   * TTS (§11). Returns audio/wav. Azure (expressive) first, Piper fallback.
    */
   app.post<{ Body: { text: string } }>("/api/tts", async (req, reply) => {
     const text = req.body?.text ?? "";
     if (!config.azureTts && !config.piperUrl)
       return reply.code(503).send({ error: "TTS not configured" });
-
-    // 1) Azure (expressive). On any failure, fall through to Piper.
-    if (config.azureTts) {
-      try {
-        const wav = await synthesizeAzure(config.azureTts, text);
-        reply.header("Content-Type", "audio/wav");
-        return reply.send(wav);
-      } catch (err) {
-        app.log.warn(`Azure TTS failed${config.piperUrl ? ", falling back to Piper" : ""}: ${err instanceof Error ? err.message : String(err)}`);
-        if (!config.piperUrl) return reply.code(502).send({ error: "TTS upstream error" });
-      }
-    }
-
-    // 2) Piper fallback.
-    const upstream = await fetch(`${config.piperUrl}/tts`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text }),
-    });
-    if (!upstream.ok || !upstream.body) {
-      return reply.code(502).send({ error: "TTS upstream error" });
-    }
+    const wav = await synthesizeTts(text, config.azureTts);
+    if (!wav) return reply.code(502).send({ error: "TTS upstream error" });
     reply.header("Content-Type", "audio/wav");
-    return reply.send(Buffer.from(await upstream.arrayBuffer()));
+    return reply.send(wav);
+  });
+
+  /**
+   * Voice preview for the settings UI. Synthesizes a sample line using the
+   * (possibly unsaved) form values layered over the saved config, so the table
+   * can audition a voice/key/rate/pitch before committing. The key, if given,
+   * is used only for this request and never persisted here.
+   */
+  app.post<{
+    Body: { text?: string; voice?: string; rate?: string; pitch?: string; region?: string; azureKey?: string };
+  }>("/api/tts/preview", async (req, reply) => {
+    const b = req.body ?? {};
+    const text = (b.text?.trim() ||
+      "Vítej, poutníče. Stíny se prodlužují a cesta ke starému mlýnu je dlouhá.").slice(0, 500);
+
+    const base = config.azureTts;
+    const key = b.azureKey || base?.key || "";
+    const region = (b.region?.trim() || base?.region || "").trim();
+    const azure =
+      key && region
+        ? {
+            key,
+            region,
+            voice: b.voice?.trim() || base?.voice || "cs-CZ-AntoninNeural",
+            rate: b.rate?.trim() || base?.rate || "-6%",
+            pitch: b.pitch?.trim() || base?.pitch || "-2%",
+            style: base?.style ?? null,
+            format: base?.format ?? "riff-24khz-16bit-mono-pcm",
+          }
+        : null;
+
+    if (!azure && !config.piperUrl)
+      return reply.code(503).send({ error: "Hlas není nakonfigurován" });
+    const wav = await synthesizeTts(text, azure);
+    if (!wav) return reply.code(502).send({ error: "Syntéza hlasu selhala" });
+    reply.header("Content-Type", "audio/wav");
+    return reply.send(wav);
   });
 }

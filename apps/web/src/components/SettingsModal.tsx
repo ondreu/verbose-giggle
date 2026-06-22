@@ -34,6 +34,8 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
   const [view, setView] = useState<SettingsView | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [previewing, setPreviewing] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
 
   // Editable form fields (mirror the view; secrets kept separate, blank = keep).
   const [provider, setProvider] = useState<"auto" | "mock">("auto");
@@ -126,6 +128,36 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function previewVoice() {
+    setPreviewing(true);
+    setPreviewError(null);
+    try {
+      const res = await fetch("/api/tts/preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          voice: ttsVoice,
+          rate: ttsRate,
+          pitch: ttsPitch,
+          region: ttsRegion,
+          ...(ttsKey ? { azureKey: ttsKey } : {}),
+        }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error ?? `Chyba ${res.status}`);
+      }
+      const url = URL.createObjectURL(await res.blob());
+      const audio = new Audio(url);
+      audio.onended = () => URL.revokeObjectURL(url);
+      await audio.play();
+    } catch (err) {
+      setPreviewError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setPreviewing(false);
     }
   }
 
@@ -280,8 +312,21 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                   <input className="settings-input" placeholder="-2%" value={ttsPitch} onChange={(e) => setTtsPitch(e.target.value)} />
                 </Field>
               </div>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  className="flex items-center gap-1.5 rounded-sm border border-ink/30 bg-ink/10 px-3 py-1 font-display text-xs hover:bg-ink/20 disabled:opacity-50"
+                  onClick={previewVoice}
+                  disabled={previewing}
+                >
+                  <Icon name="flame" size={13} />
+                  {previewing ? "Přehrávám…" : "Přehrát ukázku"}
+                </button>
+                {previewError && <span className="text-xs text-blood">{previewError}</span>}
+              </div>
               <p className="text-xs italic text-ink/50">
-                Pomalejší tempo a nižší výška = dramatičtější projev. Aktivní engine:{" "}
+                Ukázka použije i neuložené hodnoty z formuláře. Pomalejší tempo a nižší výška ={" "}
+                dramatičtější projev. Aktivní engine:{" "}
                 {view.tts.engine === "azure" ? "Azure" : view.tts.engine === "piper" ? "Piper (záložní)" : "vypnuto"}.
               </p>
             </fieldset>
