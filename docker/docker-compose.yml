@@ -1,7 +1,11 @@
 # AI Dungeon Master — NAS deployment (spec §14.2)
 #
-# Copy this file (and Caddyfile) to your NAS, create a `.env` next to it with
-# at least LLM_API_KEY set (see /.env.example), then `docker compose up -d`.
+# Copy this file (and Caddyfile if you use it) to your NAS, create a `.env`
+# next to it (see /.env.example), then start with the ingress you want:
+#
+#   docker compose up -d                              # app only (LAN / Tailscale)
+#   docker compose --profile caddy up -d              # + Caddy public HTTPS
+#   docker compose --profile cloudflare up -d         # + Cloudflare Tunnel
 #
 # Watchtower auto-pulls the :latest image pushed by CI (spec §14.4); only
 # containers labeled watchtower.enable=true are updated.
@@ -55,8 +59,10 @@ services:
     expose:
       - "5000"
 
+  # --- Ingress option A: Caddy public HTTPS (profile: caddy) ----------------
   caddy:
     image: caddy:2
+    profiles: ["caddy"]
     restart: unless-stopped
     ports:
       - "80:80"
@@ -65,6 +71,24 @@ services:
       - ./Caddyfile:/etc/caddy/Caddyfile
       - caddy_data:/data
       - caddy_config:/config
+
+  # --- Ingress option B: Cloudflare Tunnel (profile: cloudflare) -------------
+  # No open ports / no port-forwarding: cloudflared dials OUT to Cloudflare,
+  # which terminates TLS and proxies to the app. So you don't need Caddy here.
+  # In the Cloudflare Zero Trust dashboard, create a tunnel, copy its token to
+  # CF_TUNNEL_TOKEN in .env, and add a Public hostname routing your domain to
+  # the service http://app:3000. SSE (/api/events) works through the tunnel —
+  # the server sends keep-alive pings every 25s. The app has no built-in auth,
+  # so protect it with Cloudflare Access (recommended) or BASIC_AUTH.
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    profiles: ["cloudflare"]
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      - TUNNEL_TOKEN=${CF_TUNNEL_TOKEN}
+    depends_on:
+      - app
 
   watchtower:
     image: containrrr/watchtower
