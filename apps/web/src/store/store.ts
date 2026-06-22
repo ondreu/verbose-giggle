@@ -149,6 +149,7 @@ interface GameStore {
   selectCampaign: (folder: string) => Promise<void>;
   deleteCampaign: (folder: string) => Promise<{ ok: boolean; error?: string }>;
   fetchCampaignFiles: (folder: string) => Promise<string[]>;
+  generateCampaignMap: () => Promise<{ ok: boolean; error?: string }>;
   forgeCampaign: (input: {
     name: string;
     premise?: string;
@@ -515,6 +516,22 @@ export const useGame = create<GameStore>((set, get) => ({
       return Array.isArray(data.files) ? data.files : [];
     } catch {
       return [];
+    }
+  },
+
+  generateCampaignMap: async () => {
+    set({ busy: true, error: null });
+    try {
+      const res = await fetch("/api/campaigns/map", { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        set({ error: data.error ?? `Chyba ${res.status}` });
+        return { ok: false, error: data.error };
+      }
+      // Server emits `reload`; the new world_map re-hydrates onto the overworld.
+      return { ok: true };
+    } finally {
+      set({ busy: false });
     }
   },
 

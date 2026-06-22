@@ -16,7 +16,9 @@ export function StartMenu({ onSettings }: { onSettings: () => void }) {
   const listCampaigns = useGame((s) => s.listCampaigns);
   const listSnapshots = useGame((s) => s.listSnapshots);
   const selectCampaign = useGame((s) => s.selectCampaign);
+  const generateCampaignMap = useGame((s) => s.generateCampaignMap);
   const busy = useGame((s) => s.busy);
+  const [mapMsg, setMapMsg] = useState<string | null>(null);
 
   useEffect(() => {
     void listCampaigns();
@@ -55,6 +57,18 @@ export function StartMenu({ onSettings }: { onSettings: () => void }) {
               </div>
             </div>
             <button
+              className="flex items-center gap-1.5 rounded-sm border border-surface2 px-3 py-2.5 font-log text-sm text-subtext1 hover:border-gold/60 hover:text-gold disabled:opacity-50"
+              onClick={async () => {
+                setMapMsg(null);
+                const r = await generateCampaignMap();
+                setMapMsg(r.ok ? "Mapa vygenerována." : r.error ?? "Generování selhalo.");
+              }}
+              disabled={busy}
+              title="Vygenerovat AI mapu světa (volitelné, vyžaduje konfiguraci obrázků)"
+            >
+              <Icon name="camera" size={14} /> {busy ? "Generuji…" : "Mapa (AI)"}
+            </button>
+            <button
               className="flex items-center gap-1.5 rounded-sm border border-surface2 px-3 py-2.5 font-log text-sm text-subtext1 hover:border-gold/60 hover:text-gold"
               onClick={() => setCreateChar(true)}
             >
@@ -65,6 +79,7 @@ export function StartMenu({ onSettings }: { onSettings: () => void }) {
             </button>
           </section>
         )}
+        {mapMsg && <p className="-mt-2 px-1 font-log text-xs text-subtext0">{mapMsg}</p>}
 
         <CampaignList campaigns={campaigns} busy={busy} onSelect={selectCampaign} onManage={setManage} />
         {manage && <CampaignManager campaign={manage} onClose={() => setManage(null)} />}

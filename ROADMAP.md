@@ -251,12 +251,14 @@ on old code and items **#15, #17, #18** are likely already resolved by updating.
   `apps/web/public/favicon.svg` and referenced it from `index.html`, so the tab
   no longer shows the generic globe. (SVG favicon covers modern browsers; a
   legacy `.ico` can be added later if needed.)
-- **#37 — AI-generated campaign map.** When a campaign is created or when the DM
-  first describes the world, optionally generate a rough overworld map image via
-  the image-generation endpoint and store it as the campaign's base map. This is
-  a stretch goal — scope it so the campaign still works without the image if
-  generation fails or the key is absent. Wire to the existing image-generation
-  path; store result in the vault alongside other campaign assets.
+- **[x] #37 — AI-generated campaign map.** Done (manual trigger). A "Mapa (AI)"
+  button on the active campaign in the start menu calls `POST /api/campaigns/map`,
+  which builds an overworld-map prompt from the campaign name + authored
+  locations (`buildMapPrompt`), generates via the existing `ImageClient`, stores
+  the bytes in the vault (`maps/overworld-ai.<ext>`), and points
+  `campaign.world_map` at it — so it shows as the overworld backdrop. Fully
+  optional: missing image config or an upstream failure surfaces an error and
+  leaves the campaign untouched.
 
 ---
 

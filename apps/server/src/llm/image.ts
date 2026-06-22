@@ -157,6 +157,25 @@ export class ImageClient {
   }
 }
 
+const MAP_STYLE =
+  "Hand-drawn fantasy overworld map on aged parchment, ink and watercolor cartography, " +
+  "bird's-eye top-down view, compass rose, mountains, forests, rivers, roads and coastlines, " +
+  "decorative border. ";
+
+/** Prompt for a campaign overworld map from its name + authored locations (#37). */
+export function buildMapPrompt(campaignName: string, locations: Record<string, Location>): string {
+  const places = Object.values(locations)
+    .filter((l) => l.kind !== "dungeon")
+    .slice(0, 12)
+    .map((l) => l.name);
+  return (
+    MAP_STYLE +
+    `The world of ${campaignName}.` +
+    (places.length ? ` Notable places: ${places.join(", ")}.` : "") +
+    " Clean cartography, no rendered text labels."
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Prompt builder
 // ---------------------------------------------------------------------------

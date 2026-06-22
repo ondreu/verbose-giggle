@@ -4,7 +4,7 @@ import YAML from "yaml";
 import type { FastifyInstance } from "fastify";
 import { LlmClient, type Llm } from "../llm/client.js";
 import { MockLlmClient } from "../llm/mock.js";
-import { ImageClient, buildPrompt, type ImageSubject } from "../llm/image.js";
+import { ImageClient, buildMapPrompt, buildPrompt, type ImageSubject } from "../llm/image.js";
 import { synthesizeAzure } from "../tts/azure.js";
 import { resolveAiTurns, runIntro, runRecap, runTurn } from "../session/loop.js";
 import { startEncounter } from "../session/encounter.js";
@@ -29,6 +29,25 @@ export interface GameContext {
   manager: SessionManager;
   bus: EventBus;
   config: Config;
+}
+
+/** Image MIME → file extension for stored assets. */
+const IMG_EXT: Record<string, string> = {
+  "image/png": "png",
+  "image/jpeg": "jpg",
+  "image/webp": "webp",
+  "image/gif": "gif",
+  "image/svg+xml": "svg",
+};
+
+/** Resolve a generated image (data: URL or http(s) URL) to raw bytes + extension. */
+async function fetchImageBytes(url: string): Promise<{ buf: Buffer; ext: string }> {
+  const m = /^data:([^;]+);base64,(.*)$/s.exec(url);
+  if (m) return { buf: Buffer.from(m[2]!, "base64"), ext: IMG_EXT[m[1]!] ?? "png" };
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Stažení obrázku selhalo (${res.status})`);
+  const mime = (res.headers.get("content-type") ?? "image/png").split(";")[0]!.trim();
+  return { buf: Buffer.from(await res.arrayBuffer()), ext: IMG_EXT[mime] ?? "png" };
 }
 
 export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext): Promise<void> {
@@ -319,6 +338,35 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
     }
     await fs.rm(dir, { recursive: true, force: true });
     return { ok: true };
+  });
+
+  /**
+   * Generate an AI overworld map for the active campaign and store it as the
+   * base map (#37). Stretch/optional: a failure (no image config, upstream
+   * error) leaves the campaign untouched — it plays fine without the image.
+   */
+  app.post("/api/campaigns/map", async (_req, reply) => {
+    if (!config.image)
+      return reply.code(503).send({ error: "Generování obrázků není nakonfigurováno" });
+    try {
+      const prompt = buildMapPrompt(ctx.manager.campaign.config.name, ctx.manager.campaign.locations);
+      const { url } = await new ImageClient(config.image).generate(prompt);
+      const { buf, ext } = await fetchImageBytes(url);
+      const rel = `maps/overworld-ai.${ext}`;
+      const abs = path.join(ctx.manager.campaign.dir, rel);
+      await fs.mkdir(path.dirname(abs), { recursive: true });
+      await fs.writeFile(abs, buf);
+      // Point the campaign at the new base map.
+      const cfgPath = path.join(ctx.manager.campaign.dir, "campaign.yaml");
+      const cfg = YAML.parse(await fs.readFile(cfgPath, "utf8")) ?? {};
+      cfg.world_map = rel;
+      await fs.writeFile(cfgPath, YAML.stringify(cfg), "utf8");
+      await reopenManager();
+      ctx.bus.emit({ type: "reload", reason: "map-generated" });
+      return { ok: true, world_map: rel };
+    } catch (err) {
+      return reply.code(500).send({ error: err instanceof Error ? err.message : String(err) });
+    }
   });
 
   // --- Snapshots: campaign rollback (§7) -----------------------------------
