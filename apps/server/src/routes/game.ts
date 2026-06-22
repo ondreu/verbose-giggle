@@ -8,7 +8,8 @@ import { resolveAiTurns, runRecap, runTurn } from "../session/loop.js";
 import { startEncounter } from "../session/encounter.js";
 import type { EventBus } from "../session/events.js";
 import type { SessionManager } from "../session/manager.js";
-import type { Config } from "../config.js";
+import { applySettings, loadConfig, type Config } from "../config.js";
+import { loadSettings, saveSettings, type Settings } from "../settings.js";
 
 export interface GameContext {
   manager: SessionManager;
@@ -17,39 +18,133 @@ export interface GameContext {
 }
 
 export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext): Promise<void> {
-  // Fall back to the offline mock narrator when no API key is configured, so
-  // the full loop + UI run without secrets (set LLM_PROVIDER=mock to force it).
-  const useMock = !ctx.config.llm.apiKey || process.env.LLM_PROVIDER === "mock";
-  const llm: Llm = useMock
-    ? new MockLlmClient(() => {
-        const actors = ctx.manager.campaign.actors;
-        const alive = (id: string) => (ctx.manager.session.actors[id]?.hp?.current ?? 1) > 0;
-        const friendly = new Set(["party", "ally"]);
-        return {
-          activePlayer: ctx.manager.session.active_player,
-          partyIds: Object.values(actors)
-            .filter((a) => friendly.has(a.faction))
-            .map((a) => a.id),
-          hostileIds: Object.values(actors)
-            .filter((a) => a.faction === "hostile" && alive(a.id))
-            .map((a) => a.id),
-          inCombat: ctx.manager.session.combat !== null,
-          enemyOf: (actorId: string) => {
-            const self = actors[actorId];
-            if (!self) return null;
-            const wantHostile = friendly.has(self.faction);
-            const target = Object.values(actors).find(
-              (a) =>
-                a.id !== actorId &&
-                alive(a.id) &&
-                (wantHostile ? a.faction === "hostile" : friendly.has(a.faction)),
-            );
-            return target?.id ?? null;
-          },
-        };
-      })
-    : new LlmClient(ctx.config);
-  if (useMock) app.log.warn("LLM_API_KEY not set — using offline mock narrator");
+  // Effective config and the live narrator are mutable: the settings routes
+  // rebuild them in place so changes from the GUI take effect without a
+  // restart. Handlers read `config`/`llm` at call time (closure over the
+  // binding), so reassignment is picked up everywhere.
+  let config = ctx.config;
+
+  /**
+   * Build the narrator for the current config. Falls back to the offline mock
+   * when no API key is configured (or provider is forced to "mock"), so the
+   * full loop + UI run without secrets.
+   */
+  function makeLlm(): Llm {
+    const useMock = !config.llm.apiKey || config.llm.provider === "mock";
+    if (!useMock) return new LlmClient(config);
+    return new MockLlmClient(() => {
+      const actors = ctx.manager.campaign.actors;
+      const alive = (id: string) => (ctx.manager.session.actors[id]?.hp?.current ?? 1) > 0;
+      const friendly = new Set(["party", "ally"]);
+      return {
+        activePlayer: ctx.manager.session.active_player,
+        partyIds: Object.values(actors)
+          .filter((a) => friendly.has(a.faction))
+          .map((a) => a.id),
+        hostileIds: Object.values(actors)
+          .filter((a) => a.faction === "hostile" && alive(a.id))
+          .map((a) => a.id),
+        inCombat: ctx.manager.session.combat !== null,
+        enemyOf: (actorId: string) => {
+          const self = actors[actorId];
+          if (!self) return null;
+          const wantHostile = friendly.has(self.faction);
+          const target = Object.values(actors).find(
+            (a) =>
+              a.id !== actorId &&
+              alive(a.id) &&
+              (wantHostile ? a.faction === "hostile" : friendly.has(a.faction)),
+          );
+          return target?.id ?? null;
+        },
+      };
+    });
+  }
+
+  let llm: Llm = makeLlm();
+  if (!config.llm.apiKey || config.llm.provider === "mock") {
+    app.log.warn("No LLM API key configured — using offline mock narrator");
+  }
+
+  // --- Settings (GUI-editable runtime config; §9.1) ------------------------
+  /** Campaign folders available for selection (for the settings dropdown). */
+  async function listCampaigns(): Promise<string[]> {
+    try {
+      const root = path.join(config.vaultPath, "campaigns");
+      const entries = await fs.readdir(root, { withFileTypes: true });
+      return entries.filter((e) => e.isDirectory()).map((e) => e.name).sort();
+    } catch {
+      return [];
+    }
+  }
+
+  /** Masked view of the effective settings — never leaks secret values. */
+  async function settingsView(): Promise<unknown> {
+    const stored = await loadSettings(config.vaultPath);
+    return {
+      llm: {
+        baseUrl: config.llm.baseUrl,
+        model: config.llm.model,
+        provider: config.llm.provider,
+        apiKeySet: Boolean(config.llm.apiKey),
+      },
+      image: {
+        enabled: config.image != null,
+        baseUrl: config.image?.baseUrl ?? "",
+        model: config.image?.model ?? "",
+        apiKeySet: Boolean(config.image?.apiKey),
+        // The image side reuses the LLM key when no dedicated key is set.
+        usesLlmKey: config.image != null && !stored.image?.apiKey,
+      },
+      srdPath: config.srdPath,
+      // The selectable identity is the campaign *folder*, not its display name.
+      campaign: stored.campaign ?? path.basename(ctx.manager.campaign.dir),
+      campaignName: ctx.manager.campaign.config.name,
+      campaigns: await listCampaigns(),
+      activeNarrator: !config.llm.apiKey || config.llm.provider === "mock" ? "mock" : "llm",
+      // Bootstrap values that stay in the environment (shown read-only).
+      env: {
+        piperConfigured: config.piperUrl != null,
+        basicAuth: config.basicAuth != null,
+      },
+    };
+  }
+
+  app.get("/api/settings", async () => settingsView());
+
+  app.put<{ Body: Settings }>("/api/settings", async (req, reply) => {
+    const patch = (req.body ?? {}) as Settings;
+    // Whitelist the editable fields — never let arbitrary keys through.
+    const clean: Settings = {};
+    if (patch.llm) {
+      clean.llm = {};
+      if (patch.llm.apiKey !== undefined) clean.llm.apiKey = patch.llm.apiKey;
+      if (patch.llm.baseUrl !== undefined) clean.llm.baseUrl = patch.llm.baseUrl;
+      if (patch.llm.model !== undefined) clean.llm.model = patch.llm.model;
+      if (patch.llm.provider === "auto" || patch.llm.provider === "mock")
+        clean.llm.provider = patch.llm.provider;
+    }
+    if (patch.image) {
+      clean.image = {};
+      if (patch.image.enabled !== undefined) clean.image.enabled = Boolean(patch.image.enabled);
+      if (patch.image.apiKey !== undefined) clean.image.apiKey = patch.image.apiKey;
+      if (patch.image.baseUrl !== undefined) clean.image.baseUrl = patch.image.baseUrl;
+      if (patch.image.model !== undefined) clean.image.model = patch.image.model;
+    }
+    if (patch.srdPath !== undefined) clean.srdPath = patch.srdPath;
+    if (patch.campaign !== undefined) clean.campaign = patch.campaign;
+
+    try {
+      const merged = await saveSettings(config.vaultPath, clean);
+      // Rebuild the effective config + narrator from env + the new settings.
+      config = applySettings(loadConfig(), merged);
+      llm = makeLlm();
+      app.log.info(`Settings updated; narrator=${!config.llm.apiKey || config.llm.provider === "mock" ? "mock" : "llm"}`);
+      return settingsView();
+    } catch (err) {
+      return reply.code(500).send({ error: err instanceof Error ? err.message : String(err) });
+    }
+  });
 
   /** Full scene + state snapshot for initial client hydration. */
   app.get("/api/state", async () => ({
@@ -187,8 +282,8 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
   app.post<{ Body: { subject: ImageSubject; id?: string } }>(
     "/api/image",
     async (req, reply) => {
-      if (!ctx.config.image)
-        return reply.code(503).send({ error: "Generování obrázků není nakonfigurováno (IMAGE_BASE_URL chybí)" });
+      if (!config.image)
+        return reply.code(503).send({ error: "Generování obrázků není nakonfigurováno (chybí adresa poskytovatele)" });
       const { subject, id } = req.body ?? {};
       if (!subject) return reply.code(400).send({ error: "Chybí subject" });
       try {
@@ -199,7 +294,7 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
           ctx.manager.session,
           id,
         );
-        const client = new ImageClient(ctx.config.image);
+        const client = new ImageClient(config.image);
         const result = await client.generate(prompt);
         return result;
       } catch (err) {
@@ -210,9 +305,9 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
 
   /** TTS proxy to Piper (§11). Returns audio/wav. */
   app.post<{ Body: { text: string } }>("/api/tts", async (req, reply) => {
-    if (!ctx.config.piperUrl) return reply.code(503).send({ error: "TTS not configured" });
+    if (!config.piperUrl) return reply.code(503).send({ error: "TTS not configured" });
     const text = req.body?.text ?? "";
-    const upstream = await fetch(`${ctx.config.piperUrl}/tts`, {
+    const upstream = await fetch(`${config.piperUrl}/tts`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ text }),

@@ -127,6 +127,23 @@
     cursor: not-allowed;
   }
 
+  /* Form inputs on the parchment settings surface: inset paper field. */
+  .settings-input {
+    width: 100%;
+    background-color: rgba(255, 255, 255, 0.45);
+    border: 1px solid rgba(42, 33, 24, 0.3);
+    border-radius: 2px;
+    padding: 0.35rem 0.5rem;
+    color: var(--ink);
+    font-family: "EB Garamond", Georgia, serif;
+    font-size: 0.95rem;
+  }
+  .settings-input:focus {
+    outline: none;
+    border-color: rgba(42, 33, 24, 0.6);
+    box-shadow: inset 0 0 0 1px rgba(42, 33, 24, 0.25);
+  }
+
   /* Active-actor ring — the one place arcane mauve is allowed to glow. */
   .ring-active {
     box-shadow:

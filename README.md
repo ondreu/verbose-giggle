@@ -76,6 +76,8 @@ This starts Vite with hot reload (talking to the running server's API).
 
 Read by `apps/server/src/config.ts`. See [`.env.example`](.env.example) for the full template.
 
+> **In-app settings.** The LLM provider/key/model, image generation, the campaign selection, and the SRD path can also be configured from the web UI (gear icon, top-right) without editing `.env`. They are stored in `<vault>/settings.json` and **override** the environment defaults below — so `.env` only needs a minimal bootstrap (vault path, port/host, `PIPER_URL`, optional `BASIC_AUTH`, Cloudflare token). LLM changes apply live; campaign and SRD path apply on the next server start. Secrets are write-only over the API (the UI shows only whether a key is set, never its value), and `BASIC_AUTH` deliberately stays env-only as the gate that guards the settings UI itself.
+
 | Variable | Default | Required | Description |
 |---|---|---|---|
 | `LLM_API_KEY` | _(empty)_ | No | API key for the LLM provider (Mistral, OpenRouter, …). Empty → offline mock narrator. |

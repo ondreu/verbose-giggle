@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useGame } from "./store/store";
 import { ChatPanel } from "./panels/ChatPanel";
 import { DiceLog } from "./panels/DiceLog";
@@ -8,6 +8,7 @@ import { InventoryPanel } from "./panels/InventoryPanel";
 import { MapPanel } from "./map/MapPanel";
 import { Icon } from "./components/Icon";
 import { ImageModal } from "./components/ImageModal";
+import { SettingsModal } from "./components/SettingsModal";
 
 export default function App() {
   const hydrate = useGame((s) => s.hydrate);
@@ -15,6 +16,7 @@ export default function App() {
   const connected = useGame((s) => s.connected);
   const campaign = useGame((s) => s.campaign);
   const time = useGame((s) => s.session?.time);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   useEffect(() => {
     void hydrate();
@@ -24,6 +26,7 @@ export default function App() {
   return (
     <div className="flex h-full flex-col">
       <ImageModal />
+      {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
       <header className="flex items-center gap-3 border-b border-black bg-bg-mantle px-4 py-2">
         <Icon name="d20" size={22} className="text-gold" />
         <h1 className="font-display text-lg tracking-wide">{campaign?.name ?? "Pán jeskyně"}</h1>
@@ -40,6 +43,14 @@ export default function App() {
           <span className={`h-2 w-2 rounded-full ${connected ? "bg-verdigris" : "bg-blood"}`} />
           {connected ? "spojeno" : "odpojeno"}
         </span>
+        <button
+          className="text-subtext0 transition-colors hover:text-gold"
+          title="Nastavení"
+          aria-label="Nastavení"
+          onClick={() => setSettingsOpen(true)}
+        >
+          <Icon name="gear" size={18} />
+        </button>
       </header>
 
       {/* Play surface: narration + map are the focal point; mechanics rail at right. */}
