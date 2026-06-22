@@ -15,10 +15,16 @@ export interface CastResult {
   error?: string;
 }
 
-/** Spellcasting ability modifier — uses the highest mental stat as a heuristic. */
+/**
+ * Spellcasting ability modifier. Prefers the SRD class's declared spellcasting
+ * ability (#20) when a dataset is mounted; otherwise falls back to a per-class
+ * map, then to the highest mental stat.
+ */
 function spellMod(state: GameState, casterId: string): number {
   const a = getActor(state, casterId);
   const cls = (a.class ?? "").toLowerCase();
+  const srdAbility = state.srd.class(cls)?.spellcasting_ability;
+  if (srdAbility) return abilityMod(a.abilities[srdAbility]);
   if (["wizard", "artificer"].includes(cls)) return abilityMod(a.abilities.int);
   if (["cleric", "druid", "ranger"].includes(cls)) return abilityMod(a.abilities.wis);
   if (["sorcerer", "warlock", "bard", "paladin"].includes(cls)) return abilityMod(a.abilities.cha);

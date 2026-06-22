@@ -211,6 +211,11 @@ export function csSubrace(id: string, fallback?: string): string {
 export function csClass(id: string, fallback?: string): string {
   return CLASS_CS[id] ?? fallback ?? id;
 }
+/** Localize a stored lineage id, which may be a race or a subrace id. */
+export function csLineage(id?: string): string {
+  if (!id) return "";
+  return SUBRACE_CS[id] ?? RACE_CS[id] ?? id;
+}
 export function csFeat(id: string, fallback?: string): string {
   return FEAT_CS[id] ?? fallback ?? id;
 }

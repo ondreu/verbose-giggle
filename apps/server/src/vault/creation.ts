@@ -164,6 +164,43 @@ export function creationOptions(srd?: SrdIndex) {
   };
 }
 
+/** SRD class id for a stored class label/id (the sheet now stores ids). */
+function classIdOf(actorClass: string | undefined): string | undefined {
+  if (!actorClass) return undefined;
+  const lc = actorClass.toLowerCase();
+  if (CLASSES[lc]) return lc;
+  // Tolerate a Czech label stored by older saves.
+  const byLabel = Object.entries(CLASSES).find(([, c]) => c.name.toLowerCase() === lc);
+  return byLabel?.[0];
+}
+
+/**
+ * What the *next* level-up offers an actor, derived from the SRD when mounted
+ * (#13/#20): spells castable at the actor's tier, subclass choices when the
+ * class needs one and none is set yet, and the feat list as an ASI alternative.
+ */
+export function levelUpOptions(
+  srd: SrdIndex,
+  actor: { class?: string; subclass?: string; spell_slots?: Record<string, unknown>; spells_known?: string[] },
+) {
+  const classId = classIdOf(actor.class);
+  // Highest spell tier the actor currently has a slot for (cantrips always ok).
+  const tiers = Object.keys(actor.spell_slots ?? {}).map((t) => Number(t)).filter((n) => Number.isFinite(n));
+  const maxLevel = tiers.length ? Math.max(...tiers) : 0;
+  const isCaster = (actor.spells_known?.length ?? 0) > 0 || tiers.length > 0;
+
+  let spellList: { id: string; name: string; level: number; school?: string }[] | undefined;
+  if (classId && isCaster) {
+    const known = new Set(actor.spells_known ?? []);
+    const spells = spellsForClass(srd, classId, maxLevel).filter((s) => !known.has(s.id));
+    if (spells.length) spellList = spells.map((s) => ({ id: s.id, name: s.name, level: s.level, school: s.school }));
+  }
+
+  const subclasses = classId && !actor.subclass ? subclassesFor(srd, classId) : [];
+  const feats = srd.list.feats().map((f) => ({ id: f.id, name: f.name }));
+  return { spellList, subclasses, feats };
+}
+
 export interface CharacterDraft {
   name: string;
   race: string;
@@ -254,18 +291,17 @@ export async function createCharacter(
   const takenIds = new Set(Object.keys(campaign.actors));
   const id = uniqueId(slugify(name), takenIds);
 
-  const raceLabel = subrace
-    ? `${csRace(draft.race, race.name)} (${csSubrace(subrace.id, subrace.name)})`
-    : csRace(draft.race, race.name);
-
+  // Store SRD ids (English) on the sheet — the UI localizes them to Czech via
+  // labels. When a subrace is chosen its id stands in for the lineage, matching
+  // the example vault (e.g. `race: high-elf`).
   const actor: Actor = ActorSchema.parse({
     type: "character",
     id,
     name,
     controller: draft.controller ?? "human",
     faction: "party",
-    race: raceLabel,
-    class: csClass(draft.class, cls.name),
+    race: subrace ? subrace.id : draft.race,
+    class: draft.class,
     level: 1,
     xp: 0,
     abilities,

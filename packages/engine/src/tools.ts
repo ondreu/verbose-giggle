@@ -16,7 +16,7 @@ import { aoe, coverBetween, move, reachableCells } from "./grid.js";
 import { endCombat, nextTurn, startCombat } from "./turns.js";
 import { longRest, shortRest } from "./rest.js";
 import { advanceTime } from "./time.js";
-import { applyAbilityIncrease, awardXp, learnSpells, levelUp } from "./leveling.js";
+import { applyAbilityIncrease, awardXp, chooseSubclass, grantFeats, learnSpells, levelUp } from "./leveling.js";
 
 const Advantage = z.enum(["advantage", "disadvantage", "none"]).optional();
 
@@ -494,6 +494,30 @@ export const TOOLS: ToolDef[] = [
       required: ["actor", "spells"],
     },
     handler: (state, args) => learnSpells(state, args),
+  }),
+  def({
+    name: "choose_subclass",
+    description: "Choose an actor's subclass (e.g. at level 3); validated against the SRD class.",
+    readOnly: false,
+    schema: z.object({ actor: z.string(), subclass: z.string() }),
+    parameters: {
+      type: "object",
+      properties: { actor: { type: "string" }, subclass: { type: "string", description: "SRD subclass id" } },
+      required: ["actor", "subclass"],
+    },
+    handler: (state, args) => chooseSubclass(state, args),
+  }),
+  def({
+    name: "grant_feat",
+    description: "Grant one or more feats to an actor (creation or an ASI-level choice).",
+    readOnly: false,
+    schema: z.object({ actor: z.string(), feats: z.array(z.string()) }),
+    parameters: {
+      type: "object",
+      properties: { actor: { type: "string" }, feats: { type: "array", items: { type: "string" } } },
+      required: ["actor", "feats"],
+    },
+    handler: (state, args) => grantFeats(state, args),
   }),
   def({
     name: "update_sheet",

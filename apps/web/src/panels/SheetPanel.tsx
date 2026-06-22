@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { csCondition, csConditionDesc, csAbility, csAbilityAbbr, type AbilityKey } from "@adm/schemas";
+import { csCondition, csConditionDesc, csAbility, csAbilityAbbr, csClass, csLineage, type AbilityKey } from "@adm/schemas";
 import { useGame } from "../store/store";
 import { Icon } from "../components/Icon";
 import { LevelUpModal } from "../components/LevelUpModal";
@@ -78,7 +78,7 @@ export function SheetPanel() {
         <h2 className="font-display text-xl">{actor.name}</h2>
         <div className="flex items-center gap-2">
           <span className="text-xs uppercase tracking-wider text-ink/70">
-            {actor.race} {actor.class} · úr. {actor.level}
+            {csLineage(actor.race)} {csClass(actor.class ?? "", actor.class)} · úr. {actor.level}
           </span>
           {canLevel && (
             <button

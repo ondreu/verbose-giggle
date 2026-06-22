@@ -81,7 +81,15 @@ export function levelUp(state: GameState, args: { actor: string }): LevelUpResul
     });
   }
 
-  const detail = `${actor.name} postupuje na úroveň ${actor.level} (+${gain} HP, prof +${actor.proficiency_bonus})`;
+  // Grant SRD-defined class/subclass features for the new level (#20). Only
+  // class features without a subclass, or the actor's chosen subclass, apply.
+  const gained = featuresAtLevel(state, actor.class, actor.subclass, actor.level).filter(
+    (id) => !actor.features.includes(id),
+  );
+  if (gained.length) actor.features.push(...gained);
+
+  const featNote = gained.length ? `, schopnosti: ${gained.join(", ")}` : "";
+  const detail = `${actor.name} postupuje na úroveň ${actor.level} (+${gain} HP, prof +${actor.proficiency_bonus}${featNote})`;
   log(state, { kind: "level", actor: args.actor, detail, tool: "level_up" });
   return {
     actor: args.actor,
@@ -90,6 +98,79 @@ export function levelUp(state: GameState, args: { actor: string }): LevelUpResul
     hp_max: actor.hp.max,
     detail,
   };
+}
+
+/** SRD feature ids a class (+ optional subclass) gains exactly at `level` (#20). */
+export function featuresAtLevel(
+  state: GameState,
+  classId: string | undefined,
+  subclassId: string | undefined,
+  level: number,
+): string[] {
+  if (!classId) return [];
+  const cls = classId.toLowerCase();
+  return state.srd.list
+    .features()
+    .filter(
+      (f) =>
+        f.class === cls &&
+        (f.level ?? 1) === level &&
+        (!f.subclass || f.subclass === subclassId),
+    )
+    .map((f) => f.id);
+}
+
+/** Choose a subclass for an actor (level-up, #13). Validated against the SRD. */
+export function chooseSubclass(
+  state: GameState,
+  args: { actor: string; subclass: string },
+): { subclass: string } | { error: string } {
+  const actor = getActor(state, args.actor);
+  const sub = state.srd.subclass(args.subclass);
+  // When SRD subclass data is mounted, the pick must belong to the actor's class.
+  if (sub && sub.class && actor.class && sub.class !== actor.class.toLowerCase()) {
+    return { error: `${sub.name} není podtřída pro ${actor.class}` };
+  }
+  actor.subclass = args.subclass;
+  // Backfill any subclass features the actor already qualifies for by level.
+  for (let lvl = 1; lvl <= actor.level; lvl++) {
+    for (const id of featuresAtLevel(state, actor.class, args.subclass, lvl)) {
+      if (!actor.features.includes(id)) actor.features.push(id);
+    }
+  }
+  log(state, {
+    kind: "level",
+    actor: args.actor,
+    detail: `${actor.name} si volí podtřídu: ${sub?.name ?? args.subclass}`,
+    tool: "choose_subclass",
+  });
+  return { subclass: args.subclass };
+}
+
+/** Take one or more feats (creation / ASI-level choice, #20), de-duplicated. */
+export function grantFeats(
+  state: GameState,
+  args: { actor: string; feats: string[] },
+): { feats: string[]; added: string[] } {
+  const actor = getActor(state, args.actor);
+  const added: string[] = [];
+  for (const raw of args.feats ?? []) {
+    const id = raw.trim();
+    if (id && !actor.feats.includes(id)) {
+      actor.feats.push(id);
+      const feat = state.srd.feat(id);
+      added.push(feat?.name ?? id);
+    }
+  }
+  if (added.length) {
+    log(state, {
+      kind: "level",
+      actor: args.actor,
+      detail: `${actor.name} získává vlastnost: ${added.join(", ")}`,
+      tool: "grant_feat",
+    });
+  }
+  return { feats: actor.feats, added };
 }
 
 /**

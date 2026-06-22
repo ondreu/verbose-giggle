@@ -47,7 +47,8 @@ describe("character creation", () => {
     const actor = reloaded.campaign.actors[id];
     expect(actor).toBeDefined();
     expect(actor!.abilities.dex).toBe(17); // 15 base + 2 elf
-    expect(actor!.class).toBe("Kouzelník");
+    expect(actor!.class).toBe("wizard"); // SRD id stored; UI localizes to Kouzelník
+    expect(actor!.race).toBe("elf");
     // Wizard caps skills at 2.
     expect(actor!.proficiencies.skills.length).toBe(2);
     // Full caster gets two level-1 slots; HP = 6 (d6) + CON mod (13 -> +1) = 7.
@@ -114,7 +115,7 @@ describe("character creation", () => {
     const actor = reloaded.campaign.actors[id];
     expect(actor!.abilities.dex).toBe(17); // 15 + 2 elf
     expect(actor!.abilities.int).toBe(15); // 14 + 1 high-elf
-    expect(actor!.race).toBe("Elf (Vznešený elf)");
+    expect(actor!.race).toBe("high-elf"); // subrace id stands in for the lineage
     expect(actor!.languages).toEqual(expect.arrayContaining(["common", "elvish"]));
     expect(actor!.features).toEqual(expect.arrayContaining(["darkvision", "elf-weapon-training"]));
     expect(actor!.spells_known).toEqual(["mage-hand", "magic-missile"]);
