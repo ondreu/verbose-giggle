@@ -104,16 +104,26 @@ on old code and items **#15, #17, #18** are likely already resolved by updating.
   first-run home view: open Settings, switch/create/forge a campaign, manage
   campaigns (#35), roll back (snapshots), and enter play. Campaign create/forge
   endpoints write into the vault (`apps/server/src/routes/game.ts`).
-- **[x] #14 — Character creation GUI (BG3-style guided flow).** Done (earlier
-  work). `CharacterCreate` guides race → class → ability scores (standard array)
-  → skills → cantrips/spells and writes a valid actor note + party enrolment
-  (`apps/server/src/vault/creation.ts`, `creation.test.ts`). (Subrace/subclass/
-  feats and full SRD wiring deepen with #20.)
-- **[x] #13 — Level-up GUI and engine-driven leveling.** Done (earlier work).
-  Leveling is engine-driven (`packages/engine/src/leveling.ts` + `leveling.test.ts`):
-  `award_xp` auto-levels across thresholds; the `LevelUpModal` guides ASI/HP/
-  spells wired through `/api/level-up`. (Feat picks and SRD-sourced features
-  expand with #20.)
+- **[x] #14 — Character creation GUI (BG3-style guided flow).** Done, then
+  deepened with #20. `CharacterCreate` guides race (+subrace) → class → ability
+  scores → skills → spells and writes a valid actor note + party enrolment
+  (`apps/server/src/vault/creation.ts`, `creation.test.ts`). When an SRD dataset
+  is mounted, `creationOptions(srd)` enriches with real **subraces** (ability
+  bonuses + traits), per-class **spell lists** (cantrips + level-1 picker,
+  capped), **subclasses** and **feats**; `createCharacter` applies subrace
+  bonuses, records racial traits/level-1 features + languages, and validates
+  spells against the class list. Sheets store SRD ids (race/class), localized in
+  the UI via `csLineage`/`csClass`. Falls back to the hardcoded base without a
+  dataset.
+- **[x] #13 — Level-up GUI and engine-driven leveling.** Done, then deepened with
+  #20. Leveling is engine-driven (`packages/engine/src/leveling.ts` +
+  `leveling.test.ts`): `award_xp` auto-levels across thresholds; `level_up` now
+  also grants the class/subclass **features** for the new level
+  (`featuresAtLevel`), and new `choose_subclass` / `grant_feat` tools handle
+  subclass selection (validated, backfills features) and feats. The `LevelUpModal`
+  fetches `/api/level-up/options` (SRD spell list + subclasses + feats) and
+  guides HP/ASI-or-feat/subclass/spells through `/api/level-up`. `spellMod` uses
+  the SRD class's spellcasting ability when mounted.
 - **[x] #15 — Image generation is undiscoverable.** Done (earlier work). The
   "vizualizovat" (chat) and "portrét" (sheet) actions use a clear `camera` icon
   and sit as visible toolbar buttons. `ChatPanel.tsx`, `SheetPanel.tsx`,
