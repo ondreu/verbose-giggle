@@ -7,4 +7,5 @@ export * from "./turns.js";
 export * from "./grid.js";
 export * from "./spells.js";
 export * from "./rest.js";
+export * from "./leveling.js";
 export * from "./tools.js";

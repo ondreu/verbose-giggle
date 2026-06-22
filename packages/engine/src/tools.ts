@@ -15,6 +15,7 @@ import { castSpell, concentrationCheck } from "./spells.js";
 import { aoe, coverBetween, move, reachableCells } from "./grid.js";
 import { endCombat, nextTurn, startCombat } from "./turns.js";
 import { longRest, shortRest } from "./rest.js";
+import { awardXp, levelUp } from "./leveling.js";
 
 const Advantage = z.enum(["advantage", "disadvantage", "none"]).optional();
 
@@ -369,6 +370,26 @@ export const TOOLS: ToolDef[] = [
       required: ["actors"],
     },
     handler: (state, args) => longRest(state, args),
+  }),
+  def({
+    name: "award_xp",
+    description: "Award XP to actors and auto-level them across any thresholds crossed.",
+    readOnly: false,
+    schema: z.object({ actors: z.array(z.string()).min(1), amount: z.number().int() }),
+    parameters: {
+      type: "object",
+      properties: { actors: { type: "array", items: { type: "string" } }, amount: { type: "integer" } },
+      required: ["actors", "amount"],
+    },
+    handler: (state, args) => awardXp(state, args),
+  }),
+  def({
+    name: "level_up",
+    description: "Apply a single level-up to an actor (HP, proficiency, slots).",
+    readOnly: false,
+    schema: z.object({ actor: z.string() }),
+    parameters: { type: "object", properties: { actor: { type: "string" } }, required: ["actor"] },
+    handler: (state, args) => levelUp(state, args),
   }),
   def({
     name: "update_sheet",
