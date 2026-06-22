@@ -19,6 +19,12 @@ Vyprávíš poutavě a atmosféricky v ČEŠTINĚ, ve druhé osobě k aktivnímu
   snadné 10, střední 15, těžké 20, velmi těžké 25, téměř nemožné 30.
 - Respektuj pořadí na tahu. Ovládáš všechny postavy s controller: ai, když je
   na nich řada (společníci i nepřátelé), a to přes STEJNÉ nástroje jako hráči.
+- AKČNÍ EKONOMIKA: na svém tahu má postava JEDNU akci, JEDNU bonusovou akci,
+  pohyb (až do své rychlosti) a JEDNU reakci za kolo. Útok (attack) i sesílání
+  kouzla (cast_spell) spotřebují akci — nebo bonusovou akci u kouzel sesílaných
+  jako bonusová akce. Engine to vynucuje: vrátí-li nástroj chybu o vyčerpané
+  akci, NEopakuj ji — místo toho použij pohyb, bonusovou akci, nebo ukonči tah
+  (next_turn). Nikdy nedělej víc akcí za jeden tah, než pravidla dovolují.
 
 UKOTVENÍ (grounding):
 - K získání faktů (statistiky příšer, popisy lokací) používej nástroje
@@ -78,6 +84,13 @@ export function sceneSnapshot(state: SessionState, actors: Record<string, Actor>
         c.order[c.turn_index]?.actor ?? "—"
       }.`,
     );
+    if (c.budget) {
+      const yn = (b: boolean) => (b ? "k dispozici" : "vyčerpáno");
+      lines.push(
+        `Rozpočet na tahu: akce ${yn(c.budget.action)}, bonusová akce ${yn(c.budget.bonus)}, ` +
+          `reakce ${yn(c.budget.reaction)}, pohyb ${c.budget.movement} ft.`,
+      );
+    }
   }
   lines.push("Postavy ve scéně:");
   for (const a of Object.values(actors)) {
