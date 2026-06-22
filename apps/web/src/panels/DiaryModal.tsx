@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useGame } from "../store/store";
 import { Icon } from "../components/Icon";
+import { Markdown } from "../components/Markdown";
 
 /** Read-only viewer for the append-only session diary (§6.6 handoff surface). */
 export function DiaryModal({ onClose }: { onClose: () => void }) {
@@ -35,7 +36,7 @@ export function DiaryModal({ onClose }: { onClose: () => void }) {
               Deník je zatím prázdný. Naplní se, jakmile se bude hrát.
             </p>
           ) : (
-            <pre className="whitespace-pre-wrap font-body text-[15px] leading-relaxed text-ink">{text}</pre>
+            <Markdown text={text} className="font-body text-[15px] leading-relaxed text-ink" />
           )}
         </div>
       </div>

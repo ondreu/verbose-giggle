@@ -142,10 +142,10 @@ on old code and items **#15, #17, #18** are likely already resolved by updating.
   Assign distinct icons: e.g. a scroll/book for Shrnutí (summary), an undo
   arrow for Vrátit tah. `apps/web/src/components/Icon.tsx` and wherever the
   toolbar is rendered.
-- **#26 — Deník (journal) does not render Markdown.** The journal panel displays
-  raw Markdown source (`**bold**`, `## heading`) instead of formatted text.
-  Apply the same safe Markdown renderer used (or planned, see #1) for chat.
-  `apps/web/src/panels/JournalPanel.tsx`.
+- **[x] #26 — Deník (journal) does not render Markdown.** Done. `DiaryModal`
+  now renders the diary through the shared safe `<Markdown>` component (the same
+  one used in chat, #1) instead of a raw `<pre>`, so headings/bold/lists format
+  properly. `apps/web/src/panels/DiaryModal.tsx`.
 - **[x] #27 — TTS reads Markdown formatting aloud.** Done. `speak()` now runs
   narration through a `stripMarkdown` helper (emphasis/code/headings/lists/
   quotes/links) before hitting `/api/tts`, so the voice reads clean prose.
