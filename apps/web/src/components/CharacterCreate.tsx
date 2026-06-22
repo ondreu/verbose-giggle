@@ -1,15 +1,34 @@
 import { useEffect, useMemo, useState } from "react";
-import { csAbility, csAbilityAbbr, csSkill } from "@adm/schemas";
+import { csAbility, csAbilityAbbr, csSkill, csSpellSchool } from "@adm/schemas";
 import { useGame } from "../store/store";
 import { Icon } from "./Icon";
 
 type Ability = "str" | "dex" | "con" | "int" | "wis" | "cha";
 
+interface SubraceOpt {
+  id: string;
+  name: string;
+  bonuses: Partial<Record<Ability, number>>;
+  traits: string[];
+}
 interface RaceOpt {
   id: string;
   name: string;
   speed: number;
   bonuses: Partial<Record<Ability, number>>;
+  subraces: SubraceOpt[];
+}
+interface SpellOpt {
+  id: string;
+  name: string;
+  level: number;
+  school?: string;
+}
+interface SpellList {
+  cantripsAllowed: number;
+  spellsAllowed: number;
+  cantrips: SpellOpt[];
+  level1: SpellOpt[];
 }
 interface ClassOpt {
   id: string;
@@ -19,10 +38,13 @@ interface ClassOpt {
   skillCount: number;
   skills: string[];
   caster: "full" | "half" | "warlock" | "none";
+  subclasses: { id: string; name: string }[];
+  spellList?: SpellList;
 }
 interface Options {
   races: RaceOpt[];
   classes: ClassOpt[];
+  feats: { id: string; name: string }[];
   standardArray: number[];
   abilityOrder: Ability[];
 }
@@ -42,12 +64,14 @@ export function CharacterCreate({ onClose }: { onClose: () => void }) {
   const [opts, setOpts] = useState<Options | null>(null);
   const [name, setName] = useState("");
   const [raceId, setRaceId] = useState("");
+  const [subraceId, setSubraceId] = useState("");
   const [classId, setClassId] = useState("");
   const [abilities, setAbilities] = useState<Record<Ability, number>>({
     str: 15, dex: 14, con: 13, int: 12, wis: 10, cha: 8,
   });
   const [skills, setSkills] = useState<string[]>([]);
-  const [spells, setSpells] = useState("");
+  const [picked, setPicked] = useState<string[]>([]); // SRD spell-list selections
+  const [spells, setSpells] = useState(""); // free-text fallback
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -62,16 +86,22 @@ export function CharacterCreate({ onClose }: { onClose: () => void }) {
   }, []);
 
   const race = opts?.races.find((r) => r.id === raceId);
+  const subrace = race?.subraces.find((s) => s.id === subraceId);
   const cls = opts?.classes.find((c) => c.id === classId);
+  const spellList = cls?.spellList;
 
   // Reset skills when the class changes (their list is class-specific).
   useEffect(() => setSkills([]), [classId]);
+  // Reset spell picks when the class changes; reset subrace when race changes.
+  useEffect(() => setPicked([]), [classId]);
+  useEffect(() => setSubraceId(""), [raceId]);
 
   const finalAbilities = useMemo(() => {
     const out = { ...abilities };
     if (race) for (const k of Object.keys(out) as Ability[]) out[k] = Math.min(20, out[k] + (race.bonuses[k] ?? 0));
+    if (subrace) for (const k of Object.keys(out) as Ability[]) out[k] = Math.min(20, out[k] + (subrace.bonuses[k] ?? 0));
     return out;
-  }, [abilities, race]);
+  }, [abilities, race, subrace]);
 
   const toggleSkill = (s: string) => {
     setSkills((cur) => {
@@ -81,18 +111,35 @@ export function CharacterCreate({ onClose }: { onClose: () => void }) {
     });
   };
 
+  // Count current picks against the cantrip / level-1 caps.
+  const pickedCantrips = spellList ? picked.filter((id) => spellList.cantrips.some((s) => s.id === id)) : [];
+  const pickedSpells = spellList ? picked.filter((id) => spellList.level1.some((s) => s.id === id)) : [];
+  const toggleSpell = (id: string, kind: "cantrip" | "level1") => {
+    if (!spellList) return;
+    setPicked((cur) => {
+      if (cur.includes(id)) return cur.filter((x) => x !== id);
+      const cap = kind === "cantrip" ? spellList.cantripsAllowed : spellList.spellsAllowed;
+      const taken = kind === "cantrip" ? pickedCantrips.length : pickedSpells.length;
+      if (taken >= cap) return cur; // cap reached
+      return [...cur, id];
+    });
+  };
+
   const canSubmit = name.trim() && race && cls && (!cls || skills.length === cls.skillCount) && !busy;
 
   const submit = async () => {
     if (!race || !cls) return;
     setError(null);
+    // Prefer the SRD spell picks; fall back to the free-text field otherwise.
+    const chosenSpells = spellList ? picked : spells.split(",").map((s) => s.trim()).filter(Boolean);
     const res = await createCharacter({
       name: name.trim(),
       race: race.id,
+      subrace: subrace?.id,
       class: cls.id,
       abilities,
       skills,
-      spells: spells.split(",").map((s) => s.trim()).filter(Boolean),
+      spells: chosenSpells,
     });
     if (!res.ok) {
       setError(res.error ?? "Nepodařilo se vytvořit postavu");
@@ -147,6 +194,22 @@ export function CharacterCreate({ onClose }: { onClose: () => void }) {
                       rychlost {race.speed} ft ·{" "}
                       {Object.entries(race.bonuses).map(([k, v]) => `${csAbility(k)} +${v}`).join(", ")}
                     </p>
+                  )}
+                  {race && race.subraces.length > 0 && (
+                    <div className="mt-2">
+                      <Label>Podrasa</Label>
+                      <select className="settings-input bg-bg-crust text-text" value={subraceId} onChange={(e) => setSubraceId(e.target.value)}>
+                        <option value="">— bez podrasy —</option>
+                        {race.subraces.map((s) => (
+                          <option key={s.id} value={s.id}>{s.name}</option>
+                        ))}
+                      </select>
+                      {subrace && Object.keys(subrace.bonuses).length > 0 && (
+                        <p className="mt-1 font-log text-[10px] text-subtext0">
+                          {Object.entries(subrace.bonuses).map(([k, v]) => `${csAbility(k)} +${v}`).join(", ")}
+                        </p>
+                      )}
+                    </div>
                   )}
                 </div>
                 <div>
@@ -222,8 +285,30 @@ export function CharacterCreate({ onClose }: { onClose: () => void }) {
                 </div>
               )}
 
-              {/* Spells (casters) */}
-              {cls && cls.caster !== "none" && (
+              {/* Spells — real SRD picker when a class list is mounted, else free text. */}
+              {cls && spellList && (
+                <div className="flex flex-col gap-2">
+                  {spellList.cantrips.length > 0 && (
+                    <SpellPicker
+                      title={`Triky — vyber ${spellList.cantripsAllowed} (${pickedCantrips.length}/${spellList.cantripsAllowed})`}
+                      spells={spellList.cantrips}
+                      picked={picked}
+                      full={pickedCantrips.length >= spellList.cantripsAllowed}
+                      onToggle={(id) => toggleSpell(id, "cantrip")}
+                    />
+                  )}
+                  {spellList.level1.length > 0 && spellList.spellsAllowed > 0 && (
+                    <SpellPicker
+                      title={`Kouzla 1. úrovně — vyber ${spellList.spellsAllowed} (${pickedSpells.length}/${spellList.spellsAllowed})`}
+                      spells={spellList.level1}
+                      picked={picked}
+                      full={pickedSpells.length >= spellList.spellsAllowed}
+                      onToggle={(id) => toggleSpell(id, "level1")}
+                    />
+                  )}
+                </div>
+              )}
+              {cls && cls.caster !== "none" && !spellList && (
                 <div>
                   <Label>Počáteční kouzla (id oddělená čárkou, volitelné)</Label>
                   <input
@@ -255,4 +340,47 @@ export function CharacterCreate({ onClose }: { onClose: () => void }) {
 
 function Label({ children }: { children: React.ReactNode }) {
   return <label className="mb-1 block font-log text-[11px] uppercase tracking-wider text-subtext0">{children}</label>;
+}
+
+function SpellPicker({
+  title,
+  spells,
+  picked,
+  full,
+  onToggle,
+}: {
+  title: string;
+  spells: SpellOpt[];
+  picked: string[];
+  full: boolean;
+  onToggle: (id: string) => void;
+}) {
+  return (
+    <div>
+      <Label>{title}</Label>
+      <div className="flex flex-wrap gap-1.5">
+        {spells.map((s) => {
+          const on = picked.includes(s.id);
+          const disabled = !on && full;
+          return (
+            <button
+              key={s.id}
+              onClick={() => onToggle(s.id)}
+              disabled={disabled}
+              title={s.school ? csSpellSchool(s.school) : undefined}
+              className={`rounded-sm border px-2 py-0.5 font-log text-[11px] ${
+                on
+                  ? "border-gold/60 bg-gold/10 text-gold"
+                  : disabled
+                    ? "border-surface1 text-subtext0/40"
+                    : "border-surface2 text-subtext1 hover:border-gold/40"
+              }`}
+            >
+              {s.name}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
