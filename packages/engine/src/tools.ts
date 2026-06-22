@@ -671,13 +671,44 @@ export const TOOLS: ToolDef[] = [
   }),
   def({
     name: "lookup",
-    description: "Read-only: fetch SRD or vault entity data to ground narration (never invent stats).",
+    description:
+      "Read-only: fetch SRD or vault entity data to ground narration (never invent stats). Covers monsters, spells, equipment, magic items, races, classes, subclasses, feats, traits, and party actors.",
     readOnly: true,
-    schema: z.object({ kind: z.enum(["monster", "spell", "equipment", "actor"]), id: z.string() }),
+    schema: z.object({
+      kind: z.enum([
+        "monster",
+        "spell",
+        "equipment",
+        "magic-item",
+        "race",
+        "subrace",
+        "class",
+        "subclass",
+        "feat",
+        "trait",
+        "actor",
+      ]),
+      id: z.string(),
+    }),
     parameters: {
       type: "object",
       properties: {
-        kind: { type: "string", enum: ["monster", "spell", "equipment", "actor"] },
+        kind: {
+          type: "string",
+          enum: [
+            "monster",
+            "spell",
+            "equipment",
+            "magic-item",
+            "race",
+            "subrace",
+            "class",
+            "subclass",
+            "feat",
+            "trait",
+            "actor",
+          ],
+        },
         id: { type: "string" },
       },
       required: ["kind", "id"],
@@ -690,6 +721,20 @@ export const TOOLS: ToolDef[] = [
           return state.srd.spell(args.id) ?? { error: "not found" };
         case "equipment":
           return state.srd.equipment(args.id) ?? { error: "not found" };
+        case "magic-item":
+          return state.srd.magicItem(args.id) ?? { error: "not found" };
+        case "race":
+          return state.srd.race(args.id) ?? { error: "not found" };
+        case "subrace":
+          return state.srd.subrace(args.id) ?? { error: "not found" };
+        case "class":
+          return state.srd.class(args.id) ?? { error: "not found" };
+        case "subclass":
+          return state.srd.subclass(args.id) ?? { error: "not found" };
+        case "feat":
+          return state.srd.feat(args.id) ?? { error: "not found" };
+        case "trait":
+          return state.srd.trait(args.id) ?? { error: "not found" };
         case "actor":
           return state.actors[args.id] ?? { error: "not found" };
       }

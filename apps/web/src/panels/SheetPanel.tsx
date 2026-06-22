@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { csCondition, csConditionDesc, csAbility, csAbilityAbbr, csClass, csLineage, type AbilityKey } from "@adm/schemas";
+import { csCondition, csConditionDesc, csAbility, csAbilityAbbr, csClass, csFeat, csLineage, type AbilityKey } from "@adm/schemas";
 import { useGame } from "../store/store";
 import { Icon } from "../components/Icon";
 import { LevelUpModal } from "../components/LevelUpModal";
@@ -272,6 +272,38 @@ export function SheetPanel() {
           )}
         </div>
       )}
+
+      {/* Features, feats & languages from the SRD (#20). */}
+      {(actor.features?.length ?? 0) > 0 && (
+        <TagRow label="Schopnosti" items={(actor.features ?? []).map(humanizeId)} />
+      )}
+      {(actor.feats?.length ?? 0) > 0 && (
+        <TagRow label="Vlastnosti (feats)" items={(actor.feats ?? []).map((f) => csFeat(f, humanizeId(f)))} />
+      )}
+      {(actor.languages?.length ?? 0) > 0 && (
+        <TagRow label="Jazyky" items={(actor.languages ?? []).map(humanizeId)} />
+      )}
     </section>
+  );
+}
+
+/** Turn an SRD id like "elf-weapon-training" into "Elf weapon training". */
+function humanizeId(id: string): string {
+  const s = id.replace(/[-_]/g, " ").trim();
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+function TagRow({ label, items }: { label: string; items: string[] }) {
+  return (
+    <div className="mt-3">
+      <div className="mb-1 text-[11px] uppercase tracking-wider text-ink/60">{label}</div>
+      <div className="flex flex-wrap gap-1.5">
+        {items.map((t, i) => (
+          <span key={`${t}-${i}`} className="rounded-sm border border-ink/20 bg-ink/5 px-1.5 py-0.5 font-log text-[11px] text-ink/80">
+            {t}
+          </span>
+        ))}
+      </div>
+    </div>
   );
 }

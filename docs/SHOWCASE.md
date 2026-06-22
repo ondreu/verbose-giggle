@@ -165,26 +165,41 @@ is available — enough for the example, not for real play. For the full set:
    under `src/`, **versioned and multilingual** — `src/2014/en/`, `src/2024/en/`,
    plus translations (`fr-FR`, `pt-BR`, `ru`). This project targets **SRD 5.1 =
    the 2014 edition, English**.
-2. **Copy only these three files, from `src/2014/en/`, flat into the host `srd/`
-   folder:**
+2. **Copy these files, from `src/2014/en/`, flat into the host `srd/` folder.**
+   The three core files are enough for monsters/spells/items:
    ```
    srd/5e-SRD-Monsters.json
    srd/5e-SRD-Spells.json
    srd/5e-SRD-Equipment.json
+   ```
+   For full character creation & leveling (#20), also add:
+   ```
+   srd/5e-SRD-Races.json
+   srd/5e-SRD-Subraces.json
+   srd/5e-SRD-Classes.json
+   srd/5e-SRD-Subclasses.json
+   srd/5e-SRD-Features.json
+   srd/5e-SRD-Traits.json
+   srd/5e-SRD-Feats.json
+   srd/5e-SRD-Magic-Items.json
+   srd/5e-SRD-Proficiencies.json
+   srd/5e-SRD-Languages.json
    ```
    - Do **not** dump the whole `src/` tree: the loader matches by filename
      recursively, so every language and both editions would load and overwrite
      each other by `index` → mixed-language, mixed-edition garbage.
    - Do **not** use `src/2024/en/` (different structure — Species vs Races, etc.;
      the loader is written for the 2014 format).
-   - Do **not** copy `5e-SRD-Equipment-Categories.json` (it also matches
-     `equipment` and would add junk entries).
+   - `5e-SRD-Equipment-Categories.json` and `5e-SRD-Spellcasting.json` are now
+     **ignored** (the loader matches exact category filenames), so they no
+     longer leak junk if present — but you still don't need them.
    - `srd/` is mounted to `/data/srd` by the Compose stacks; on a NAS, upload the
-     three JSON files there via the File Manager.
-3. The loader (`apps/server/src/srd/load.ts`) **recursively** finds files
-   matching `*monster*`, `*spell*`, `*equipment*` by name. Restart the app;
-   bestiary notes that set `srd_ref:` now resolve to full stats, and casters'
-   `spells_known` resolve to real spell data.
+     JSON files there via the File Manager.
+3. The loader (`apps/server/src/srd/load.ts`) finds files by their exact
+   `5e-SRD-<Category>.json` name (recursively, case-insensitive). Restart the
+   app; bestiary `srd_ref:` notes resolve to full stats, casters' `spells_known`
+   resolve to real spell data, and character creation/leveling draw on the real
+   races, subraces, classes, subclasses, features, feats and spell lists.
 
 > Why not fetch from GitHub at runtime? By design this is offline/self-hosted
 > (NAS, possibly restricted egress) and deterministic — pin a snapshot, mount

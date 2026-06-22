@@ -57,6 +57,7 @@ describe("SRD dataset loader (5e-bits/5e-database shape)", () => {
     expect(out.spells.fireball?.level).toBe(3);
     expect(out.spells.fireball?.save?.ability).toBe("dex");
     expect(out.spells.fireball?.range_ft).toBe(150);
+    expect(out.spells.fireball?.classes ?? []).toEqual([]); // none tagged here
     expect(out.equipment.greataxe?.damage).toBe("1d12");
   });
 
