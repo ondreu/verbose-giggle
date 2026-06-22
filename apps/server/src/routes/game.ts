@@ -1,5 +1,6 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
+import YAML from "yaml";
 import type { FastifyInstance } from "fastify";
 import { LlmClient, type Llm } from "../llm/client.js";
 import { MockLlmClient } from "../llm/mock.js";
@@ -8,7 +9,14 @@ import { synthesizeAzure } from "../tts/azure.js";
 import { resolveAiTurns, runRecap, runTurn } from "../session/loop.js";
 import { startEncounter } from "../session/encounter.js";
 import type { EventBus } from "../session/events.js";
-import type { SessionManager } from "../session/manager.js";
+import { SessionManager } from "../session/manager.js";
+import { createCampaign } from "../vault/scaffold.js";
+import {
+  createSnapshot,
+  deleteSnapshot,
+  listSnapshots,
+  restoreSnapshot,
+} from "../vault/snapshots.js";
 import { applySettings, loadConfig, type Config } from "../config.js";
 import { loadSettings, saveSettings, type Settings } from "../settings.js";
 
@@ -162,6 +170,111 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
       return settingsView();
     } catch (err) {
       return reply.code(500).send({ error: err instanceof Error ? err.message : String(err) });
+    }
+  });
+
+  // --- Campaigns: start-menu management + hot-swap (§2) ---------------------
+  /** Re-open the SessionManager in place; handlers read ctx.manager lazily. */
+  async function reopenManager(folder?: string): Promise<void> {
+    const dir = folder
+      ? path.join(config.vaultPath, "campaigns", folder)
+      : ctx.manager.campaign.dir;
+    ctx.manager = await SessionManager.open(dir, { srdDir: config.srdPath });
+  }
+
+  /** List campaigns with display name + party size for the start menu. */
+  app.get("/api/campaigns", async () => {
+    const folders = await listCampaigns();
+    const active = path.basename(ctx.manager.campaign.dir);
+    const campaigns = [];
+    for (const folder of folders) {
+      let name = folder;
+      let party = 0;
+      try {
+        const raw = await fs.readFile(
+          path.join(config.vaultPath, "campaigns", folder, "campaign.yaml"),
+          "utf8",
+        );
+        const cfg = YAML.parse(raw) ?? {};
+        name = cfg.name ?? folder;
+        party = Array.isArray(cfg.party) ? cfg.party.length : 0;
+      } catch {
+        /* skip unreadable config */
+      }
+      campaigns.push({ folder, name, party, active: folder === active });
+    }
+    return { active, campaigns };
+  });
+
+  /** Create a fresh campaign folder (optionally switch to it). */
+  app.post<{ Body: { name: string; folder?: string; startingLocationName?: string; select?: boolean } }>(
+    "/api/campaigns",
+    async (req, reply) => {
+      try {
+        const folder = await createCampaign(config.vaultPath, {
+          name: req.body?.name ?? "",
+          folder: req.body?.folder,
+          startingLocationName: req.body?.startingLocationName,
+        });
+        if (req.body?.select) {
+          await saveSettings(config.vaultPath, { campaign: folder });
+          config = applySettings(loadConfig(), await loadSettings(config.vaultPath));
+          await reopenManager(folder);
+          llm = makeLlm();
+          ctx.bus.emit({ type: "reload", reason: "campaign-created" });
+        }
+        return { ok: true, folder };
+      } catch (err) {
+        return reply.code(400).send({ error: err instanceof Error ? err.message : String(err) });
+      }
+    },
+  );
+
+  /** Switch the active campaign — persists the choice and hot-swaps in place. */
+  app.post<{ Body: { folder: string } }>("/api/campaigns/select", async (req, reply) => {
+    const folder = (req.body?.folder ?? "").trim();
+    if (!folder) return reply.code(400).send({ error: "missing folder" });
+    const dir = path.join(config.vaultPath, "campaigns", folder);
+    try {
+      await fs.access(path.join(dir, "campaign.yaml"));
+    } catch {
+      return reply.code(404).send({ error: "unknown campaign" });
+    }
+    await saveSettings(config.vaultPath, { campaign: folder });
+    config = applySettings(loadConfig(), await loadSettings(config.vaultPath));
+    await reopenManager(folder);
+    llm = makeLlm();
+    ctx.bus.emit({ type: "reload", reason: "campaign-changed" });
+    return { ok: true, campaign: ctx.manager.campaign.config.name };
+  });
+
+  // --- Snapshots: campaign rollback (§7) -----------------------------------
+  app.get("/api/snapshots", async () => ({
+    snapshots: await listSnapshots(ctx.manager.campaign.dir),
+  }));
+
+  app.post<{ Body: { label?: string } }>("/api/snapshots", async (req) => ({
+    ok: true,
+    snapshot: await createSnapshot(ctx.manager.campaign.dir, { label: req.body?.label }),
+  }));
+
+  app.post<{ Params: { id: string } }>("/api/snapshots/:id/restore", async (req, reply) => {
+    try {
+      await restoreSnapshot(ctx.manager.campaign.dir, req.params.id);
+      await reopenManager();
+      ctx.bus.emit({ type: "reload", reason: "snapshot-restored" });
+      return { ok: true };
+    } catch (err) {
+      return reply.code(400).send({ error: err instanceof Error ? err.message : String(err) });
+    }
+  });
+
+  app.delete<{ Params: { id: string } }>("/api/snapshots/:id", async (req, reply) => {
+    try {
+      await deleteSnapshot(ctx.manager.campaign.dir, req.params.id);
+      return { ok: true };
+    } catch (err) {
+      return reply.code(400).send({ error: err instanceof Error ? err.message : String(err) });
     }
   });
 

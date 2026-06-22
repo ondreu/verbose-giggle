@@ -7,6 +7,7 @@ export type GameEvent =
   | { type: "state"; state: SessionState }
   | { type: "thinking"; tool: string }
   | { type: "actor_turn"; actor: string; name: string; controller: "human" | "ai" }
+  | { type: "reload"; reason: string }
   | { type: "error"; message: string };
 
 /** A tiny pub/sub bus the SSE route subscribes to (§13: SSE for push). */
