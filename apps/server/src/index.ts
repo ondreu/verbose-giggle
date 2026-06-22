@@ -14,7 +14,19 @@ async function findCampaignDir(vaultPath: string, selected?: string): Promise<st
   const explicit = selected || process.env.CAMPAIGN;
   const campaignsRoot = path.join(vaultPath, "campaigns");
   if (explicit) return path.join(campaignsRoot, explicit);
-  const entries = await fs.readdir(campaignsRoot, { withFileTypes: true });
+  let entries;
+  try {
+    entries = await fs.readdir(campaignsRoot, { withFileTypes: true });
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") {
+      throw new Error(
+        `Vault has no campaigns/ folder at ${campaignsRoot}. ` +
+          `Point VAULT_PATH at a vault that contains campaigns/, or seed one ` +
+          `(e.g. copy data/vault.example/* into it).`,
+      );
+    }
+    throw err;
+  }
   const first = entries.find((e) => e.isDirectory());
   if (!first) throw new Error(`No campaigns found in ${campaignsRoot}`);
   return path.join(campaignsRoot, first.name);

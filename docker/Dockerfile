@@ -68,4 +68,9 @@ ENV VAULT_PATH=/data/vault
 
 EXPOSE 3000
 
-CMD ["node", "apps/server/dist/index.js"]
+# Entrypoint re-seeds the example into an empty mounted vault before starting
+# (a bind mount over /data/vault hides the copy above). Idempotent.
+COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
