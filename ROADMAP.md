@@ -66,13 +66,18 @@ on old code and items **#15, #17, #18** are likely already resolved by updating.
     (`ttsEnabled`, `ttsProvider`) now persist to `localStorage` and rehydrate on
     boot (`apps/web/src/store/store.ts`). Remaining: anything else found to reset.
 - **[x] #23 — Character cannot die; death saving throws have no consequence.**
-  Done. A third failed death save now marks the actor `dead`
-  (`packages/engine/src/combat.ts` → `markDead`), removes them from initiative
-  (`removeFromCombat` in `turns.ts`), and — once no party hero is left standing
-  — sets `session.ending`. The loop stops (`resolveAiTurns`), `/api/action`
-  refuses further input (409), the death flag persists via the session overlay,
-  and the web app shows a game-over screen with a load-last-save / main-menu
-  prompt (`apps/web/src/components/GameOverModal.tsx`).
+  Done. A third failed death save marks the actor `dead`
+  (`packages/engine/src/combat.ts` → `markDead`) and removes them from
+  initiative (`removeFromCombat` in `turns.ts`). The campaign only **ends for a
+  single-character campaign** when its lone hero dies — multi-character parties
+  play on; `checkCampaignEnd(state, roster)` makes this decision from the
+  config party roster (called in `SessionManager.applyTool`). On an ending the
+  loop stops (`resolveAiTurns`), `/api/action` refuses input (409), the death
+  flag persists via the session overlay, and the web app shows a game-over
+  screen (`GameOverModal`) offering **create a new character**, load-last-save,
+  or main menu. Creating a replacement retires the fallen hero from the roster
+  (`removeFromParty`), clears `session.ending`, and resumes play with the
+  newcomer.
 - **[x] #29 — AI validates ability use against the character sheet; HP not
   updated.** Done. (a) `castSpell` now refuses a spell that isn't on a player
   character's `spells_known` list — no slot spent, refusal logged, monsters

@@ -191,3 +191,19 @@ export async function createCharacter(
 
   return { id };
 }
+
+/**
+ * Remove an actor id from the campaign party roster (campaign.yaml). Used when
+ * a fallen hero is replaced after a game-over so the roster stays accurate and
+ * a single-character campaign remains single-character (#23). The actor note is
+ * left on disk as history; it is simply no longer an active party member.
+ */
+export async function removeFromParty(campaignDir: string, id: string): Promise<void> {
+  const cfgPath = path.join(campaignDir, "campaign.yaml");
+  const cfg = YAML.parse(await fs.readFile(cfgPath, "utf8")) ?? {};
+  if (!Array.isArray(cfg.party)) return;
+  const next = cfg.party.filter((p: string) => p !== id);
+  if (next.length === cfg.party.length) return;
+  cfg.party = next;
+  await fs.writeFile(cfgPath, YAML.stringify(cfg), "utf8");
+}

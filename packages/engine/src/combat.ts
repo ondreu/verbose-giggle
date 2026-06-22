@@ -324,39 +324,41 @@ export function deathSave(state: GameState, args: { actor: string }): DeathSaveR
 }
 
 /**
- * Mark an actor permanently dead (#23): set the flag, pull them out of the
- * initiative order, and — if every party hero is now dead — flag the session
- * as ended so the loop stops and the UI can offer a rollback. Death is not
+ * Mark an actor permanently dead (#23): set the flag and pull them out of the
+ * initiative order. The body stays unconscious for narration. Death is not
  * recoverable here; only a dedicated revival spell (not yet modelled) would be.
+ * Whether the *campaign* ends is decided separately (see `checkCampaignEnd`),
+ * because that depends on the party roster the engine doesn't own.
  */
 function markDead(state: GameState, actor: Actor): void {
   actor.dead = true;
-  // The body is no longer a combatant; keep it unconscious for narration.
   if (!actor.conditions.some((c) => c.name === "unconscious")) {
     actor.conditions.push({ name: "unconscious", source: "mrtev", duration: null });
   }
   removeFromCombat(state, actor.id);
+}
 
-  // A dead hero ends the campaign once no party member is left standing.
-  if (actor.faction === "party") {
-    const heroes = Object.values(state.actors).filter((a) => a.faction === "party");
-    const wiped = heroes.length > 0 && heroes.every((a) => a.dead === true);
-    if (wiped && !state.session.ending) {
-      state.session.ending = {
-        reason:
-          heroes.length === 1
-            ? `${actor.name} nepřežívá záchrany před smrtí. Výprava končí.`
-            : "Celá družina padla. Výprava končí.",
-        actor: actor.id,
-      };
-      log(state, {
-        kind: "death",
-        actor: actor.id,
-        detail: `${actor.name} umírá. ${state.session.ending.reason}`,
-        tool: "death_save",
-      });
-    }
-  }
+/**
+ * Decide whether a death ends the campaign (#23). Only a *single-character*
+ * campaign ends when its lone hero dies — multi-character parties play on (a
+ * fallen member can be replaced). `roster` is the campaign's party id list
+ * (owned by the server config), passed in so the engine stays roster-agnostic.
+ */
+export function checkCampaignEnd(state: GameState, roster: string[]): void {
+  if (state.session.ending) return;
+  if (roster.length !== 1) return; // only solo campaigns end on death
+  const hero = state.actors[roster[0]!];
+  if (!hero?.dead) return;
+  state.session.ending = {
+    reason: `${hero.name} nepřežívá záchrany před smrtí. Výprava končí.`,
+    actor: hero.id,
+  };
+  log(state, {
+    kind: "death",
+    actor: hero.id,
+    detail: `${hero.name} umírá. ${state.session.ending.reason}`,
+    tool: "death_save",
+  });
 }
 
 export function applyCondition(

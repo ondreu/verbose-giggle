@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyDamage, attack, deathSave, heal } from "../src/index.js";
+import { applyDamage, attack, checkCampaignEnd, deathSave, heal } from "../src/index.js";
 import { makeActor, makeState } from "./helpers.js";
 
 describe("apply_damage", () => {
@@ -138,7 +138,7 @@ describe("death consequence (#23)", () => {
     };
   }
 
-  it("third failed save kills a solo hero, pulls them from initiative, and ends the campaign", () => {
+  it("third failed save marks the hero dead and pulls them from initiative", () => {
     let died = false;
     for (let s = 0; s < 200 && !died; s++) {
       const hero = downedHero(2);
@@ -150,31 +150,34 @@ describe("death consequence (#23)", () => {
         died = true;
         expect(hero.dead).toBe(true);
         expect(state.session.combat?.order.some((o) => o.actor === "h")).toBe(false);
-        expect(state.session.ending).not.toBeNull();
-        expect(state.session.ending?.actor).toBe("h");
       } else {
         expect(hero.dead).toBe(false);
-        expect(state.session.ending).toBeNull();
       }
     }
     expect(died).toBe(true);
   });
 
-  it("does not end the campaign while another party hero still stands", () => {
-    let died = false;
-    for (let s = 0; s < 200 && !died; s++) {
-      const hero = downedHero(2);
-      const ally = makeActor({ id: "a", name: "Druh", faction: "party" });
-      const state = makeState([hero, ally], `ally-${s}`);
-      withCombat(state, ["a", "h"]);
-      const r = deathSave(state, { actor: "h" });
-      if (r.outcome === "dead") {
-        died = true;
-        expect(hero.dead).toBe(true);
-        expect(state.session.ending).toBeNull(); // ally still alive → no game-over
-      }
-    }
-    expect(died).toBe(true);
+  it("ends a single-character campaign when its lone hero dies", () => {
+    const hero = makeActor({ id: "h", name: "Hrdina", faction: "party", dead: true });
+    const state = makeState([hero], "solo-end");
+    checkCampaignEnd(state, ["h"]);
+    expect(state.session.ending).not.toBeNull();
+    expect(state.session.ending?.actor).toBe("h");
+  });
+
+  it("does NOT end a multi-character campaign even on a full wipe", () => {
+    const a = makeActor({ id: "a", name: "A", faction: "party", dead: true });
+    const b = makeActor({ id: "b", name: "B", faction: "party", dead: true });
+    const state = makeState([a, b], "multi-wipe");
+    checkCampaignEnd(state, ["a", "b"]); // both dead, but roster > 1
+    expect(state.session.ending).toBeNull();
+  });
+
+  it("does not end a solo campaign while the hero still lives", () => {
+    const hero = makeActor({ id: "h", name: "Hrdina", faction: "party" });
+    const state = makeState([hero], "solo-alive");
+    checkCampaignEnd(state, ["h"]);
+    expect(state.session.ending).toBeNull();
   });
 });
 

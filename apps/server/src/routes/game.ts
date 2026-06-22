@@ -12,7 +12,7 @@ import type { EventBus } from "../session/events.js";
 import { SessionManager } from "../session/manager.js";
 import { createCampaign } from "../vault/scaffold.js";
 import { forgeCampaign, type ForgeInput } from "../vault/forge.js";
-import { createCharacter, creationOptions, type CharacterDraft } from "../vault/creation.js";
+import { createCharacter, creationOptions, removeFromParty, type CharacterDraft } from "../vault/creation.js";
 import {
   checkpointTurn,
   createSnapshot,
@@ -317,11 +317,21 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
 
   app.post<{ Body: CharacterDraft }>("/api/characters", async (req, reply) => {
     try {
+      // If the campaign is over (a fallen solo hero, #23), this creation is a
+      // replacement: remember the ending so we can retire the dead PC and
+      // resume play with the newcomer.
+      const ending = ctx.manager.session.ending;
       const { id } = await createCharacter(ctx.manager.campaign, req.body as CharacterDraft);
-      // Reload so the new actor + party membership are live, then point the
-      // hotseat at the new character if no one is active yet.
+      if (ending?.actor) await removeFromParty(ctx.manager.campaign.dir, ending.actor);
+      // Reload so the new actor + party membership are live.
       await reopenManager();
-      if (!ctx.manager.session.active_player) {
+      if (ending) {
+        // Lift the game-over state and hand control to the new character.
+        ctx.manager.session.ending = null;
+        ctx.manager.session.active_player = id;
+        await ctx.manager.persist();
+      } else if (!ctx.manager.session.active_player) {
+        // First character of a fresh campaign: point the hotseat at them.
         ctx.manager.session.active_player = id;
         await ctx.manager.persist();
       }

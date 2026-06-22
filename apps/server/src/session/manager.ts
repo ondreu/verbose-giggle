@@ -1,5 +1,5 @@
 import type { Actor, SessionState } from "@adm/schemas";
-import { dispatch, makeRng, TOOLS, type GameState } from "@adm/engine";
+import { checkCampaignEnd, dispatch, makeRng, TOOLS, type GameState } from "@adm/engine";
 import { createSrdIndex, type SrdEquipment } from "@adm/srd";
 import { loadSrdDataset, type SrdOverrides } from "../srd/load.js";
 import {
@@ -89,6 +89,9 @@ export class SessionManager {
   /** Run a single tool through the engine, persisting the resulting state. */
   async applyTool(gs: GameState, name: string, args: unknown) {
     const result = dispatch(gs, name, args);
+    // A solo hero's death ends the campaign; the roster lives in the config,
+    // so the engine can't decide this on its own (#23).
+    checkCampaignEnd(gs, this.campaign.config.party ?? []);
     this.syncOverlay(gs);
     return result;
   }
