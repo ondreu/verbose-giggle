@@ -5,11 +5,13 @@ import {
   ActorSchema,
   CampaignSchema,
   EncounterSchema,
+  ItemSchema,
   LocationSchema,
   SessionState,
   type Actor,
   type Campaign,
   type Encounter,
+  type Item,
   type Location,
 } from "@adm/schemas";
 import { listNotes, readNote, writeNote, type Note } from "./notes.js";
@@ -22,6 +24,9 @@ export interface LoadedCampaign {
   actorFiles: Record<string, string>;
   locations: Record<string, Location>;
   encounters: Record<string, Encounter>;
+  items: Record<string, Item>;
+  /** Free lore notes (factions, quests) for narration grounding (§6). */
+  lore: Record<string, { id: string; name: string; body: string }>;
 }
 
 async function loadActorsFrom(dir: string): Promise<{ actors: Actor[]; files: Record<string, string> }> {
@@ -69,7 +74,22 @@ export async function loadCampaign(campaignDir: string): Promise<LoadedCampaign>
     if (parsed.success) encounters[parsed.data.id] = parsed.data;
   }
 
-  return { dir: campaignDir, config, actors, actorFiles, locations, encounters };
+  const items: Record<string, Item> = {};
+  for (const file of await listNotes(path.join(campaignDir, "items"))) {
+    const note = await readNote(file);
+    const parsed = ItemSchema.safeParse(note.data);
+    if (parsed.success) items[parsed.data.id] = parsed.data;
+    else console.warn(`[vault] skipping invalid item ${file}: ${parsed.error.message}`);
+  }
+
+  const lore: LoadedCampaign["lore"] = {};
+  for (const file of await listNotes(path.join(campaignDir, "lore"))) {
+    const note = await readNote<{ id?: string; name?: string }>(file);
+    const id = note.data.id ?? path.basename(file, ".md");
+    lore[id] = { id, name: note.data.name ?? id, body: note.body };
+  }
+
+  return { dir: campaignDir, config, actors, actorFiles, locations, encounters, items, lore };
 }
 
 const sessionPath = (dir: string) => path.join(dir, "state", "session.json");

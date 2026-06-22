@@ -1,6 +1,7 @@
 import { roll, rollD20 } from "./dice.js";
 import { applyDamage, heal } from "./combat.js";
-import { savingThrow, type Advantage } from "./checks.js";
+import { savingThrow } from "./checks.js";
+import type { Advantage } from "./conditions.js";
 import { abilityMod, getActor, log, type GameState } from "./state.js";
 
 export interface CastResult {

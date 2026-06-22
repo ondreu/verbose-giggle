@@ -1,6 +1,7 @@
 import type { Actor, SessionState } from "@adm/schemas";
 import { dispatch, makeRng, TOOLS, type GameState } from "@adm/engine";
-import { createSrdIndex } from "@adm/srd";
+import { createSrdIndex, type SrdEquipment } from "@adm/srd";
+import { loadSrdDataset, type SrdOverrides } from "../srd/load.js";
 import {
   appendSessionLog,
   flushActor,
@@ -23,12 +24,28 @@ export class SessionManager {
   private constructor(
     public campaign: LoadedCampaign,
     public session: SessionState,
+    private srdOverrides: SrdOverrides,
   ) {}
 
-  static async open(campaignDir: string): Promise<SessionManager> {
+  static async open(campaignDir: string, opts?: { srdDir?: string }): Promise<SessionManager> {
     const campaign = await loadCampaign(campaignDir);
     const session = await loadSession(campaign);
-    return new SessionManager(campaign, session);
+    // Merge the mounted SRD dataset (if any) with homebrew items from the
+    // campaign, so inventory/weapon/armor ids resolve in the engine (§6.4).
+    const dataset = opts?.srdDir ? await loadSrdDataset(opts.srdDir) : { monsters: {}, spells: {}, equipment: {} };
+    for (const item of Object.values(campaign.items)) {
+      const eq: SrdEquipment = {
+        id: item.id,
+        name: item.name,
+        category: item.category,
+        weight: item.weight ?? 0,
+        damage: item.damage,
+        properties: item.properties,
+        ac: item.ac,
+      };
+      dataset.equipment[item.id] = eq;
+    }
+    return new SessionManager(campaign, session, dataset);
   }
 
   /** Build a fresh engine GameState with actors resolved from base + overlay. */
@@ -46,7 +63,7 @@ export class SessionManager {
     return {
       actors,
       session: this.session,
-      srd: createSrdIndex(),
+      srd: createSrdIndex(this.srdOverrides),
       rng: makeRng(`${this.campaign.config.name}:${Date.now()}`),
       variant: {
         flanking: this.campaign.config.variant_rules.flanking,

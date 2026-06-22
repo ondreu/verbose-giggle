@@ -3,6 +3,7 @@ export interface Config {
   port: number;
   host: string;
   vaultPath: string;
+  srdPath: string;
   llm: { baseUrl: string; apiKey: string; model: string };
   piperUrl: string | null;
   basicAuth: string | null;
@@ -10,10 +11,13 @@ export interface Config {
 }
 
 export function loadConfig(): Config {
+  const vaultPath = process.env.VAULT_PATH ?? "./data/vault";
   return {
     port: Number(process.env.PORT ?? 3000),
     host: process.env.HOST ?? "0.0.0.0",
-    vaultPath: process.env.VAULT_PATH ?? "./data/vault",
+    vaultPath,
+    // Shared SRD dataset (5e-bits/5e-database). Defaults to <vault>/srd.
+    srdPath: process.env.SRD_PATH ?? `${vaultPath.replace(/\/$/, "")}/srd`,
     llm: {
       baseUrl: process.env.LLM_BASE_URL ?? "https://api.mistral.ai/v1",
       apiKey: process.env.LLM_API_KEY ?? "",

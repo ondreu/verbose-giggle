@@ -83,6 +83,7 @@ Read by `apps/server/src/config.ts`. See [`.env.example`](.env.example) for the 
 | `LLM_BASE_URL` | `https://api.mistral.ai/v1` | No | OpenAI-compatible chat-completions base URL. Set to OpenRouter's to route there. |
 | `LLM_MODEL` | `mistral-medium-3.5` | No | Model id (overridable per campaign via `campaign.yaml`). |
 | `VAULT_PATH` | `./data/vault` | No | Path to the vault root (contains `campaigns/`). |
+| `SRD_PATH` | `<vault>/srd` | No | Full SRD dataset (5e-bits/5e-database JSON); falls back to a bundled subset. |
 | `CAMPAIGN` | _(first found)_ | No | Specific campaign folder under `<vault>/campaigns`. |
 | `PIPER_URL` | _(unset → TTS off)_ | No | Piper HTTP endpoint (`POST /tts {text} -> audio/wav`). |
 | `BASIC_AUTH` | _(none)_ | No | Optional shared HTTP Basic Auth gate, `user:pass`. |

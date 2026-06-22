@@ -1,4 +1,5 @@
 import type { Position } from "@adm/schemas";
+import { movementBlocked } from "./conditions.js";
 import { getActor, log, type GameState } from "./state.js";
 
 export type DiagonalRule = "5-5-5" | "5-10-5";
@@ -69,6 +70,9 @@ export function move(state: GameState, args: { actor: string; to: Position }): M
   const actor = getActor(state, args.actor);
   const from = c.tokens[args.actor] ?? actor.position;
   if (!from) return { ok: false, error: "Actor has no position" };
+  if (movementBlocked(actor)) {
+    return { ok: false, error: "Actor cannot move (grappled/restrained/incapacitated)" };
+  }
 
   const { w, h, cell_ft } = c.grid;
   if (args.to.x < 0 || args.to.y < 0 || args.to.x >= w || args.to.y >= h) {
@@ -165,7 +169,7 @@ export function reachableCells(
   if (!c) return { cells: [], budget: 0 };
   const actor = getActor(state, args.actor);
   const from = c.tokens[args.actor] ?? actor.position;
-  if (!from) return { cells: [], budget: 0 };
+  if (!from || movementBlocked(actor)) return { cells: [], budget: 0 };
 
   const { w, h, cell_ft } = c.grid;
   const { blocked, difficult } = buildCostMap(state, args.actor);

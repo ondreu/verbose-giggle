@@ -1,6 +1,7 @@
 export * from "./rng.js";
 export * from "./dice.js";
 export * from "./state.js";
+export * from "./conditions.js";
 export * from "./checks.js";
 export * from "./combat.js";
 export * from "./turns.js";

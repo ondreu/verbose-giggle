@@ -1,7 +1,8 @@
 import type { Actor, ActiveCondition, ConditionName, DamageType } from "@adm/schemas";
 import { roll, rollD20 } from "./dice.js";
-import { savingThrow, type Advantage } from "./checks.js";
-import { coverBetween } from "./grid.js";
+import { savingThrow } from "./checks.js";
+import { attackMods, combineAdv, type Advantage } from "./conditions.js";
+import { coverBetween, distanceFt } from "./grid.js";
 import { abilityMod, actorAc, getActor, log, type GameState } from "./state.js";
 
 function damageMultiplier(actor: Actor, type?: string): { mult: number; tag: string } {
@@ -186,11 +187,26 @@ export function attack(
     if (cov.cover !== "none") coverNote = ` (kryt ${cov.cover}: +${cov.acBonus} AC)`;
   }
 
-  const d20 = rollD20(state.rng, profile.toHitMod, args.advantage ?? "none");
+  // Condition-driven advantage/disadvantage, auto-crit, and can't-act (§8.1).
+  const weaponEq = args.weapon ? state.srd.equipment(args.weapon) : undefined;
+  const ranged = !!weaponEq?.range_ft || (weaponEq?.properties?.includes("ammunition") ?? false);
+  const adjacent =
+    combat && from && to
+      ? distanceFt(from, to, combat.grid.cell_ft, state.variant.diagonals) <= 5
+      : true;
+  const cmods = attackMods(attacker, target, { ranged, adjacent });
+  if (cmods.blocked) {
+    const detail = `${attacker.name} nemůže útočit (neschopen jednat)`;
+    log(state, { kind: "attack", actor: args.attacker, target: args.target, detail, tool: "attack" });
+    return { to_hit: 0, hit: false, crit: false, detail };
+  }
+  const adv = combineAdv([args.advantage ?? "none", cmods.advantage]);
+
+  const d20 = rollD20(state.rng, profile.toHitMod, adv);
   const ac = actorAc(target) + coverAc;
-  const crit = d20.natural === 20;
   const autoMiss = d20.natural === 1;
-  const hit = !autoMiss && (crit || d20.total >= ac);
+  const hit = !autoMiss && (d20.natural === 20 || d20.total >= ac);
+  const crit = hit && (d20.natural === 20 || cmods.autoCrit);
 
   let damage: number | undefined;
   let damageDetail = "";

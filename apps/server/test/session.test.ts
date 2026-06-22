@@ -34,6 +34,15 @@ describe("SessionManager + example vault", () => {
     expect(mgr.campaign.actors["goblin-boss"]?.faction).toBe("hostile");
   });
 
+  it("loads homebrew items and lore notes, resolving items in the engine", async () => {
+    const mgr = await SessionManager.open(await freshCampaign());
+    expect(mgr.campaign.items["cint-rodu"]?.name).toBe("Čepel rodu");
+    expect(Object.keys(mgr.campaign.lore)).toContain("goblini-z-mlyna");
+    // Homebrew item is merged into the engine's equipment index.
+    const gs = mgr.buildGameState();
+    expect(gs.srd.equipment("cint-rodu")?.damage).toBe("1d8+1");
+  });
+
   it("dispatches a deterministic engine command and records the dice log", async () => {
     const mgr = await SessionManager.open(await freshCampaign());
     const gs = mgr.buildGameState();

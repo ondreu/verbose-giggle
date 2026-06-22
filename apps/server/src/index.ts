@@ -33,7 +33,7 @@ async function main(): Promise<void> {
 
   const campaignDir = await findCampaignDir(config.vaultPath);
   app.log.info(`Loading campaign from ${campaignDir}`);
-  const manager = await SessionManager.open(campaignDir);
+  const manager = await SessionManager.open(campaignDir, { srdDir: config.srdPath });
   const bus = new EventBus();
 
   await registerGameRoutes(app, { manager, bus, config });
