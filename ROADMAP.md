@@ -137,11 +137,10 @@ on old code and items **#15, #17, #18** are likely already resolved by updating.
   extended downtime. Surface the current in-world date/time somewhere visible
   (sheet sidebar or HUD). `packages/engine/src/time.ts`,
   `apps/server/src/session/loop.ts`.
-- **#25 — "Shrnutí" and "Vrátit tah" share the same icon.** Two toolbar actions
-  that do opposite things look identical; the user can't tell them apart.
-  Assign distinct icons: e.g. a scroll/book for Shrnutí (summary), an undo
-  arrow for Vrátit tah. `apps/web/src/components/Icon.tsx` and wherever the
-  toolbar is rendered.
+- **[x] #25 — "Shrnutí" and "Vrátit tah" share the same icon.** Done. Added two
+  distinct icons (`undo` curved back-arrow, `document` lined page) to
+  `Icon.tsx`; the chat toolbar now uses `undo` for Vrátit tah and `document` for
+  Shrnutí (the diary keeps the scroll), so the two are easy to tell apart.
 - **[x] #26 — Deník (journal) does not render Markdown.** Done. `DiaryModal`
   now renders the diary through the shared safe `<Markdown>` component (the same
   one used in chat, #1) instead of a raw `<pre>`, so headings/bold/lists format

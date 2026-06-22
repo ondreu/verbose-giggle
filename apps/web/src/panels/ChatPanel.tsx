@@ -49,7 +49,7 @@ export function ChatPanel() {
             disabled={busy}
             title="Vrátit poslední tah (zpět o jednu zprávu)"
           >
-            <Icon name="hourglass" size={12} />
+            <Icon name="undo" size={12} />
             vrátit tah
           </button>
           <button
@@ -58,7 +58,7 @@ export function ChatPanel() {
             disabled={busy}
             title="Shrnout dosavadní děj"
           >
-            <Icon name="hourglass" size={12} />
+            <Icon name="document" size={12} />
             shrnutí
           </button>
           <button
