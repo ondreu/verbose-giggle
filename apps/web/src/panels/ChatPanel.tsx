@@ -12,8 +12,12 @@ export function ChatPanel() {
   const aiActing = useGame((s) => s.aiActing);
   const error = useGame((s) => s.error);
   const ttsEnabled = useGame((s) => s.ttsEnabled);
+  const ttsProvider = useGame((s) => s.ttsProvider);
+  const speaking = useGame((s) => s.speaking);
   const sendAction = useGame((s) => s.sendAction);
   const toggleTts = useGame((s) => s.toggleTts);
+  const setTtsProvider = useGame((s) => s.setTtsProvider);
+  const stopSpeech = useGame((s) => s.stopSpeech);
   const recap = useGame((s) => s.recap);
   const undoTurn = useGame((s) => s.undoTurn);
   const generateImage = useGame((s) => s.generateImage);
@@ -79,11 +83,34 @@ export function ChatPanel() {
               ttsEnabled ? "text-gold" : "text-subtext0"
             }`}
             onClick={toggleTts}
-            title="Předčítání nahlas (Piper TTS)"
+            title="Předčítání nahlas zap/vyp"
           >
             <Icon name="flame" size={12} />
             {ttsEnabled ? "hlas zap" : "hlas vyp"}
           </button>
+          {speaking && (
+            <button
+              className="flex items-center gap-1 font-log text-[11px] normal-case text-blood hover:text-gold"
+              onClick={stopSpeech}
+              title="Zastavit předčítání"
+            >
+              <Icon name="hourglass" size={12} />
+              stop
+            </button>
+          )}
+          {ttsEnabled && (
+            <button
+              className="flex items-center gap-1 font-log text-[11px] normal-case text-subtext0 hover:text-gold"
+              onClick={() =>
+                setTtsProvider(
+                  ttsProvider === "auto" ? "azure" : ttsProvider === "azure" ? "piper" : "auto",
+                )
+              }
+              title="Přepnout hlasový engine (auto → Azure → Piper)"
+            >
+              {ttsProvider}
+            </button>
+          )}
         </div>
       </header>
       {diaryOpen && <DiaryModal onClose={() => setDiaryOpen(false)} />}

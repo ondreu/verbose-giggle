@@ -524,17 +524,25 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
    * (expressive Czech); Piper is the fallback when Azure is absent or errors.
    * Returns null only when no engine is configured at all.
    */
-  async function synthesizeTts(text: string, azure: Config["azureTts"]): Promise<Buffer | null> {
-    if (azure) {
+  async function synthesizeTts(
+    text: string,
+    azure: Config["azureTts"],
+    provider: "auto" | "azure" | "piper" = "auto",
+  ): Promise<Buffer | null> {
+    // The client can force a single engine (#30); "auto" keeps the default
+    // Azure-first-with-Piper-fallback behaviour.
+    const tryAzure = provider !== "piper" && azure;
+    const tryPiper = provider !== "azure" && config.piperUrl;
+    if (tryAzure) {
       try {
-        return await synthesizeAzure(azure, text);
+        return await synthesizeAzure(azure!, text);
       } catch (err) {
         app.log.warn(
-          `Azure TTS failed${config.piperUrl ? ", falling back to Piper" : ""}: ${err instanceof Error ? err.message : String(err)}`,
+          `Azure TTS failed${tryPiper ? ", falling back to Piper" : ""}: ${err instanceof Error ? err.message : String(err)}`,
         );
       }
     }
-    if (config.piperUrl) {
+    if (tryPiper) {
       const upstream = await fetch(`${config.piperUrl}/tts`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -548,11 +556,12 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
   /**
    * TTS (§11). Returns audio/wav. Azure (expressive) first, Piper fallback.
    */
-  app.post<{ Body: { text: string } }>("/api/tts", async (req, reply) => {
+  app.post<{ Body: { text: string; provider?: "auto" | "azure" | "piper" } }>("/api/tts", async (req, reply) => {
     const text = req.body?.text ?? "";
+    const provider = req.body?.provider === "azure" || req.body?.provider === "piper" ? req.body.provider : "auto";
     if (!config.azureTts && !config.piperUrl)
       return reply.code(503).send({ error: "TTS not configured" });
-    const wav = await synthesizeTts(text, config.azureTts);
+    const wav = await synthesizeTts(text, config.azureTts, provider);
     if (!wav) return reply.code(502).send({ error: "TTS upstream error" });
     reply.header("Content-Type", "audio/wav");
     return reply.send(wav);

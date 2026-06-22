@@ -31,6 +31,47 @@ export interface GeneratedImage {
 
 export type View = "home" | "play";
 
+/** Which TTS engine the client asks the server to use. `auto` = Azure with
+ *  Piper fallback (server default); the others force a single engine (#30). */
+export type TtsProvider = "auto" | "azure" | "piper";
+
+// --- Persisted UI preferences (#22) ----------------------------------------
+// The server owns provider/campaign config (settings.json); these are the
+// client-only toggles that must survive a page reload.
+const PREFS_KEY = "adm.prefs";
+
+interface Prefs {
+  ttsEnabled: boolean;
+  ttsProvider: TtsProvider;
+}
+
+const DEFAULT_PREFS: Prefs = { ttsEnabled: false, ttsProvider: "auto" };
+
+function loadPrefs(): Prefs {
+  try {
+    const raw = localStorage.getItem(PREFS_KEY);
+    if (!raw) return { ...DEFAULT_PREFS };
+    const parsed = JSON.parse(raw) as Partial<Prefs>;
+    return {
+      ttsEnabled: typeof parsed.ttsEnabled === "boolean" ? parsed.ttsEnabled : DEFAULT_PREFS.ttsEnabled,
+      ttsProvider:
+        parsed.ttsProvider === "azure" || parsed.ttsProvider === "piper" || parsed.ttsProvider === "auto"
+          ? parsed.ttsProvider
+          : DEFAULT_PREFS.ttsProvider,
+    };
+  } catch {
+    return { ...DEFAULT_PREFS };
+  }
+}
+
+function savePrefs(prefs: Prefs): void {
+  try {
+    localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
+  } catch {
+    /* storage may be unavailable (private mode); preferences are best-effort */
+  }
+}
+
 export interface CampaignInfo {
   folder: string;
   name: string;
@@ -61,6 +102,9 @@ interface GameStore {
   encounters: Record<string, Encounter>;
   narration: NarrationLine[];
   ttsEnabled: boolean;
+  ttsProvider: TtsProvider;
+  /** True while narration audio is actively playing (drives the stop button). */
+  speaking: boolean;
   reachable: Cell[];
   aoeCells: Cell[];
   lastImage: GeneratedImage | null;
@@ -87,6 +131,9 @@ interface GameStore {
   undoTurn: () => Promise<void>;
   fetchLog: () => Promise<string>;
   toggleTts: () => void;
+  setTtsProvider: (provider: TtsProvider) => void;
+  /** Stop any narration audio currently playing (#30). */
+  stopSpeech: () => void;
   generateImage: (subject: ImageSubject, id?: string, label?: string) => Promise<void>;
   closeImage: () => void;
 
@@ -117,6 +164,8 @@ interface GameStore {
 
 let lineSeq = 0;
 
+const initialPrefs = loadPrefs();
+
 export const useGame = create<GameStore>((set, get) => ({
   view: "home",
   connected: false,
@@ -130,7 +179,9 @@ export const useGame = create<GameStore>((set, get) => ({
   locations: {},
   encounters: {},
   narration: [],
-  ttsEnabled: false,
+  ttsEnabled: initialPrefs.ttsEnabled,
+  ttsProvider: initialPrefs.ttsProvider,
+  speaking: false,
   reachable: [],
   aoeCells: [],
   lastImage: null,
@@ -171,7 +222,10 @@ export const useGame = create<GameStore>((set, get) => ({
     source.addEventListener("narration", (e) => {
       const { text } = JSON.parse((e as MessageEvent).data);
       set((s) => ({ narration: [...s.narration, { id: lineSeq++, role: "dm", text }] }));
-      if (get().ttsEnabled) void speak(text);
+      if (get().ttsEnabled) {
+        void speak(text, get().ttsProvider, () => set({ speaking: false }));
+        set({ speaking: true });
+      }
     });
     source.addEventListener("log", (e) => {
       const { entry } = JSON.parse((e as MessageEvent).data) as { entry: LogEntry };
@@ -327,7 +381,25 @@ export const useGame = create<GameStore>((set, get) => ({
     }
   },
 
-  toggleTts: () => set((s) => ({ ttsEnabled: !s.ttsEnabled })),
+  toggleTts: () =>
+    set((s) => {
+      const ttsEnabled = !s.ttsEnabled;
+      savePrefs({ ttsEnabled, ttsProvider: s.ttsProvider });
+      // Turning narration off should silence anything already playing (#30).
+      if (!ttsEnabled) stopAudio();
+      return { ttsEnabled, speaking: ttsEnabled ? s.speaking : false };
+    }),
+
+  setTtsProvider: (provider) =>
+    set((s) => {
+      savePrefs({ ttsEnabled: s.ttsEnabled, ttsProvider: provider });
+      return { ttsProvider: provider };
+    }),
+
+  stopSpeech: () => {
+    stopAudio();
+    set({ speaking: false });
+  },
 
   generateImage: async (subject, id, label) => {
     set({ imageLoading: true, imageError: null, lastImage: null });
@@ -509,19 +581,74 @@ export const useGame = create<GameStore>((set, get) => ({
   },
 }));
 
-async function speak(text: string): Promise<void> {
+// The single in-flight narration audio element, tracked so `stopSpeech` can
+// cancel it mid-sentence (#30). A fresh `speak()` supersedes the previous one.
+let currentAudio: HTMLAudioElement | null = null;
+let currentUrl: string | null = null;
+
+function stopAudio(): void {
+  if (currentAudio) {
+    currentAudio.pause();
+    currentAudio.src = "";
+    currentAudio = null;
+  }
+  if (currentUrl) {
+    URL.revokeObjectURL(currentUrl);
+    currentUrl = null;
+  }
+}
+
+/**
+ * Strip Markdown formatting so the TTS voice doesn't read "asterisk asterisk"
+ * aloud (#27). Removes emphasis/code markers, heading/list/quote prefixes,
+ * horizontal rules, and link/image syntax while keeping the readable text.
+ */
+export function stripMarkdown(md: string): string {
+  return md
+    .replace(/\r\n/g, "\n")
+    .replace(/^[ \t]{0,3}(#{1,6})[ \t]+/gm, "") // headings
+    .replace(/^[ \t]{0,3}(?:[-*_][ \t]*){3,}$/gm, "") // horizontal rules
+    .replace(/^[ \t]*>[ \t]?/gm, "") // blockquotes
+    .replace(/^[ \t]*[-*+][ \t]+/gm, "") // unordered list markers
+    .replace(/^[ \t]*\d+\.[ \t]+/gm, "") // ordered list markers
+    .replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1") // images → alt text
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1") // links → label
+    .replace(/(\*\*|__)(.+?)\1/g, "$2") // bold
+    .replace(/(\*|_)(.+?)\1/g, "$2") // italic
+    .replace(/`([^`]+)`/g, "$1") // inline code
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+async function speak(
+  text: string,
+  provider: TtsProvider,
+  onDone: () => void,
+): Promise<void> {
+  // A new line supersedes whatever is currently playing.
+  stopAudio();
   try {
     const res = await fetch("/api/tts", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text }),
+      body: JSON.stringify({ text: stripMarkdown(text), provider }),
     });
-    if (!res.ok) return;
+    if (!res.ok) return onDone();
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
     const audio = new Audio(url);
+    currentAudio = audio;
+    currentUrl = url;
+    const cleanup = () => {
+      if (currentAudio === audio) stopAudio();
+      onDone();
+    };
+    audio.onended = cleanup;
+    audio.onerror = cleanup;
     await audio.play().catch(() => undefined);
   } catch {
     /* TTS is best-effort */
+    onDone();
   }
 }
