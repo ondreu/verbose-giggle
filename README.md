@@ -102,21 +102,39 @@ Read by `apps/server/src/config.ts`. See [`.env.example`](.env.example) for the 
 
 ## Docker / NAS deployment
 
-CI builds and pushes a multi-stage image to `ghcr.io/ondreu/ai-dungeon-master:latest` on every push to `main`. On the NAS, use the provided Compose stack (app + Piper + Caddy + Watchtower):
+CI builds and pushes a multi-stage image to `ghcr.io/ondreu/ai-dungeon-master:latest` on every push to `main`. On the NAS, use the provided Compose stack (app + Piper + Watchtower, plus an optional ingress):
 
 ```bash
 cd docker
-# Create a .env next to docker-compose.yml with at least LLM_API_KEY set.
-docker compose up -d
+# Create a .env next to docker-compose.yml (copy ../.env.example).
+docker compose up -d                          # app only (LAN / Tailscale)
+docker compose --profile caddy up -d          # + Caddy public HTTPS
+docker compose --profile cloudflare up -d     # + Cloudflare Tunnel
 ```
 
 - Mount your real content over `./vault`, `./maps`, `./srd`. Live session state is written inside each campaign's `state/` folder, so it persists with the vault.
-- **TLS / public access:** three options — pick one:
-  - **Caddy (default):** edit [`docker/Caddyfile`](docker/Caddyfile), set your domain, point its DNS A record at the NAS. Caddy obtains TLS certs automatically. No extra config needed.
-  - **Cloudflare Tunnel:** no open ports required. Create a tunnel in the [Zero Trust dashboard](https://one.dash.cloudflare.com) (Networks → Tunnels → token-based), set `CLOUDFLARE_TUNNEL_TOKEN` in `.env`, and route the public hostname to `http://app:3000`. Start with `docker compose --profile cloudflare up -d`. Remove the `caddy` service from `docker-compose.yml` if you don't need local LAN HTTPS.
-  - **Tailscale:** skip both Caddy and CF Tunnel. Remove the `caddy` service, publish `app:3000` on the tailnet, and reach it over a `*.ts.net` name.
+- **TLS / public access:** see [Ingress options](#ingress-options) below — Caddy, Tailscale, or Cloudflare Tunnel.
 - **Auto-update:** Watchtower pulls `:latest` when CI pushes a new image (only containers labeled `watchtower.enable=true`).
 - **Local image build:** in `docker-compose.yml`, comment the `image:` line and uncomment the `build:` block (context `..`, dockerfile `docker/Dockerfile`).
+- **TTS:** the `piper` sidecar (`services/piper-http`) implements the `POST /tts {text} -> audio/wav` contract the server expects; mount a `cs_CZ` voice at `./piper-voices` and set `PIPER_VOICE`. Without a voice it returns silence, so the app still runs.
+
+### Ingress options
+
+Pick one (or none — reach it over your LAN / Tailscale):
+
+- **Caddy** (`--profile caddy`): public auto-HTTPS. Set your domain in [`docker/Caddyfile`](docker/Caddyfile).
+- **Tailscale**: no profile — leave the app internal and reach it over your tailnet.
+- **Cloudflare Tunnel** (`--profile cloudflare`): no open ports / no port-forwarding; `cloudflared` dials out to Cloudflare, which terminates TLS. SSE (`/api/events`) works through it (the server sends keep-alive pings every 25 s).
+
+#### Cloudflare Tunnel — quick deploy
+
+1. In **Cloudflare Zero Trust → Networks → Tunnels**, create a tunnel (connector type *Cloudflared*) and copy its **token**.
+2. Put it in `docker/.env`: `CLOUDFLARE_TUNNEL_TOKEN=eyJ...`
+3. In the tunnel's **Public Hostnames**, add your hostname (e.g. `dnd.example.org`) → Service **HTTP** `app:3000`.
+4. Start it: `docker compose --profile cloudflare up -d`. Cloudflare creates the DNS record automatically; open your hostname.
+5. **Protect it** (the app has no built-in login): either enable **Cloudflare Access** (Zero Trust → Access → Applications, e-mail/SSO) on that hostname, or set `BASIC_AUTH=user:pass` in `.env`.
+
+> Quick test without a domain: `cloudflared tunnel --url http://localhost:3000` gives a temporary `*.trycloudflare.com` URL.
 
 ### Voice (TTS)
 
