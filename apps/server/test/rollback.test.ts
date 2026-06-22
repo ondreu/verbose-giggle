@@ -3,7 +3,13 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, describe, expect, it } from "vitest";
-import { createSnapshot, listSnapshots, restoreSnapshot } from "../src/vault/snapshots.js";
+import {
+  checkpointTurn,
+  createSnapshot,
+  listSnapshots,
+  restoreSnapshot,
+  undoLastTurn,
+} from "../src/vault/snapshots.js";
 import { createCampaign, slugify } from "../src/vault/scaffold.js";
 
 const SOURCE = fileURLToPath(
@@ -55,6 +61,26 @@ describe("campaign rollback via snapshots", () => {
     // base + the safety auto-snapshot taken during restore.
     expect(snaps.length).toBe(2);
     expect(snaps.some((s) => s.auto)).toBe(true);
+  });
+
+  it("undoes the last turn and keeps turn checkpoints out of the rollback list", async () => {
+    const dir = await freshCampaign();
+    const sessionFile = path.join(dir, "state", "session.json");
+    await fs.mkdir(path.dirname(sessionFile), { recursive: true });
+
+    await fs.writeFile(sessionFile, JSON.stringify({ current_location: "before" }), "utf8");
+    await checkpointTurn(dir, "Před tahem");
+    await fs.writeFile(sessionFile, JSON.stringify({ current_location: "after" }), "utf8");
+
+    // Turn checkpoints are hidden from the manual rollback list.
+    expect(await listSnapshots(dir)).toHaveLength(0);
+
+    const undone = await undoLastTurn(dir);
+    expect(undone).toBe(true);
+    expect(JSON.parse(await fs.readFile(sessionFile, "utf8")).current_location).toBe("before");
+
+    // Checkpoint was consumed; a second undo has nothing to do.
+    expect(await undoLastTurn(dir)).toBe(false);
   });
 
   it("scaffolds a valid new campaign folder", async () => {

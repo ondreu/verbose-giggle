@@ -13,10 +13,12 @@ import { SessionManager } from "../session/manager.js";
 import { createCampaign } from "../vault/scaffold.js";
 import { createCharacter, creationOptions, type CharacterDraft } from "../vault/creation.js";
 import {
+  checkpointTurn,
   createSnapshot,
   deleteSnapshot,
   listSnapshots,
   restoreSnapshot,
+  undoLastTurn,
 } from "../vault/snapshots.js";
 import { applySettings, loadConfig, type Config } from "../config.js";
 import { loadSettings, saveSettings, type Settings } from "../settings.js";
@@ -279,6 +281,19 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
     }
   });
 
+  /** Undo the last player turn (in-chat quick rollback). */
+  app.post("/api/undo", async (_req, reply) => {
+    try {
+      const undone = await undoLastTurn(ctx.manager.campaign.dir);
+      if (!undone) return reply.code(400).send({ error: "Není co vrátit — žádný předchozí tah." });
+      await reopenManager();
+      ctx.bus.emit({ type: "reload", reason: "undo" });
+      return { ok: true };
+    } catch (err) {
+      return reply.code(400).send({ error: err instanceof Error ? err.message : String(err) });
+    }
+  });
+
   // --- Character creation (#14) --------------------------------------------
   app.get("/api/creation/options", async () => creationOptions());
 
@@ -414,6 +429,8 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
     const input = (req.body?.input ?? "").trim();
     if (!input) return reply.code(400).send({ error: "empty input" });
     try {
+      // Checkpoint the pre-turn state so the player can undo this message.
+      await checkpointTurn(ctx.manager.campaign.dir, `Před: „${input.slice(0, 40)}“`);
       const { narration } = await runTurn({ manager: ctx.manager, llm, bus: ctx.bus, input });
       return { narration };
     } catch (err) {

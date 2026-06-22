@@ -15,6 +15,7 @@ export function ChatPanel() {
   const sendAction = useGame((s) => s.sendAction);
   const toggleTts = useGame((s) => s.toggleTts);
   const recap = useGame((s) => s.recap);
+  const undoTurn = useGame((s) => s.undoTurn);
   const generateImage = useGame((s) => s.generateImage);
   const imageLoading = useGame((s) => s.imageLoading);
   const [input, setInput] = useState("");
@@ -38,6 +39,15 @@ export function ChatPanel() {
         <Icon name="scroll" size={14} />
         Vyprávění
         <div className="ml-auto flex items-center gap-2.5">
+          <button
+            className="flex items-center gap-1 font-log text-[11px] normal-case text-subtext0 hover:text-gold disabled:opacity-50"
+            onClick={() => void undoTurn()}
+            disabled={busy}
+            title="Vrátit poslední tah (zpět o jednu zprávu)"
+          >
+            <Icon name="hourglass" size={12} />
+            vrátit tah
+          </button>
           <button
             className="flex items-center gap-1 font-log text-[11px] normal-case text-subtext0 hover:text-gold disabled:opacity-50"
             onClick={() => void recap()}

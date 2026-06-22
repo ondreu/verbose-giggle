@@ -84,6 +84,7 @@ interface GameStore {
   startEncounter: (id: string) => Promise<void>;
   fetchReachable: (actor: string) => Promise<void>;
   recap: () => Promise<void>;
+  undoTurn: () => Promise<void>;
   fetchLog: () => Promise<string>;
   toggleTts: () => void;
   generateImage: (subject: ImageSubject, id?: string, label?: string) => Promise<void>;
@@ -289,6 +290,21 @@ export const useGame = create<GameStore>((set, get) => ({
     set({ busy: true });
     try {
       await fetch("/api/recap", { method: "POST" });
+    } finally {
+      set({ busy: false });
+    }
+  },
+
+  undoTurn: async () => {
+    if (get().busy) return;
+    set({ busy: true, error: null });
+    try {
+      const res = await fetch("/api/undo", { method: "POST" });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        set({ error: d.error ?? `Chyba ${res.status}` });
+      }
+      // The server emits `reload`, which re-hydrates the rewound state.
     } finally {
       set({ busy: false });
     }

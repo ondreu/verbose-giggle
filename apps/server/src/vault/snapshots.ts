@@ -21,6 +21,8 @@ export interface SnapshotMeta {
   location?: string;
   day?: number;
   auto?: boolean;
+  /** "manual"/"pre-restore" show in the rollback list; "turn" backs in-chat undo. */
+  kind?: "manual" | "turn" | "pre-restore";
 }
 
 function snapshotsRoot(campaignDir: string): string {
@@ -40,7 +42,7 @@ async function copyIfExists(from: string, to: string): Promise<void> {
 /** Create a snapshot of the campaign's mutable state. Returns its metadata. */
 export async function createSnapshot(
   campaignDir: string,
-  opts: { label?: string; auto?: boolean } = {},
+  opts: { label?: string; auto?: boolean; kind?: SnapshotMeta["kind"] } = {},
 ): Promise<SnapshotMeta> {
   const id = `${new Date().toISOString().replace(/[:.]/g, "-")}`;
   const dest = path.join(snapshotsRoot(campaignDir), id);
@@ -73,13 +75,14 @@ export async function createSnapshot(
     location,
     day,
     auto: opts.auto,
+    kind: opts.kind ?? "manual",
   };
   await fs.writeFile(path.join(dest, "meta.json"), JSON.stringify(meta, null, 2), "utf8");
   return meta;
 }
 
-/** List snapshots, newest first. */
-export async function listSnapshots(campaignDir: string): Promise<SnapshotMeta[]> {
+/** All snapshots, newest first (optionally filtered by kind). */
+async function allSnapshots(campaignDir: string): Promise<SnapshotMeta[]> {
   const root = snapshotsRoot(campaignDir);
   let entries: string[] = [];
   try {
@@ -101,17 +104,51 @@ export async function listSnapshots(campaignDir: string): Promise<SnapshotMeta[]
   return metas.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
 }
 
+/** Snapshots for the rollback list — per-turn undo checkpoints are excluded. */
+export async function listSnapshots(campaignDir: string): Promise<SnapshotMeta[]> {
+  return (await allSnapshots(campaignDir)).filter((s) => s.kind !== "turn");
+}
+
+/**
+ * Record a per-turn undo checkpoint and prune old ones (keep the most recent
+ * `keep`). Called before each player turn so the last message can be undone.
+ */
+export async function checkpointTurn(campaignDir: string, label: string, keep = 12): Promise<void> {
+  await createSnapshot(campaignDir, { label, auto: true, kind: "turn" });
+  const turns = (await allSnapshots(campaignDir)).filter((s) => s.kind === "turn");
+  for (const stale of turns.slice(keep)) await deleteSnapshot(campaignDir, stale.id);
+}
+
+/**
+ * Undo the most recent turn: restore its pre-turn checkpoint and consume it, so
+ * repeated calls walk back turn by turn. Returns false when nothing to undo.
+ */
+export async function undoLastTurn(campaignDir: string): Promise<boolean> {
+  const turns = (await allSnapshots(campaignDir)).filter((s) => s.kind === "turn");
+  const latest = turns[0];
+  if (!latest) return false;
+  await restoreSnapshot(campaignDir, latest.id, { safety: false });
+  await deleteSnapshot(campaignDir, latest.id);
+  return true;
+}
+
 /**
  * Restore a snapshot over the live campaign. Takes a safety auto-snapshot of the
  * current state first, then copies the captured files back into place. The
  * caller is responsible for re-opening the SessionManager afterwards.
  */
-export async function restoreSnapshot(campaignDir: string, id: string): Promise<void> {
+export async function restoreSnapshot(
+  campaignDir: string,
+  id: string,
+  opts: { safety?: boolean } = {},
+): Promise<void> {
   const src = path.join(snapshotsRoot(campaignDir), id);
   await fs.access(path.join(src, "meta.json")); // throws if the id is unknown
 
-  // Safety net: never let a restore be irreversible.
-  await createSnapshot(campaignDir, { label: "Před obnovením (automatická)", auto: true });
+  // Safety net: never let a manual restore be irreversible (undo skips this).
+  if (opts.safety !== false) {
+    await createSnapshot(campaignDir, { label: "Před obnovením (automatická)", auto: true, kind: "pre-restore" });
+  }
 
   await copyIfExists(path.join(src, "state", "session.json"), path.join(campaignDir, "state", "session.json"));
   await copyIfExists(path.join(src, "state", "session-log.md"), path.join(campaignDir, "state", "session-log.md"));
