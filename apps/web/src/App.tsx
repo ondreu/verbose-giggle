@@ -7,6 +7,7 @@ import { TurnTracker } from "./panels/TurnTracker";
 import { InventoryPanel } from "./panels/InventoryPanel";
 import { MapPanel } from "./map/MapPanel";
 import { Icon } from "./components/Icon";
+import { ImageModal } from "./components/ImageModal";
 
 export default function App() {
   const hydrate = useGame((s) => s.hydrate);
@@ -22,6 +23,7 @@ export default function App() {
 
   return (
     <div className="flex h-full flex-col">
+      <ImageModal />
       <header className="flex items-center gap-3 border-b border-black bg-bg-mantle px-4 py-2">
         <Icon name="d20" size={22} className="text-gold" />
         <h1 className="font-display text-lg tracking-wide">{campaign?.name ?? "Pán jeskyně"}</h1>
