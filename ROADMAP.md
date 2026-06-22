@@ -134,6 +134,29 @@ on old code and items **#15, #17, #18** are likely already resolved by updating.
   - Pairs with the start-up menu (#2) and the showcase vault (#5 — author a few
     quests so it demos).
 
+- **#20 — Consume the rest of the SRD dataset.** Today the loader
+  (`apps/server/src/srd/load.ts`) only reads `*monster*`, `*spell*`,
+  `*equipment*`; everything else in 5e-bits/5e-database is ignored. Extend it to
+  load and expose the data that future authoring/leveling features need
+  (`src/2014/en`):
+  - **Races / Subraces** (`5e-SRD-Races.json`, `5e-SRD-Subraces.json`) — ability
+    bonuses, speed, traits; feeds character creation (#14).
+  - **Classes / Subclasses / Features / Traits** (`5e-SRD-Classes.json`,
+    `5e-SRD-Subclasses.json`, `5e-SRD-Features.json`, `5e-SRD-Traits.json`) —
+    class progression, proficiencies, features by level; feeds character
+    creation (#14) and the level-up GUI (#13).
+  - **Feats** (`5e-SRD-Feats.json`) — selectable at creation/level-up (#13/#14).
+  - **Magic items** (`5e-SRD-Magic-Items.json`) — new category + a `mapMagicItem`
+    mapper and an `srd_ref`-style hook for item notes / loot.
+  - **Proficiencies / Languages** (`5e-SRD-Proficiencies.json`,
+    `5e-SRD-Languages.json`) — round out character creation.
+  - **Work:** add typed accessors in `@adm/srd` + mappers in the loader
+    (mirroring `mapMonster`/`mapSpell`/`mapEquipment`), tolerant of missing
+    files so the 3-file minimal setup still works. Keep matching specific
+    (avoid the `*spell*`/`*equipment*` lookalike traps, e.g. Spellcasting,
+    Equipment-Categories). Gate behind the features that use them so loading
+    cost is only paid when needed. Unlocks **#13** and **#14**.
+
 ---
 
 ## Deliverables the user can provide
