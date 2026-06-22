@@ -59,7 +59,7 @@ export function SheetPanel() {
             disabled={imageLoading}
             title="Vygenerovat portrét postavy"
           >
-            <Icon name="scroll" size={11} />
+            <Icon name="camera" size={12} />
             portrét
           </button>
         </div>

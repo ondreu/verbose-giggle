@@ -29,7 +29,7 @@ export function ImageModal() {
     >
       <div className="panel relative flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden shadow-2xl">
         <header className="flex items-center gap-2 border-b border-black px-4 py-2">
-          <Icon name="scroll" size={14} className="text-gold" />
+          <Icon name="camera" size={14} className="text-gold" />
           <span className="font-display text-sm tracking-wide">
             {lastImage?.label ?? "Vizualizace"}
           </span>

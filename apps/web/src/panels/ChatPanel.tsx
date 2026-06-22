@@ -61,7 +61,7 @@ export function ChatPanel() {
             disabled={busy || imageLoading}
             title="Vygenerovat obrázek aktuální scény"
           >
-            <Icon name="scroll" size={12} />
+            <Icon name="camera" size={13} />
             {imageLoading ? "…" : "vizualizovat"}
           </button>
           <button
