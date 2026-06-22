@@ -242,9 +242,10 @@ on old code and items **#15, #17, #18** are likely already resolved by updating.
   export the campaign folder as a `.zip`. New route/modal in the web app; server
   endpoints: `GET /api/campaigns`, `DELETE /api/campaigns/:id`,
   `GET /api/campaigns/:id/export`. Vault is on disk in the configured path.
-- **#36 — Favicon.** The browser tab shows the generic globe icon. Add a
-  thematic favicon (D20 or torch/skull SVG) at `apps/web/public/favicon.ico`
-  (and `favicon.svg` for modern browsers). Reference in `index.html`.
+- **[x] #36 — Favicon.** Done. Added a thematic gold-D20-on-dark
+  `apps/web/public/favicon.svg` and referenced it from `index.html`, so the tab
+  no longer shows the generic globe. (SVG favicon covers modern browsers; a
+  legacy `.ico` can be added later if needed.)
 - **#37 — AI-generated campaign map.** When a campaign is created or when the DM
   first describes the world, optionally generate a rough overworld map image via
   the image-generation endpoint and store it as the campaign's base map. This is
