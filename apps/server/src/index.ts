@@ -3,13 +3,15 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import Fastify from "fastify";
 import fastifyStatic from "@fastify/static";
-import { loadConfig } from "./config.js";
+import { applySettings, loadConfig } from "./config.js";
+import { loadSettings } from "./settings.js";
 import { EventBus } from "./session/events.js";
 import { SessionManager } from "./session/manager.js";
 import { registerGameRoutes } from "./routes/game.js";
 
-async function findCampaignDir(vaultPath: string): Promise<string> {
-  const explicit = process.env.CAMPAIGN;
+async function findCampaignDir(vaultPath: string, selected?: string): Promise<string> {
+  // Precedence: GUI setting → CAMPAIGN env → first folder found.
+  const explicit = selected || process.env.CAMPAIGN;
   const campaignsRoot = path.join(vaultPath, "campaigns");
   if (explicit) return path.join(campaignsRoot, explicit);
   const entries = await fs.readdir(campaignsRoot, { withFileTypes: true });
@@ -19,7 +21,9 @@ async function findCampaignDir(vaultPath: string): Promise<string> {
 }
 
 async function main(): Promise<void> {
-  const config = loadConfig();
+  const env = loadConfig();
+  const settings = await loadSettings(env.vaultPath);
+  const config = applySettings(env, settings);
   const app = Fastify({ logger: true });
 
   if (config.basicAuth) {
@@ -31,7 +35,7 @@ async function main(): Promise<void> {
     });
   }
 
-  const campaignDir = await findCampaignDir(config.vaultPath);
+  const campaignDir = await findCampaignDir(config.vaultPath, settings.campaign);
   app.log.info(`Loading campaign from ${campaignDir}`);
   const manager = await SessionManager.open(campaignDir, { srdDir: config.srdPath });
   const bus = new EventBus();

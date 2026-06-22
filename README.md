@@ -13,7 +13,8 @@ A single deployable TypeScript app (Fastify server that also serves the built fr
 - **Schemas** (`@adm/schemas`) — `zod` schemas + TS types for Characters, Locations, Encounters, Items, Campaigns, and SessionState.
 - **SRD** (`@adm/srd`) — loader + typed accessors for the bundled D&D 5e SRD dataset.
 - **Web** (`@adm/web`, React + Vite + Zustand + Tailwind) — the hotseat client: narration/chat, character sheet, inventory, dice log, turn tracker, and maps.
-- **Sidecars** — **Piper** (Czech TTS), **Caddy** (auto-HTTPS reverse proxy), **Watchtower** (auto-update from GHCR `:latest`).
+- **TTS** — **Azure AI Speech** (primary; expressive Czech neural voices, called directly from the server — no sidecar/GPU needed) with **Piper** (local sidecar) as the flat-but-free fallback.
+- **Sidecars** — **Piper** (fallback Czech TTS), **Caddy** (auto-HTTPS reverse proxy), **Watchtower** (auto-update from GHCR `:latest`).
 
 The LLM is provider-agnostic: it speaks the OpenAI-compatible chat-completions-with-tools shape, so it works through Mistral's API or OpenRouter with no vendor lock-in. The LLM is given tools but **no ability to write state directly** — all mutation flows through engine tools that validate args with `zod` and append to the dice log.
 
@@ -76,6 +77,8 @@ This starts Vite with hot reload (talking to the running server's API).
 
 Read by `apps/server/src/config.ts`. See [`.env.example`](.env.example) for the full template.
 
+> **In-app settings.** The LLM provider/key/model, image generation, **Azure TTS (key/region/voice/drama)**, the campaign selection, and the SRD path can all be configured from the web UI (gear icon, top-right) without editing `.env`. They are stored in `<vault>/settings.json` and **override** the environment defaults below — so `.env` only needs a minimal bootstrap (vault path, port/host, the fallback `PIPER_URL`, optional `BASIC_AUTH`, Cloudflare token). LLM and TTS changes apply live; campaign and SRD path apply on the next server start. Secrets are write-only over the API (the UI shows only whether a key is set, never its value), and `BASIC_AUTH` deliberately stays env-only as the gate that guards the settings UI itself.
+
 | Variable | Default | Required | Description |
 |---|---|---|---|
 | `LLM_API_KEY` | _(empty)_ | No | API key for the LLM provider (Mistral, OpenRouter, …). Empty → offline mock narrator. |
@@ -85,7 +88,10 @@ Read by `apps/server/src/config.ts`. See [`.env.example`](.env.example) for the 
 | `VAULT_PATH` | `./data/vault` | No | Path to the vault root (contains `campaigns/`). |
 | `SRD_PATH` | `<vault>/srd` | No | Full SRD dataset (5e-bits/5e-database JSON); falls back to a bundled subset. |
 | `CAMPAIGN` | _(first found)_ | No | Specific campaign folder under `<vault>/campaigns`. |
-| `PIPER_URL` | _(unset → TTS off)_ | No | Piper HTTP endpoint (`POST /tts {text} -> audio/wav`). |
+| `AZURE_SPEECH_KEY` / `AZURE_SPEECH_REGION` | _(unset → Azure off)_ | No | **Primary TTS** — Azure AI Speech (expressive Czech). Set both to enable; falls back to Piper on error. |
+| `AZURE_TTS_VOICE` | `cs-CZ-AntoninNeural` | No | Azure voice (`cs-CZ-AntoninNeural` m, `cs-CZ-VlastaNeural` f). |
+| `AZURE_TTS_RATE` / `AZURE_TTS_PITCH` | `-6%` / `-2%` | No | SSML prosody tuning for a dramatic narrator. |
+| `PIPER_URL` | _(unset → off)_ | No | **Fallback TTS** — Piper HTTP endpoint (`POST /tts {text} -> audio/wav`). Used when Azure is unset or errors. |
 | `BASIC_AUTH` | _(none)_ | No | Optional shared HTTP Basic Auth gate, `user:pass`. |
 | `WEB_DIST` | `../../web/dist` | No | Path to the built web client. The Docker image sets `/app/apps/web/dist`. |
 | `PORT` | `3000` | No | HTTP port. |
@@ -112,7 +118,15 @@ docker compose up -d
 - **Auto-update:** Watchtower pulls `:latest` when CI pushes a new image (only containers labeled `watchtower.enable=true`).
 - **Local image build:** in `docker-compose.yml`, comment the `image:` line and uncomment the `build:` block (context `..`, dockerfile `docker/Dockerfile`).
 
-> Open item: the bundled Piper service uses `rhasspy/wyoming-piper`, which speaks the **Wyoming** protocol, not the plain HTTP `POST /tts` shape the server expects. A thin HTTP adapter or an HTTP-native Piper image is required before TTS works end-to-end — see spec §11 and §18.1.
+### Voice (TTS)
+
+For a vivid, dramatic Czech narrator the recommended primary engine is **Azure AI Speech** — no GPU or extra container required, the server calls it directly:
+
+1. In the [Azure portal](https://portal.azure.com) create a **Speech** resource (the free **F0** tier covers ≈500k characters/month). Copy a **KEY** and the **REGION** (e.g. `westeurope`).
+2. Enter the key/region in the web UI (**gear → Hlas**) — or put `AZURE_SPEECH_KEY` / `AZURE_SPEECH_REGION` in `.env`. Pick a voice (`cs-CZ-AntoninNeural` or `cs-CZ-VlastaNeural`).
+3. Tune the drama with the rate/pitch fields (a slightly slower, lower read carries more gravitas; env equivalents `AZURE_TTS_RATE` / `AZURE_TTS_PITCH`). The server wraps each line in SSML prosody automatically.
+
+**Piper** remains the offline fallback (used automatically when Azure is unset or errors). It is flat by design — fine for dev/CI, but Azure is the recommended table voice. The bundled Piper sidecar is an HTTP adapter (`services/piper-http`) implementing the same `POST /tts {text} -> audio/wav` contract; mount a `cs_CZ` voice at `./piper-voices` and set `PIPER_VOICE` (without one it returns silence, so the pipeline stays wired).
 
 ## Core principles
 

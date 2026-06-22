@@ -22,7 +22,13 @@ services:
       - LLM_BASE_URL=${LLM_BASE_URL:-https://api.mistral.ai/v1}     # Mistral or OpenRouter base URL
       - LLM_MODEL=${LLM_MODEL:-mistral-medium-3.5}
       - VAULT_PATH=/data/vault
-      - PIPER_URL=http://piper:5000                                 # see piper note below
+      # TTS: Azure AI Speech is the expressive primary; Piper is the fallback.
+      - AZURE_SPEECH_KEY=${AZURE_SPEECH_KEY:-}                       # set to enable Azure TTS
+      - AZURE_SPEECH_REGION=${AZURE_SPEECH_REGION:-}                 # e.g. westeurope
+      - AZURE_TTS_VOICE=${AZURE_TTS_VOICE:-cs-CZ-AntoninNeural}
+      - AZURE_TTS_RATE=${AZURE_TTS_RATE:--6%}
+      - AZURE_TTS_PITCH=${AZURE_TTS_PITCH:--2%}
+      - PIPER_URL=http://piper:5000                                 # fallback; see piper note below
       - BASIC_AUTH=${BASIC_AUTH:-}                                  # optional "user:pass" gate
     volumes:
       - ./vault:/data/vault                # campaigns (markdown + frontmatter + JSON)
