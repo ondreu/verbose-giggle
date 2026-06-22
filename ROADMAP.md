@@ -240,11 +240,13 @@ on old code and items **#15, #17, #18** are likely already resolved by updating.
   `CONDITION_DESC_CS` / `csConditionDesc` in `packages/schemas/src/labels.ts`
   (can later be backfilled from the SRD Conditions dataset, #21).
   `apps/web/src/panels/SheetPanel.tsx`.
-- **#35 — Campaign management screen.** Allow players/DM to list saved
-  campaigns, delete one, browse its vault files (read-only tree view), and
-  export the campaign folder as a `.zip`. New route/modal in the web app; server
-  endpoints: `GET /api/campaigns`, `DELETE /api/campaigns/:id`,
-  `GET /api/campaigns/:id/export`. Vault is on disk in the configured path.
+- **[x] #35 — Campaign management screen.** Done. A `CampaignManager` modal
+  (opened via a per-campaign "spravovat" button in the start menu) lists the
+  vault files (read-only), exports the folder as a `.zip`, and deletes a campaign
+  (the active one is refused). Server endpoints `GET /api/campaigns/:folder/files`,
+  `GET /api/campaigns/:folder/export`, `DELETE /api/campaigns/:folder` (all
+  path-confined). ZIP is built by a dependency-free STORE-method writer
+  (`apps/server/src/vault/zip.ts`); verified with `unzip -t` and a server test.
 - **[x] #36 — Favicon.** Done. Added a thematic gold-D20-on-dark
   `apps/web/public/favicon.svg` and referenced it from `index.html`, so the tab
   no longer shows the generic globe. (SVG favicon covers modern browsers; a

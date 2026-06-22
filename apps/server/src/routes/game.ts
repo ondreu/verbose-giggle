@@ -11,6 +11,7 @@ import { startEncounter } from "../session/encounter.js";
 import type { EventBus } from "../session/events.js";
 import { SessionManager } from "../session/manager.js";
 import { createCampaign } from "../vault/scaffold.js";
+import { listFiles, zipDir } from "../vault/zip.js";
 import { forgeCampaign, type ForgeInput } from "../vault/forge.js";
 import { createCharacter, creationOptions, removeFromParty, type CharacterDraft } from "../vault/creation.js";
 import {
@@ -267,6 +268,57 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
     llm = makeLlm();
     ctx.bus.emit({ type: "reload", reason: "campaign-changed" });
     return { ok: true, campaign: ctx.manager.campaign.config.name };
+  });
+
+  // --- Campaign management: browse / export / delete (#35) -----------------
+  /** Resolve a campaign folder param to its dir, confined to the vault. */
+  function campaignDir(folder: string): string | null {
+    const safe = path.basename((folder ?? "").trim());
+    if (!safe || safe !== folder.trim()) return null;
+    return path.join(config.vaultPath, "campaigns", safe);
+  }
+
+  /** Read-only file tree of a campaign's vault (relative POSIX paths). */
+  app.get<{ Params: { folder: string } }>("/api/campaigns/:folder/files", async (req, reply) => {
+    const dir = campaignDir(req.params.folder);
+    if (!dir) return reply.code(400).send({ error: "invalid folder" });
+    try {
+      await fs.access(path.join(dir, "campaign.yaml"));
+      return { files: await listFiles(dir) };
+    } catch {
+      return reply.code(404).send({ error: "unknown campaign" });
+    }
+  });
+
+  /** Export the campaign folder as a .zip download. */
+  app.get<{ Params: { folder: string } }>("/api/campaigns/:folder/export", async (req, reply) => {
+    const dir = campaignDir(req.params.folder);
+    if (!dir) return reply.code(400).send({ error: "invalid folder" });
+    try {
+      await fs.access(path.join(dir, "campaign.yaml"));
+    } catch {
+      return reply.code(404).send({ error: "unknown campaign" });
+    }
+    const zip = await zipDir(dir);
+    reply.header("Content-Type", "application/zip");
+    reply.header("Content-Disposition", `attachment; filename="${path.basename(dir)}.zip"`);
+    return reply.send(zip);
+  });
+
+  /** Delete a campaign folder. Refuses the currently active campaign. */
+  app.delete<{ Params: { folder: string } }>("/api/campaigns/:folder", async (req, reply) => {
+    const dir = campaignDir(req.params.folder);
+    if (!dir) return reply.code(400).send({ error: "invalid folder" });
+    if (path.basename(dir) === path.basename(ctx.manager.campaign.dir)) {
+      return reply.code(409).send({ error: "Nelze smazat aktivní kampaň — nejdřív přepni na jinou." });
+    }
+    try {
+      await fs.access(path.join(dir, "campaign.yaml"));
+    } catch {
+      return reply.code(404).send({ error: "unknown campaign" });
+    }
+    await fs.rm(dir, { recursive: true, force: true });
+    return { ok: true };
   });
 
   // --- Snapshots: campaign rollback (§7) -----------------------------------

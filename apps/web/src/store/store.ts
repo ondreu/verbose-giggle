@@ -147,6 +147,8 @@ interface GameStore {
     select?: boolean;
   }) => Promise<{ ok: boolean; error?: string; folder?: string }>;
   selectCampaign: (folder: string) => Promise<void>;
+  deleteCampaign: (folder: string) => Promise<{ ok: boolean; error?: string }>;
+  fetchCampaignFiles: (folder: string) => Promise<string[]>;
   forgeCampaign: (input: {
     name: string;
     premise?: string;
@@ -490,6 +492,29 @@ export const useGame = create<GameStore>((set, get) => ({
       // The server emits a `reload` event which re-hydrates everything.
     } finally {
       set({ busy: false });
+    }
+  },
+
+  deleteCampaign: async (folder) => {
+    try {
+      const res = await fetch(`/api/campaigns/${encodeURIComponent(folder)}`, { method: "DELETE" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) return { ok: false, error: data.error ?? `Chyba ${res.status}` };
+      await get().listCampaigns();
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    }
+  },
+
+  fetchCampaignFiles: async (folder) => {
+    try {
+      const res = await fetch(`/api/campaigns/${encodeURIComponent(folder)}/files`);
+      if (!res.ok) return [];
+      const data = await res.json();
+      return Array.isArray(data.files) ? data.files : [];
+    } catch {
+      return [];
     }
   },
 

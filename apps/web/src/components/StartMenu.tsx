@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useGame, type CampaignInfo } from "../store/store";
 import { Icon } from "./Icon";
 import { CharacterCreate } from "./CharacterCreate";
+import { CampaignManager } from "./CampaignManager";
 
 /**
  * First-run / home screen (#2): continue the current campaign, switch or create
@@ -23,6 +24,7 @@ export function StartMenu({ onSettings }: { onSettings: () => void }) {
   }, [listCampaigns, listSnapshots]);
 
   const [createChar, setCreateChar] = useState(false);
+  const [manage, setManage] = useState<CampaignInfo | null>(null);
   const active = campaigns.find((c) => c.active);
 
   return (
@@ -64,7 +66,8 @@ export function StartMenu({ onSettings }: { onSettings: () => void }) {
           </section>
         )}
 
-        <CampaignList campaigns={campaigns} busy={busy} onSelect={selectCampaign} />
+        <CampaignList campaigns={campaigns} busy={busy} onSelect={selectCampaign} onManage={setManage} />
+        {manage && <CampaignManager campaign={manage} onClose={() => setManage(null)} />}
         <ForgeCampaign />
         <CreateCampaign />
         <RollbackPanel />
@@ -77,10 +80,12 @@ function CampaignList({
   campaigns,
   busy,
   onSelect,
+  onManage,
 }: {
   campaigns: CampaignInfo[];
   busy: boolean;
   onSelect: (folder: string) => Promise<void>;
+  onManage: (c: CampaignInfo) => void;
 }) {
   if (campaigns.length === 0) return null;
   return (
@@ -112,6 +117,13 @@ function CampaignList({
                 otevřít
               </button>
             )}
+            <button
+              className="rounded-sm border border-surface2 px-2.5 py-1 font-log text-[11px] text-subtext1 hover:border-gold/60 hover:text-gold"
+              onClick={() => onManage(c)}
+              title="Spravovat: procházet soubory, export, smazat"
+            >
+              spravovat
+            </button>
           </li>
         ))}
       </ul>
