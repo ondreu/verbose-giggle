@@ -7,6 +7,22 @@ export interface Config {
   vaultPath: string;
   srdPath: string;
   llm: { baseUrl: string; apiKey: string; model: string; provider: "auto" | "mock" };
+  /**
+   * Primary TTS: Azure AI Speech (expressive Czech neural voices via SSML).
+   * Null disables it; the /api/tts route then falls back to Piper.
+   */
+  azureTts: {
+    key: string;
+    region: string;
+    voice: string;
+    /** SSML <prosody> tuning for a dramatic narrator. */
+    rate: string;
+    pitch: string;
+    /** Optional mstts:express-as style (most cs-CZ voices ignore it). */
+    style: string | null;
+    format: string;
+  } | null;
+  /** Fallback TTS: Piper. Same POST /tts {text} -> audio/wav contract. */
   piperUrl: string | null;
   basicAuth: string | null;
   webDist: string | null;
@@ -27,6 +43,21 @@ export function loadConfig(): Config {
       }
     : null;
 
+  const azureKey = process.env.AZURE_SPEECH_KEY ?? "";
+  const azureRegion = process.env.AZURE_SPEECH_REGION ?? "";
+  const azureTts =
+    azureKey && azureRegion
+      ? {
+          key: azureKey,
+          region: azureRegion,
+          voice: process.env.AZURE_TTS_VOICE ?? "cs-CZ-AntoninNeural",
+          rate: process.env.AZURE_TTS_RATE ?? "-6%",
+          pitch: process.env.AZURE_TTS_PITCH ?? "-2%",
+          style: process.env.AZURE_TTS_STYLE || null,
+          format: process.env.AZURE_TTS_FORMAT ?? "riff-24khz-16bit-mono-pcm",
+        }
+      : null;
+
   return {
     port: Number(process.env.PORT ?? 3000),
     host: process.env.HOST ?? "0.0.0.0",
@@ -38,6 +69,7 @@ export function loadConfig(): Config {
       model: process.env.LLM_MODEL ?? "mistral-medium-3.5",
       provider: process.env.LLM_PROVIDER === "mock" ? "mock" : "auto",
     },
+    azureTts,
     piperUrl: process.env.PIPER_URL ?? null,
     basicAuth: process.env.BASIC_AUTH || null,
     webDist: process.env.WEB_DIST ?? null,

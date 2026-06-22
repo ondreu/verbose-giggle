@@ -4,6 +4,7 @@ import type { FastifyInstance } from "fastify";
 import { LlmClient, type Llm } from "../llm/client.js";
 import { MockLlmClient } from "../llm/mock.js";
 import { ImageClient, buildPrompt, type ImageSubject } from "../llm/image.js";
+import { synthesizeAzure } from "../tts/azure.js";
 import { resolveAiTurns, runRecap, runTurn } from "../session/loop.js";
 import { startEncounter } from "../session/encounter.js";
 import type { EventBus } from "../session/events.js";
@@ -104,6 +105,8 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
       activeNarrator: !config.llm.apiKey || config.llm.provider === "mock" ? "mock" : "llm",
       // Bootstrap values that stay in the environment (shown read-only).
       env: {
+        // Active TTS engine: Azure (expressive) is primary, Piper the fallback.
+        tts: config.azureTts ? "azure" : config.piperUrl ? "piper" : "off",
         piperConfigured: config.piperUrl != null,
         basicAuth: config.basicAuth != null,
       },
@@ -303,10 +306,28 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
     },
   );
 
-  /** TTS proxy to Piper (§11). Returns audio/wav. */
+  /**
+   * TTS (§11). Returns audio/wav. Primary engine is Azure AI Speech (expressive
+   * Czech); Piper is the fallback when Azure is unconfigured or errors.
+   */
   app.post<{ Body: { text: string } }>("/api/tts", async (req, reply) => {
-    if (!config.piperUrl) return reply.code(503).send({ error: "TTS not configured" });
     const text = req.body?.text ?? "";
+    if (!config.azureTts && !config.piperUrl)
+      return reply.code(503).send({ error: "TTS not configured" });
+
+    // 1) Azure (expressive). On any failure, fall through to Piper.
+    if (config.azureTts) {
+      try {
+        const wav = await synthesizeAzure(config.azureTts, text);
+        reply.header("Content-Type", "audio/wav");
+        return reply.send(wav);
+      } catch (err) {
+        app.log.warn(`Azure TTS failed${config.piperUrl ? ", falling back to Piper" : ""}: ${err instanceof Error ? err.message : String(err)}`);
+        if (!config.piperUrl) return reply.code(502).send({ error: "TTS upstream error" });
+      }
+    }
+
+    // 2) Piper fallback.
     const upstream = await fetch(`${config.piperUrl}/tts`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },

@@ -11,7 +11,7 @@ interface SettingsView {
   campaign: string;
   campaigns: string[];
   activeNarrator: "mock" | "llm";
-  env: { piperConfigured: boolean; basicAuth: boolean };
+  env: { tts: "azure" | "piper" | "off"; piperConfigured: boolean; basicAuth: boolean };
 }
 
 /**
@@ -242,8 +242,14 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
             </fieldset>
 
             <p className="text-xs italic text-ink/50">
-              TTS ({view.env.piperConfigured ? "nastaveno" : "vypnuto"}) a přihlášení (
-              {view.env.basicAuth ? "zapnuto" : "vypnuto"}) se konfigurují v prostředí (.env), ne zde.
+              Hlas (TTS:{" "}
+              {view.env.tts === "azure"
+                ? "Azure – expresivní čeština"
+                : view.env.tts === "piper"
+                  ? "Piper – záložní"
+                  : "vypnuto"}
+              ) a přihlášení ({view.env.basicAuth ? "zapnuto" : "vypnuto"}) se konfigurují v prostředí
+              (.env), ne zde.
             </p>
 
             {error && <p className="text-sm text-blood">{error}</p>}
