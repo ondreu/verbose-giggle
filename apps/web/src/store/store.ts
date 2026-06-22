@@ -3,11 +3,18 @@ import type { Actor, Campaign, Encounter, Location, LogEntry, SessionState } fro
 
 interface NarrationLine {
   id: number;
-  role: "dm" | "player";
+  role: "dm" | "player" | "roll";
   text: string;
   /** Display name of the acting character (player lines only); falls back in UI. */
   actor?: string;
+  /** Log kind for roll lines (attack/check/save/…), used for styling. */
+  kind?: string;
 }
+
+/** Dice-bearing log kinds surfaced inline in the chat as animated roll cards. */
+const ROLL_KINDS = new Set([
+  "roll", "check", "save", "attack", "damage", "spell", "death-save", "initiative",
+]);
 
 interface Cell {
   x: number;
@@ -161,9 +168,19 @@ export const useGame = create<GameStore>((set, get) => ({
     });
     source.addEventListener("log", (e) => {
       const { entry } = JSON.parse((e as MessageEvent).data) as { entry: LogEntry };
-      set((s) =>
-        s.session ? { session: { ...s.session, log: [...s.session.log, entry] } } : {},
-      );
+      set((s) => {
+        const next: Partial<GameStore> = s.session
+          ? { session: { ...s.session, log: [...s.session.log, entry] } }
+          : {};
+        // Surface dice rolls inline in the chat (animated), not just in the log.
+        if (ROLL_KINDS.has(entry.kind)) {
+          next.narration = [
+            ...s.narration,
+            { id: lineSeq++, role: "roll", text: entry.detail, kind: entry.kind },
+          ];
+        }
+        return next;
+      });
     });
     source.addEventListener("state", (e) => {
       const { state } = JSON.parse((e as MessageEvent).data) as { state: SessionState };

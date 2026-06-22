@@ -84,27 +84,31 @@ export function ChatPanel() {
             Svíce zaprská. Pán jeskyně čeká na tvůj první krok…
           </p>
         )}
-        {narration.map((line) => (
-          <div
-            key={line.id}
-            className={
-              line.role === "dm"
-                ? "mb-4 font-body text-[1.12rem] font-medium leading-relaxed text-text"
-                : "mb-4 border-l-2 border-gold/40 pl-3 font-body italic text-subtext1"
-            }
-          >
-            {line.role === "dm" ? (
-              <Markdown text={line.text} />
-            ) : (
-              <p>
-                <span className="mr-1 font-display text-xs uppercase tracking-wider text-gold">
-                  {line.actor ?? "Hráč"} ·{" "}
-                </span>
-                {line.text}
-              </p>
-            )}
-          </div>
-        ))}
+        {narration.map((line) =>
+          line.role === "roll" ? (
+            <RollLine key={line.id} kind={line.kind} text={line.text} />
+          ) : (
+            <div
+              key={line.id}
+              className={
+                line.role === "dm"
+                  ? "mb-4 font-body text-[1.12rem] font-medium leading-relaxed text-text"
+                  : "mb-4 border-l-2 border-gold/40 pl-3 font-body italic text-subtext1"
+              }
+            >
+              {line.role === "dm" ? (
+                <Markdown text={line.text} />
+              ) : (
+                <p>
+                  <span className="mr-1 font-display text-xs uppercase tracking-wider text-gold">
+                    {line.actor ?? "Hráč"} ·{" "}
+                  </span>
+                  {line.text}
+                </p>
+              )}
+            </div>
+          ),
+        )}
         {aiActing && (
           <p className="mb-2 flex items-center gap-1.5 font-display text-sm tracking-wide text-arcane">
             <Icon name="d20" size={14} className="animate-pulse" />
@@ -145,5 +149,42 @@ export function ChatPanel() {
         </button>
       </div>
     </section>
+  );
+}
+
+// Per-kind accent for inline roll cards.
+const ROLL_STYLE: Record<string, { border: string; text: string }> = {
+  attack: { border: "border-gold/50", text: "text-gold" },
+  damage: { border: "border-blood/50", text: "text-blood" },
+  spell: { border: "border-arcane/50", text: "text-arcane" },
+  save: { border: "border-steel/50", text: "text-steel" },
+  check: { border: "border-arcane/40", text: "text-arcane" },
+  "death-save": { border: "border-blood/50", text: "text-blood" },
+  initiative: { border: "border-bone/40", text: "text-bone" },
+};
+
+/** Highlight the headline number/outcome so a roll reads at a glance. */
+function emphasize(text: string) {
+  const m = text.match(/(KRIT|krit|zásah|úspěch|minutí|neúspěch)/);
+  if (!m) return text;
+  const i = text.lastIndexOf(m[0]);
+  return (
+    <>
+      {text.slice(0, i)}
+      <span className="font-display font-semibold">{text.slice(i)}</span>
+    </>
+  );
+}
+
+/** An animated dice-roll card shown inline in the narration stream (#dice). */
+function RollLine({ kind, text }: { kind?: string; text: string }) {
+  const style = (kind && ROLL_STYLE[kind]) || { border: "border-surface2", text: "text-subtext1" };
+  return (
+    <div
+      className={`mb-2.5 flex items-center gap-2 rounded-sm border ${style.border} bg-bg-mantle/50 px-2.5 py-1.5`}
+    >
+      <Icon name="d20" size={18} className={`dice-rolling shrink-0 ${style.text}`} />
+      <span className={`font-log text-[12.5px] leading-snug ${style.text}`}>{emphasize(text)}</span>
+    </div>
   );
 }

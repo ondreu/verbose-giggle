@@ -163,8 +163,20 @@
 .log-enter {
   animation: tumble 260ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
+
+/* A die that tumbles to a stop as a roll appears (chat + dice log). */
+@keyframes dice-roll {
+  0% { transform: rotate(0) scale(0.6); opacity: 0; }
+  70% { transform: rotate(380deg) scale(1.18); }
+  100% { transform: rotate(360deg) scale(1); opacity: 1; }
+}
+.dice-rolling {
+  animation: dice-roll 520ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .log-enter {
+  .log-enter,
+  .dice-rolling {
     animation: none;
   }
 }
