@@ -77,6 +77,12 @@ export const ActorSchema = z
     hit_dice: HitDice.optional(),
     spell_slots: z.record(z.string(), SpellSlotTier).default({}),
     spells_known: z.array(z.string()).default([]),
+    /** Languages known (SRD ids/labels, #20). */
+    languages: z.array(z.string()).default([]),
+    /** Class/subclass/race features granted by level (SRD ids, #20). */
+    features: z.array(z.string()).default([]),
+    /** Feats taken at creation/level-up (SRD ids, #20). */
+    feats: z.array(z.string()).default([]),
     conditions: z.array(ActiveCondition).default([]),
     concentration: Concentration.default(null),
     inventory: z.array(InventoryEntry).default([]),

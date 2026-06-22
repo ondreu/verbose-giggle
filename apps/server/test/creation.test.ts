@@ -60,6 +60,93 @@ describe("character creation", () => {
     expect(cfg.party).toContain(id);
   });
 
+  it("enriches options and applies a subrace + spell list when SRD is mounted (#20)", async () => {
+    const srdDir = await fs.mkdtemp(path.join(os.tmpdir(), "adm-srd-"));
+    tmpRoots.push(srdDir);
+    await fs.writeFile(
+      path.join(srdDir, "5e-SRD-Races.json"),
+      JSON.stringify([
+        { index: "elf", name: "Elf", speed: 30, ability_bonuses: [{ ability_score: { index: "dex" }, bonus: 2 }], languages: [{ index: "common" }, { index: "elvish" }], traits: [{ index: "darkvision" }], subraces: [{ index: "high-elf" }] },
+      ]),
+    );
+    await fs.writeFile(
+      path.join(srdDir, "5e-SRD-Subraces.json"),
+      JSON.stringify([
+        { index: "high-elf", name: "High Elf", race: { index: "elf" }, ability_bonuses: [{ ability_score: { index: "int" }, bonus: 1 }], racial_traits: [{ index: "elf-weapon-training" }] },
+      ]),
+    );
+    await fs.writeFile(
+      path.join(srdDir, "5e-SRD-Spells.json"),
+      JSON.stringify([
+        { index: "mage-hand", name: "Mage Hand", level: 0, school: { index: "conjuration" }, classes: [{ index: "wizard" }, { index: "sorcerer" }] },
+        { index: "magic-missile", name: "Magic Missile", level: 1, school: { index: "evocation" }, classes: [{ index: "wizard" }, { index: "sorcerer" }] },
+        { index: "cure-wounds", name: "Cure Wounds", level: 1, school: { index: "evocation" }, classes: [{ index: "cleric" }] },
+      ]),
+    );
+
+    const dir = await freshCampaign();
+    const mgr = await SessionManager.open(dir, { srdDir });
+
+    const opts = creationOptions(mgr.srd());
+    const elf = opts.races.find((r) => r.id === "elf");
+    expect(elf?.subraces.map((s) => s.id)).toContain("high-elf");
+    const wizard = opts.classes.find((c) => c.id === "wizard");
+    expect(wizard?.spellList?.cantrips.map((s) => s.id)).toContain("mage-hand");
+    expect(wizard?.spellList?.level1.map((s) => s.id)).toContain("magic-missile");
+    // cure-wounds is cleric-only, so it must not appear on the wizard list.
+    expect(wizard?.spellList?.level1.map((s) => s.id)).not.toContain("cure-wounds");
+
+    const { id } = await createCharacter(
+      mgr.campaign,
+      {
+        name: "Aelar",
+        race: "elf",
+        subrace: "high-elf",
+        class: "wizard",
+        abilities: { str: 8, dex: 15, con: 13, int: 14, wis: 12, cha: 10 },
+        skills: ["arcana", "history"],
+        spells: ["mage-hand", "magic-missile"],
+      },
+      mgr.srd(),
+    );
+
+    const reloaded = await SessionManager.open(dir, { srdDir });
+    const actor = reloaded.campaign.actors[id];
+    expect(actor!.abilities.dex).toBe(17); // 15 + 2 elf
+    expect(actor!.abilities.int).toBe(15); // 14 + 1 high-elf
+    expect(actor!.race).toBe("Elf (Vznešený elf)");
+    expect(actor!.languages).toEqual(expect.arrayContaining(["common", "elvish"]));
+    expect(actor!.features).toEqual(expect.arrayContaining(["darkvision", "elf-weapon-training"]));
+    expect(actor!.spells_known).toEqual(["mage-hand", "magic-missile"]);
+  });
+
+  it("rejects a spell that is not on the class list when SRD is mounted (#20)", async () => {
+    const srdDir = await fs.mkdtemp(path.join(os.tmpdir(), "adm-srd-"));
+    tmpRoots.push(srdDir);
+    await fs.writeFile(
+      path.join(srdDir, "5e-SRD-Spells.json"),
+      JSON.stringify([
+        { index: "magic-missile", name: "Magic Missile", level: 1, classes: [{ index: "wizard" }] },
+        { index: "cure-wounds", name: "Cure Wounds", level: 1, classes: [{ index: "cleric" }] },
+      ]),
+    );
+    const mgr = await SessionManager.open(await freshCampaign(), { srdDir });
+    await expect(
+      createCharacter(
+        mgr.campaign,
+        {
+          name: "Cheater",
+          race: "human",
+          class: "wizard",
+          abilities: { str: 8, dex: 12, con: 13, int: 15, wis: 10, cha: 10 },
+          skills: ["arcana", "history"],
+          spells: ["cure-wounds"], // cleric spell, not on the wizard list
+        },
+        mgr.srd(),
+      ),
+    ).rejects.toThrow(/mimo seznam/);
+  });
+
   it("rejects out-of-range ability scores", async () => {
     const mgr = await SessionManager.open(await freshCampaign());
     await expect(

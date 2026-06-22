@@ -54,6 +54,8 @@ export const SrdSpell = z.object({
   damage: z.string().optional(),
   damage_type: z.string().optional(),
   description: z.string().optional(),
+  /** Class ids whose spell list this spell appears on (for pickers, #20). */
+  classes: z.array(z.string()).default([]),
 });
 export type SrdSpell = z.infer<typeof SrdSpell>;
 

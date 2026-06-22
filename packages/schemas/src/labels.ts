@@ -111,6 +111,72 @@ export const SKILL_CS: Record<string, string> = {
   persuasion: "přesvědčování",
 };
 
+/** Player-facing Czech names for SRD races (ids stay English). */
+export const RACE_CS: Record<string, string> = {
+  human: "Člověk",
+  elf: "Elf",
+  dwarf: "Trpaslík",
+  halfling: "Půlčík",
+  "half-orc": "Půlork",
+  "half-elf": "Půlelf",
+  tiefling: "Tiefling",
+  dragonborn: "Drakorozený",
+  gnome: "Gnóm",
+};
+
+export const SUBRACE_CS: Record<string, string> = {
+  "hill-dwarf": "Pahorkatinný trpaslík",
+  "mountain-dwarf": "Horský trpaslík",
+  "high-elf": "Vznešený elf",
+  "wood-elf": "Lesní elf",
+  "dark-elf": "Temný elf (drow)",
+  "lightfoot-halfling": "Lehkonohý půlčík",
+  "stout-halfling": "Statný půlčík",
+  "rock-gnome": "Skalní gnóm",
+  "forest-gnome": "Lesní gnóm",
+};
+
+export const CLASS_CS: Record<string, string> = {
+  fighter: "Bojovník",
+  barbarian: "Barbar",
+  rogue: "Tulák",
+  monk: "Mnich",
+  ranger: "Hraničář",
+  paladin: "Paladin",
+  cleric: "Klerik",
+  druid: "Druid",
+  wizard: "Kouzelník",
+  sorcerer: "Čaroděj",
+  bard: "Bard",
+  warlock: "Černokněžník",
+};
+
+/** Schools of magic — for spell pickers and tooltips (#21). */
+export const SPELL_SCHOOL_CS: Record<string, string> = {
+  abjuration: "abjurace",
+  conjuration: "konjurace",
+  divination: "věštění",
+  enchantment: "očarování",
+  evocation: "evokace",
+  illusion: "iluze",
+  necromancy: "nekromancie",
+  transmutation: "transmutace",
+};
+
+/** A handful of common feats; unknown ids fall back to the SRD name. */
+export const FEAT_CS: Record<string, string> = {
+  alert: "Ostražitý",
+  "great-weapon-master": "Mistr velkých zbraní",
+  lucky: "Šťastlivec",
+  "magic-initiate": "Zasvěcenec magie",
+  "war-caster": "Válečný sesílatel",
+  resilient: "Houževnatý",
+  tough: "Otužilý",
+  sentinel: "Strážce",
+  sharpshooter: "Ostrostřelec",
+  grappler: "Zápasník",
+};
+
 /** Translate a possibly-unknown key, falling back to the original string. */
 export function csDamage(type?: string): string {
   if (!type) return "";
@@ -134,4 +200,21 @@ export function csAoe(shape: string): string {
 }
 export function csSkill(skill: string): string {
   return SKILL_CS[skill] ?? skill;
+}
+/** Race/class/subrace/feat/school names, falling back to a given label or the id. */
+export function csRace(id: string, fallback?: string): string {
+  return RACE_CS[id] ?? fallback ?? id;
+}
+export function csSubrace(id: string, fallback?: string): string {
+  return SUBRACE_CS[id] ?? fallback ?? id;
+}
+export function csClass(id: string, fallback?: string): string {
+  return CLASS_CS[id] ?? fallback ?? id;
+}
+export function csFeat(id: string, fallback?: string): string {
+  return FEAT_CS[id] ?? fallback ?? id;
+}
+export function csSpellSchool(id?: string): string {
+  if (!id) return "";
+  return SPELL_SCHOOL_CS[id] ?? id;
 }

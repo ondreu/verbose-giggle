@@ -1,6 +1,6 @@
 import type { Actor, SessionState } from "@adm/schemas";
 import { checkCampaignEnd, dispatch, makeRng, TOOLS, type GameState } from "@adm/engine";
-import { createSrdIndex, type SrdEquipment } from "@adm/srd";
+import { createSrdIndex, type SrdEquipment, type SrdIndex } from "@adm/srd";
 import { emptyOverrides, loadSrdDataset, type SrdOverrides } from "../srd/load.js";
 import {
   appendSessionLog,
@@ -72,6 +72,11 @@ export class SessionManager {
         gridShape: this.campaign.config.variant_rules.grid_shape ?? "square",
       },
     };
+  }
+
+  /** The merged SRD index (bundled subset + mounted dataset + homebrew items). */
+  srd(): SrdIndex {
+    return createSrdIndex(this.srdOverrides);
   }
 
   /** Capture mutable actor state back into the session overlay after engine work. */

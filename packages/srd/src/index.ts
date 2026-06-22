@@ -123,3 +123,15 @@ export function createSrdIndex(overrides?: SrdOverrides): SrdIndex {
 }
 
 export const srd: SrdIndex = createSrdIndex();
+
+/**
+ * Spells on a class's list (#20), optionally capped at `maxLevel`, sorted by
+ * level then name. Returns `[]` when no SRD spell data with class tags is
+ * mounted, so callers can fall back to free-text entry.
+ */
+export function spellsForClass(index: SrdIndex, classId: string, maxLevel?: number): SrdSpell[] {
+  return index.list
+    .spells()
+    .filter((s) => s.classes.includes(classId) && (maxLevel === undefined || s.level <= maxLevel))
+    .sort((a, b) => a.level - b.level || a.name.localeCompare(b.name));
+}

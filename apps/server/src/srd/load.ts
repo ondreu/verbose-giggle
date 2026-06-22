@@ -188,6 +188,7 @@ function mapSpell(s: Record<string, unknown>): SrdSpell | null {
         : undefined,
     damage_type: dmg?.damage_type?.index,
     description: Array.isArray(s.desc) ? (s.desc as string[]).join(" ") : undefined,
+    classes: idxList(s.classes),
   };
 }
 

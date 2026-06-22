@@ -413,7 +413,7 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
   });
 
   // --- Character creation (#14) --------------------------------------------
-  app.get("/api/creation/options", async () => creationOptions());
+  app.get("/api/creation/options", async () => creationOptions(ctx.manager.srd()));
 
   app.post<{ Body: CharacterDraft }>("/api/characters", async (req, reply) => {
     try {
@@ -421,7 +421,7 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
       // replacement: remember the ending so we can retire the dead PC and
       // resume play with the newcomer.
       const ending = ctx.manager.session.ending;
-      const { id } = await createCharacter(ctx.manager.campaign, req.body as CharacterDraft);
+      const { id } = await createCharacter(ctx.manager.campaign, req.body as CharacterDraft, ctx.manager.srd());
       if (ending?.actor) await removeFromParty(ctx.manager.campaign.dir, ending.actor);
       // Reload so the new actor + party membership are live.
       await reopenManager();
