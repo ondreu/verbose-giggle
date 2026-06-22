@@ -1,12 +1,6 @@
 import { useEffect, useState } from "react";
 import { useGame } from "./store/store";
-import { ChatPanel } from "./panels/ChatPanel";
-import { DiceLog } from "./panels/DiceLog";
-import { SheetPanel } from "./panels/SheetPanel";
-import { ActionsPanel } from "./panels/ActionsPanel";
-import { TurnTracker } from "./panels/TurnTracker";
-import { InventoryPanel } from "./panels/InventoryPanel";
-import { MapPanel } from "./map/MapPanel";
+import { PlaySurface } from "./components/PlaySurface";
 import { Icon } from "./components/Icon";
 import { ImageModal } from "./components/ImageModal";
 import { SettingsModal } from "./components/SettingsModal";
@@ -91,24 +85,9 @@ export default function App() {
         </button>
       </header>
 
-      {/* Play surface: narration + map are the focal point; mechanics rail at right. */}
-      <main className="grid min-h-0 flex-1 gap-3 p-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)_22rem]">
-        <div className="min-h-0">
-          <ChatPanel />
-        </div>
-        <div className="min-h-0">
-          <MapPanel />
-        </div>
-        <aside className="flex min-h-0 flex-col gap-3 overflow-y-auto">
-          <SheetPanel />
-          <ActionsPanel />
-          <TurnTracker />
-          <InventoryPanel />
-          <div className="min-h-[14rem] flex-1">
-            <DiceLog />
-          </div>
-        </aside>
-      </main>
+      {/* Play surface: narration + map are the focal point; mechanics rail at
+          right. Columns are resizable with persisted widths (#11). */}
+      <PlaySurface />
     </div>
   );
 }

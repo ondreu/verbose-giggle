@@ -187,8 +187,11 @@ on old code and items **#15, #17, #18** are likely already resolved by updating.
   for their own sake; keep the dark-fantasy intent in `theme/tokens.css`).
 - **#7 — Font legibility.** The display font is pretty but hard to read; bump
   weight/size a touch for body text and lean on Markdown (#1) for structure.
-- **#11 — Resizable UI panels.** Make the three-column play surface
-  (`apps/web/src/App.tsx`) resizable (draggable splitters / persisted sizes).
+- **[x] #11 — Resizable UI panels.** Done. The three-column play surface is now
+  a `PlaySurface` component (`apps/web/src/components/PlaySurface.tsx`) with
+  draggable splitters between chat/map and map/rail; widths are stored as
+  fractions in `localStorage` (so they survive window resizing) and clamped to
+  sane minimums. Below `lg` the columns stack as before (no splitters).
 - **#6b — Hex grid for the tactical map.** Switch the square grid to hexagons
   (render + distance/range math). Engine work in `packages/engine/src/grid.ts`
   plus `TacticalGrid.tsx`. Schedule after #6 (maps must render first).
