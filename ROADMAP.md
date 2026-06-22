@@ -24,11 +24,11 @@ on old code and items **#15, #17, #18** are likely already resolved by updating.
 
 ## P0 — Blocking playability
 
-- **#8 — Wizard's spells are not visible / castable.** The sheet shows spell
-  *slots* but never the *known/prepared spell list*, so a caster can't pick a
-  spell. Render `actor.spells_known` (with cast buttons) in
-  `apps/web/src/panels/SheetPanel.tsx` (slots block is at ~line 102). Likely the
-  root cause of **#12**.
+- **[x] #8 — Wizard's spells are not visible / castable.** Done. The character
+  sheet now renders `actor.spells_known` as cast buttons right under the spell
+  slots (`apps/web/src/panels/SheetPanel.tsx`); clicking sends a cast action
+  through the DM loop (and the engine validates the spell against the sheet per
+  #29). The universal Actions panel already listed them too.
 - **#12 — Narration diverges from the mechanic that ran (determinism leak).**
   Repro: player typed *"vyšlu firebolt na Thorina"*; the engine actually ran
   `Unarmed Strike` (log: "Elara útočí na Thorin (Unarmed Strike) … minutí"),

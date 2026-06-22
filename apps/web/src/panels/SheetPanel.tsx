@@ -7,6 +7,8 @@ import { LevelUpModal } from "../components/LevelUpModal";
 
 const mod = (score: number) => Math.floor((score - 10) / 2);
 const fmt = (m: number) => (m >= 0 ? `+${m}` : `${m}`);
+/** Prettify an SRD spell id ("fire-bolt") into a readable label. */
+const prettySpell = (id: string) => id.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 
 /** Cumulative XP to REACH each level (index 0 = level 1). SRD. */
 const XP_THRESHOLDS = [
@@ -28,6 +30,7 @@ export function SheetPanel() {
   const session = useGame((s) => s.session);
   const actors = useGame((s) => s.actors);
   const sendCommand = useGame((s) => s.sendCommand);
+  const sendAction = useGame((s) => s.sendAction);
   const busy = useGame((s) => s.busy);
   const generateImage = useGame((s) => s.generateImage);
   const imageLoading = useGame((s) => s.imageLoading);
@@ -172,6 +175,28 @@ export function SheetPanel() {
                   />
                 ))}
               </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Known / prepared spells (#8): list with cast buttons so a caster can
+          actually pick a spell from the sheet, not just see empty slots. */}
+      {actor.spells_known.length > 0 && (
+        <div className="mt-3">
+          <div className="mb-1 text-[11px] uppercase tracking-wider text-ink/60">Známá kouzla</div>
+          <div className="flex flex-wrap gap-1.5">
+            {actor.spells_known.map((spell) => (
+              <button
+                key={spell}
+                disabled={busy || downed}
+                title={`Seslat ${prettySpell(spell)}`}
+                onClick={() => void sendAction(`Sešlu kouzlo ${prettySpell(spell)} (${spell}).`)}
+                className="flex items-center gap-1 rounded-sm border border-arcane/50 bg-arcane/10 px-1.5 py-0.5 font-body text-[12px] text-arcane transition-colors hover:bg-arcane/20 disabled:opacity-40"
+              >
+                <Icon name="flame" size={11} />
+                {prettySpell(spell)}
+              </button>
             ))}
           </div>
         </div>
