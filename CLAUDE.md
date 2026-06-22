@@ -64,12 +64,14 @@ descriptive data for tooltips/localization, then build quest tracking.
 
 ### Where the SRD loader lives
 - `apps/server/src/srd/load.ts` — `loadSrdDataset(dir)` recursively finds JSON
-  (`findJson(dir, /regex/i)`) and maps records. **Today it only loads
-  `*monster*`, `*spell*`, `*equipment*`.** Mappers mirror the
-  5e-bits/5e-database field names → our minimal types in
-  `packages/srd/src/types.ts`.
-- `packages/srd/src/index.ts` exposes `createSrdIndex(overrides)` with accessors
-  (`monster`/`spell`/`equipment`). New categories need new types + accessors here.
+  by exact `5e-SRD-<Category>.json` name and maps records. **As of #20 it loads
+  monsters, spells, equipment, races, subraces, classes, subclasses, features,
+  traits, feats, magic-items, proficiencies and languages** (tolerant of missing
+  files). Mappers mirror the 5e-bits/5e-database field names → our minimal types
+  in `packages/srd/src/types.ts`.
+- `packages/srd/src/index.ts` exposes `createSrdIndex(overrides)` with per-id
+  accessors (`monster`/`spell`/`race`/`class`/`feat`/…) plus a `list.*()` for
+  enumerating each category. New categories need new types + accessors here.
 - The dataset source + which files to mount: `docs/SHOWCASE.md` §3 (repo
   <https://github.com/5e-bits/5e-database>, files under `src/2014/en/`, this
   project targets **SRD 5.1 / 2014**, not 2024).

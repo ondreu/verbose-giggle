@@ -1,7 +1,7 @@
 import type { Actor, SessionState } from "@adm/schemas";
 import { checkCampaignEnd, dispatch, makeRng, TOOLS, type GameState } from "@adm/engine";
 import { createSrdIndex, type SrdEquipment } from "@adm/srd";
-import { loadSrdDataset, type SrdOverrides } from "../srd/load.js";
+import { emptyOverrides, loadSrdDataset, type SrdOverrides } from "../srd/load.js";
 import {
   appendSessionLog,
   flushActor,
@@ -32,7 +32,7 @@ export class SessionManager {
     const session = await loadSession(campaign);
     // Merge the mounted SRD dataset (if any) with homebrew items from the
     // campaign, so inventory/weapon/armor ids resolve in the engine (§6.4).
-    const dataset = opts?.srdDir ? await loadSrdDataset(opts.srdDir) : { monsters: {}, spells: {}, equipment: {} };
+    const dataset = opts?.srdDir ? await loadSrdDataset(opts.srdDir) : emptyOverrides();
     for (const item of Object.values(campaign.items)) {
       const eq: SrdEquipment = {
         id: item.id,

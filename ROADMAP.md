@@ -274,11 +274,20 @@ on old code and items **#15, #17, #18** are likely already resolved by updating.
   - Pairs with the start-up menu (#2) and the showcase vault (#5 — author a few
     quests so it demos).
 
-- **#20 — Consume the rest of the SRD dataset.** Today the loader
-  (`apps/server/src/srd/load.ts`) only reads `*monster*`, `*spell*`,
-  `*equipment*`; everything else in 5e-bits/5e-database is ignored. Extend it to
-  load and expose the data that future authoring/leveling features need
-  (`src/2014/en`):
+- **[x] #20 — Consume the rest of the SRD dataset.** Done. The loader
+  (`apps/server/src/srd/load.ts`) now maps Races/Subraces, Classes/Subclasses/
+  Features/Traits, Feats, Magic-Items, and Proficiencies/Languages on top of the
+  original monster/spell/equipment categories, with matching tightened to the
+  exact `5e-SRD-<Category>.json` names (case-insensitive, `5e-SRD-` prefix
+  optional) so the lookalike traps no longer leak — `Spells`≠`Spellcasting`,
+  `Equipment`≠`Equipment-Categories`, `Feats`≠`Features`, `Races`≠`Subraces`.
+  New zod types + typed get/`list` accessors live in `@adm/srd`
+  (`packages/srd/src/types.ts`, `index.ts`); `SrdOverrides`/`emptyOverrides()`
+  carry the extra maps and the `SessionManager` threads them into
+  `createSrdIndex`. Tolerant by design: missing files are fine, so the 3-file
+  minimal setup still works (covered by `apps/server/test/srd.test.ts`). The
+  data is loaded but not yet wired into creation (#14)/leveling (#13) — that
+  deepening is the follow-up. Originally:
   - **Races / Subraces** (`5e-SRD-Races.json`, `5e-SRD-Subraces.json`) — ability
     bonuses, speed, traits; feeds character creation (#14).
   - **Classes / Subclasses / Features / Traits** (`5e-SRD-Classes.json`,
