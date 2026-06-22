@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useGame } from "./store/store";
 import { PlaySurface } from "./components/PlaySurface";
+import { TargetPicker } from "./components/TargetPicker";
 import { Icon } from "./components/Icon";
 import { ImageModal } from "./components/ImageModal";
 import { SettingsModal } from "./components/SettingsModal";
@@ -88,6 +89,8 @@ export default function App() {
       {/* Play surface: narration + map are the focal point; mechanics rail at
           right. Columns are resizable with persisted widths (#11). */}
       <PlaySurface />
+      {/* Global target chooser (#38): list / free-text / click a token on the map. */}
+      <TargetPicker />
     </div>
   );
 }

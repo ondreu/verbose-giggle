@@ -31,6 +31,11 @@ export interface GeneratedImage {
 
 export type View = "home" | "play";
 
+/** A chosen target: a known actor, free-text, or `null` for "no specific target". */
+export type PickedTarget = { label: string; id?: string } | null;
+/** Result of a target request — a pick, or "cancelled" when dismissed. */
+export type TargetResult = PickedTarget | "cancelled";
+
 /** Which TTS engine the client asks the server to use. `auto` = Azure with
  *  Piper fallback (server default); the others force a single engine (#30). */
 export type TtsProvider = "auto" | "azure" | "piper";
@@ -112,8 +117,14 @@ interface GameStore {
   imageError: string | null;
   campaigns: CampaignInfo[];
   snapshots: SnapshotMeta[];
+  /** Active target request (drives the global TargetPicker + map click-to-target). */
+  targetRequest: { title: string; allowNone: boolean } | null;
 
   setView: (v: View) => void;
+  /** Ask the player to choose a target (list / free-text / map click). */
+  requestTarget: (title: string, allowNone?: boolean) => Promise<TargetResult>;
+  /** Fulfil the active target request (called by the picker or a map click). */
+  resolveTarget: (result: TargetResult) => void;
   hydrate: () => Promise<void>;
   connect: () => void;
   sendAction: (input: string) => Promise<void>;
@@ -170,6 +181,8 @@ interface GameStore {
 let lineSeq = 0;
 // Guards the one-shot campaign intro against concurrent re-entry (#31).
 let introInFlight = false;
+// Pending resolver for an in-flight target request (#38).
+let targetResolver: ((r: TargetResult) => void) | null = null;
 
 const initialPrefs = loadPrefs();
 
@@ -196,8 +209,24 @@ export const useGame = create<GameStore>((set, get) => ({
   imageError: null,
   campaigns: [],
   snapshots: [],
+  targetRequest: null,
 
   setView: (v) => set({ view: v }),
+
+  requestTarget: (title, allowNone = true) =>
+    new Promise<TargetResult>((resolve) => {
+      // A new request supersedes any previous one (cancel the old).
+      targetResolver?.("cancelled");
+      targetResolver = resolve;
+      set({ targetRequest: { title, allowNone } });
+    }),
+
+  resolveTarget: (result) => {
+    const r = targetResolver;
+    targetResolver = null;
+    set({ targetRequest: null });
+    r?.(result);
+  },
 
   hydrate: async () => {
     const res = await fetch("/api/state");

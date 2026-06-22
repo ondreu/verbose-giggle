@@ -47,16 +47,14 @@ on old code and items **#15, #17, #18** are likely already resolved by updating.
   binds `current_location` → marker + camera and draws the `world_map` overlay
   (`apps/web/src/map/OverworldMap.tsx`); the tactical grid renders tokens,
   terrain, and the battle-map backdrop (`TacticalGrid.tsx`). (Hex-grid is #6b.)
-- **#17 — Voice (TTS) doesn't play.** Verify end-to-end: Azure key/region set in
-  Settings → `/api/tts` returns audio → client plays it. Most likely a config
-  gap (no Azure key, or stale image without the Settings panel) rather than code
-  — confirm against the P0 deploy note first. `apps/web/src/store/store.ts`
-  (`speak`), `apps/server/src/routes/game.ts` (`/api/tts`).
-- **[~] #22 — Settings do not persist (model resets on reload).** Mostly done.
+- **[x] #17 — Voice (TTS) doesn't play.** Closed (not a code issue). The full
+  path works (`/api/tts`, Azure→Piper fallback, client `speak`); playback simply
+  needs an Azure key/region (or Piper) configured and a current image. Voice
+  controls/markdown-stripping shipped in #27/#30.
+- **[x] #22 — Settings do not persist (model resets on reload).** Done.
   Server-owned settings (model, Azure keys, campaign) persist to `settings.json`;
   the client-only voice toggles (`ttsEnabled`, `ttsProvider`) persist to
-  `localStorage` and rehydrate on boot (`apps/web/src/store/store.ts`). Remaining:
-  audit for any other UI state that still resets on reload.
+  `localStorage` and rehydrate on boot (`apps/web/src/store/store.ts`).
 - **[x] #23 — Character cannot die; death saving throws have no consequence.**
   Done. A third failed death save marks the actor `dead`
   (`packages/engine/src/combat.ts` → `markDead`) and removes them from
@@ -164,9 +162,11 @@ on old code and items **#15, #17, #18** are likely already resolved by updating.
     "no specific target" (self / AoE).
   - **[x] Type a name/target:** a free-text field for off-board / improvised
     targets, passed through as named intent.
-  - **[ ] Click-to-target on the tactical map (stretch):** add a "targeting mode"
-    to `apps/web/src/map/TacticalGrid.tsx` (tokens render ~L305) where a click
-    selects that token as the pending action's target. Pairs with #6 and #39.
+  - **[x] Click-to-target on the tactical map (stretch):** Done. The picker is
+    now a non-modal floating card driven by the store (`requestTarget`/
+    `resolveTarget`, `targetRequest`), so while it's open the player can click a
+    token on the tactical map (square or hex) to set the target — tokens
+    highlight and use a crosshair cursor in targeting mode (`TacticalGrid.tsx`).
 
 ## P2 — Polish & feel
 

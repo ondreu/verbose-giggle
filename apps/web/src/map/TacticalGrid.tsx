@@ -33,6 +33,8 @@ export function TacticalGrid({ embedded = false }: { embedded?: boolean }) {
   const aoeCells = useGame((s) => s.aoeCells);
   const castAoe = useGame((s) => s.castAoe);
   const clearAoe = useGame((s) => s.clearAoe);
+  const targetRequest = useGame((s) => s.targetRequest);
+  const resolveTarget = useGame((s) => s.resolveTarget);
 
   const [aoeShape, setAoeShape] = useState<string | null>(null);
   const [aoeSize, setAoeSize] = useState(15);
@@ -96,8 +98,17 @@ export function TacticalGrid({ embedded = false }: { embedded?: boolean }) {
     window.addEventListener("pointerup", up);
   };
 
+  // Click a token to resolve an active target request (#38 click-to-target).
+  const pickToken = (id: string): boolean => {
+    if (!targetRequest) return false;
+    const name = actors[id]?.name ?? id;
+    resolveTarget({ label: name, id });
+    return true;
+  };
+
   const handleCell = (x: number, y: number) => {
     if (panMode) return; // hand tool: clicks pan, not move
+    if (targetRequest) return; // targeting mode: pick a token, not a cell
     if (aoeShape) {
       const def = AOE_SHAPES.find((s) => s.shape === aoeShape)!;
       if (def.needsDir) {
@@ -221,6 +232,7 @@ export function TacticalGrid({ embedded = false }: { embedded?: boolean }) {
             activeId={activeId}
             zoom={zoom}
             onCell={handleCell}
+            onToken={targetRequest ? pickToken : undefined}
           />
         ) : (
         <svg
@@ -391,7 +403,15 @@ export function TacticalGrid({ embedded = false }: { embedded?: boolean }) {
             const cy = pos.y * CELL + CELL / 2;
             const dead = (a?.hp.current ?? 1) <= 0;
             return (
-              <g key={id} opacity={dead ? 0.35 : 1}>
+              <g
+                key={id}
+                opacity={dead ? 0.35 : 1}
+                style={{ cursor: targetRequest ? "crosshair" : "default" }}
+                onClick={targetRequest ? () => pickToken(id) : undefined}
+              >
+                {targetRequest && (
+                  <circle cx={cx} cy={cy} r={CELL / 2} fill="var(--gold)" opacity={0.15} />
+                )}
                 {active && (
                   <circle cx={cx} cy={cy} r={CELL / 2 - 2} fill="none" stroke="var(--arcane)" strokeWidth={2} />
                 )}
@@ -464,6 +484,7 @@ function HexBoard({
   activeId,
   zoom,
   onCell,
+  onToken,
 }: {
   combat: CombatState;
   actors: Record<string, Actor>;
@@ -472,6 +493,7 @@ function HexBoard({
   activeId?: string;
   zoom: number;
   onCell: (x: number, y: number) => void;
+  onToken?: (id: string) => void;
 }) {
   const { w, h } = combat.grid;
   const pxW = CELL * (w + 0.5);
@@ -539,7 +561,13 @@ function HexBoard({
         const active = id === activeId;
         const dead = (a?.hp.current ?? 1) <= 0;
         return (
-          <g key={id} opacity={dead ? 0.35 : 1}>
+          <g
+            key={id}
+            opacity={dead ? 0.35 : 1}
+            style={{ cursor: onToken ? "crosshair" : "default" }}
+            onClick={onToken ? () => onToken(id) : undefined}
+          >
+            {onToken && <circle cx={cx} cy={cy} r={HSIZE * 0.9} fill="var(--gold)" opacity={0.15} />}
             {active && <circle cx={cx} cy={cy} r={HSIZE * 0.82} fill="none" stroke="var(--arcane)" strokeWidth={2} />}
             <circle cx={cx} cy={cy} r={HSIZE * 0.66} fill={FACTION_FILL[a?.faction ?? "neutral"]} stroke="var(--bg-crust)" strokeWidth={2} />
             <text x={cx} y={cy + 4} textAnchor="middle" fontFamily="Cinzel, serif" fontSize={13} fill="var(--bg-crust)">

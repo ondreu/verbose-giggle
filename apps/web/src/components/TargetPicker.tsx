@@ -3,9 +3,6 @@ import type { Actor } from "@adm/schemas";
 import { useGame } from "../store/store";
 import { Icon } from "./Icon";
 
-/** A chosen target: a known actor, free-text, or `null` for "no specific target". */
-export type PickedTarget = { label: string; id?: string } | null;
-
 const FACTION_DOT: Record<string, string> = {
   party: "bg-steel",
   ally: "bg-verdigris",
@@ -14,34 +11,26 @@ const FACTION_DOT: Record<string, string> = {
 };
 
 /**
- * Target chooser for actions that need a target (#38). Lists the actors in the
- * current scene — grouped into foes vs allies relative to the active character —
- * lets the player pick one, type an arbitrary target, or proceed with no
- * specific target (self / AoE). The caller turns the result into the action it
- * sends through the DM loop, so the engine still resolves and validates it.
+ * Global target chooser for actions that need a target (#38). Driven by the
+ * store's `targetRequest` so any caller can `await requestTarget(...)`. It is a
+ * non-modal floating card (no blocking backdrop) so the player can ALSO click a
+ * token on the tactical map to pick a target — the map resolves the same
+ * request. Lists scene actors (foes vs allies/self), accepts free text, and —
+ * when allowed — "no specific target" (self / AoE).
  */
-export function TargetPicker({
-  title,
-  allowNone = true,
-  onPick,
-  onClose,
-}: {
-  title: string;
-  /** Show the "no specific target" option (self-buffs, AoE). */
-  allowNone?: boolean;
-  onPick: (target: PickedTarget) => void;
-  onClose: () => void;
-}) {
+export function TargetPicker() {
+  const request = useGame((s) => s.targetRequest);
+  const resolveTarget = useGame((s) => s.resolveTarget);
   const session = useGame((s) => s.session);
   const actors = useGame((s) => s.actors);
   const [free, setFree] = useState("");
+
+  if (!request) return null;
 
   const activeId = session?.active_player ?? null;
   const self = (activeId ? actors[activeId] : null) ?? null;
   const friendly = (f: string) => f === "party" || f === "ally";
 
-  // Only living, on-scene actors are worth targeting; the active actor lands in
-  // the "allies" group, flagged as self.
   const all = Object.values(actors).filter((a) => {
     const hp = session?.actors[a.id]?.hp?.current ?? a.hp.current;
     return hp > 0 || a.id === activeId;
@@ -51,30 +40,34 @@ export function TargetPicker({
   );
   const allies = all.filter((a) => a.id === activeId || (a.id !== activeId && sameSide(self, a)));
 
-  const choose = (a: Actor) => onPick({ label: a.name, id: a.id });
+  const pick = (t: { label: string; id?: string } | null) => {
+    setFree("");
+    resolveTarget(t);
+  };
 
   return (
-    <div
-      className="fixed inset-0 z-[2100] flex items-center justify-center bg-bg-crust/70 p-6 backdrop-blur-sm"
-      onClick={onClose}
-    >
-      <div
-        className="parchment flex max-h-[80vh] w-full max-w-sm flex-col p-5"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="mb-3 flex items-center gap-2 border-b border-ink/20 pb-2">
-          <Icon name="compass" size={16} className="text-ink" />
-          <h2 className="font-display text-base">{title}</h2>
-          <button className="ml-auto font-log text-sm text-ink/60 hover:text-ink" onClick={onClose}>
-            zavřít ✕
+    <div className="fixed bottom-4 left-1/2 z-[2100] w-full max-w-sm -translate-x-1/2 px-3">
+      <div className="parchment flex max-h-[60vh] flex-col gap-3 rounded-md p-4 shadow-2xl">
+        <div className="flex items-center gap-2 border-b border-ink/20 pb-2">
+          <Icon name="compass" size={15} className="text-ink" />
+          <h2 className="font-display text-sm">{request.title}</h2>
+          <button
+            className="ml-auto font-log text-xs text-ink/60 hover:text-ink"
+            onClick={() => resolveTarget("cancelled")}
+          >
+            zrušit ✕
           </button>
         </div>
 
-        <div className="flex flex-col gap-3 overflow-y-auto">
+        <p className="-mt-1 font-log text-[10px] text-ink/50">
+          Vyber ze seznamu, napiš cíl, nebo klikni na postavu na bojišti.
+        </p>
+
+        <div className="flex flex-col gap-2 overflow-y-auto">
           {foes.length > 0 && (
             <Group label="Nepřátelé">
               {foes.map((a) => (
-                <TargetRow key={a.id} actor={a} onClick={() => choose(a)} />
+                <TargetRow key={a.id} actor={a} onClick={() => pick({ label: a.name, id: a.id })} />
               ))}
             </Group>
           )}
@@ -85,42 +78,36 @@ export function TargetPicker({
                   key={a.id}
                   actor={a}
                   self={a.id === activeId}
-                  onClick={() => choose(a)}
+                  onClick={() => pick({ label: a.name, id: a.id })}
                 />
               ))}
             </Group>
           )}
 
-          {/* Free-text target for off-board / improvised targets. */}
-          <div>
-            <div className="mb-1 font-log text-[10px] uppercase tracking-wider text-ink/50">
-              …nebo napiš cíl
-            </div>
-            <form
-              className="flex gap-2"
-              onSubmit={(e) => {
-                e.preventDefault();
-                const v = free.trim();
-                if (v) onPick({ label: v });
-              }}
-            >
-              <input
-                autoFocus
-                value={free}
-                onChange={(e) => setFree(e.target.value)}
-                placeholder="např. velitel goblinů, dveře…"
-                className="settings-input flex-1"
-              />
-              <button type="submit" className="btn-gold px-3 py-1 text-sm" disabled={!free.trim()}>
-                Cíl
-              </button>
-            </form>
-          </div>
+          <form
+            className="flex gap-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              const v = free.trim();
+              if (v) pick({ label: v });
+            }}
+          >
+            <input
+              autoFocus
+              value={free}
+              onChange={(e) => setFree(e.target.value)}
+              placeholder="…nebo napiš cíl (velitel goblinů, dveře…)"
+              className="settings-input flex-1"
+            />
+            <button type="submit" className="btn-gold px-3 py-1 text-sm" disabled={!free.trim()}>
+              Cíl
+            </button>
+          </form>
 
-          {allowNone && (
+          {request.allowNone && (
             <button
               className="rounded-sm border border-ink/30 bg-ink/10 px-3 py-1.5 font-display text-sm hover:bg-ink/20"
-              onClick={() => onPick(null)}
+              onClick={() => pick(null)}
             >
               Bez konkrétního cíle (sám / plošně)
             </button>

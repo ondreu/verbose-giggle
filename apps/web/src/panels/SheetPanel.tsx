@@ -3,7 +3,7 @@ import { csCondition, csConditionDesc, csAbility, csAbilityAbbr, type AbilityKey
 import { useGame } from "../store/store";
 import { Icon } from "../components/Icon";
 import { LevelUpModal } from "../components/LevelUpModal";
-import { TargetPicker, type PickedTarget } from "../components/TargetPicker";
+import type { PickedTarget } from "../store/store";
 
 /** Turn a picked target into a Czech "na <cíl>" clause for the action sentence. */
 export function targetClause(t: PickedTarget): string {
@@ -30,12 +30,19 @@ export function SheetPanel() {
   const actors = useGame((s) => s.actors);
   const sendCommand = useGame((s) => s.sendCommand);
   const sendAction = useGame((s) => s.sendAction);
+  const requestTarget = useGame((s) => s.requestTarget);
   const busy = useGame((s) => s.busy);
   const generateImage = useGame((s) => s.generateImage);
   const imageLoading = useGame((s) => s.imageLoading);
   const [levelUpOpen, setLevelUpOpen] = useState(false);
-  const [castSpell, setCastSpell] = useState<string | null>(null);
   const [openCond, setOpenCond] = useState<string | null>(null);
+
+  // Cast a spell after the player picks a target (#8 + #38).
+  const castSpellAt = async (spell: string) => {
+    const t = await requestTarget(`Cíl pro ${prettySpell(spell)}`);
+    if (t === "cancelled") return;
+    void sendAction(`Sešlu kouzlo ${prettySpell(spell)} (${spell})${targetClause(t)}.`);
+  };
   const activeId = session?.active_player ?? null;
   const actor = activeId ? actors[activeId] : null;
 
@@ -67,16 +74,6 @@ export function SheetPanel() {
   return (
     <section className="parchment flex flex-col p-4 font-body">
       {levelUpOpen && <LevelUpModal actor={actor} onClose={() => setLevelUpOpen(false)} />}
-      {castSpell && (
-        <TargetPicker
-          title={`Cíl pro ${prettySpell(castSpell)}`}
-          onClose={() => setCastSpell(null)}
-          onPick={(t) => {
-            void sendAction(`Sešlu kouzlo ${prettySpell(castSpell)} (${castSpell})${targetClause(t)}.`);
-            setCastSpell(null);
-          }}
-        />
-      )}
       <div className="flex items-baseline justify-between border-b border-ink/20 pb-1">
         <h2 className="font-display text-xl">{actor.name}</h2>
         <div className="flex items-center gap-2">
@@ -206,7 +203,7 @@ export function SheetPanel() {
                 key={spell}
                 disabled={busy || downed}
                 title={`Seslat ${prettySpell(spell)}`}
-                onClick={() => setCastSpell(spell)}
+                onClick={() => void castSpellAt(spell)}
                 className="flex items-center gap-1 rounded-sm border border-arcane/50 bg-arcane/10 px-1.5 py-0.5 font-body text-[12px] text-arcane transition-colors hover:bg-arcane/20 disabled:opacity-40"
               >
                 <Icon name="flame" size={11} />
