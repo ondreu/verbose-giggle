@@ -161,19 +161,30 @@ Out of the box only a tiny bundled subset (a couple of monsters/spells/items)
 is available — enough for the example, not for real play. For the full set:
 
 1. **Source:** the open dataset at **<https://github.com/5e-bits/5e-database>**
-   (SRD 5.1, CC-BY-4.0). Download the repo (Code → Download ZIP) and take the
-   **`src/`** folder — it contains `5e-SRD-Monsters.json`, `5e-SRD-Spells.json`,
-   `5e-SRD-Equipment.json`, etc. (newer revisions nest these under `src/2014/`;
-   either works).
-2. **Mount it** where the server looks (`SRD_PATH`, default `<vault>/srd`). In
-   the Compose stacks the app already mounts `./srd:/data/srd` — so put the
-   dataset into the host **`srd/`** folder (so you have `srd/5e-SRD-Monsters.json`
-   …). On a NAS, upload the JSON files there via the File Manager.
+   (SRD 5.1, CC-BY-4.0). Download the repo (Code → Download ZIP). The data lives
+   under `src/`, **versioned and multilingual** — `src/2014/en/`, `src/2024/en/`,
+   plus translations (`fr-FR`, `pt-BR`, `ru`). This project targets **SRD 5.1 =
+   the 2014 edition, English**.
+2. **Copy only these three files, from `src/2014/en/`, flat into the host `srd/`
+   folder:**
+   ```
+   srd/5e-SRD-Monsters.json
+   srd/5e-SRD-Spells.json
+   srd/5e-SRD-Equipment.json
+   ```
+   - Do **not** dump the whole `src/` tree: the loader matches by filename
+     recursively, so every language and both editions would load and overwrite
+     each other by `index` → mixed-language, mixed-edition garbage.
+   - Do **not** use `src/2024/en/` (different structure — Species vs Races, etc.;
+     the loader is written for the 2014 format).
+   - Do **not** copy `5e-SRD-Equipment-Categories.json` (it also matches
+     `equipment` and would add junk entries).
+   - `srd/` is mounted to `/data/srd` by the Compose stacks; on a NAS, upload the
+     three JSON files there via the File Manager.
 3. The loader (`apps/server/src/srd/load.ts`) **recursively** finds files
-   matching `*monster*`, `*spell*`, `*equipment*` and is tolerant of the
-   5e-database layout — no renaming needed. Restart the app; bestiary notes that
-   set `srd_ref:` now resolve to full stats, and casters' `spells_known` resolve
-   to real spell data.
+   matching `*monster*`, `*spell*`, `*equipment*` by name. Restart the app;
+   bestiary notes that set `srd_ref:` now resolve to full stats, and casters'
+   `spells_known` resolve to real spell data.
 
 > Why not fetch from GitHub at runtime? By design this is offline/self-hosted
 > (NAS, possibly restricted egress) and deterministic — pin a snapshot, mount
