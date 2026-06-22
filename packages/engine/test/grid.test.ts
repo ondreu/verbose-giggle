@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { aoe, distanceFt, move, reachableCells, startCombat } from "../src/index.js";
+import { aoe, attack, cellsOnLine, coverBetween, distanceFt, move, reachableCells, startCombat } from "../src/index.js";
 import { makeActor, makeState } from "./helpers.js";
 
 describe("distance (5-5-5)", () => {
@@ -59,6 +59,48 @@ describe("reachableCells", () => {
     expect(has(6, 5)).toBe(true); // 5ft away
     expect(has(11, 5)).toBe(true); // 6 cells = 30ft, exactly within budget
     expect(has(12, 5)).toBe(false); // 35ft — out of budget
+  });
+});
+
+describe("cover & line-of-sight", () => {
+  it("traces intermediate cells on a line, excluding endpoints", () => {
+    const cells = cellsOnLine({ x: 0, y: 0 }, { x: 4, y: 0 });
+    expect(cells).toEqual([
+      { x: 1, y: 0 },
+      { x: 2, y: 0 },
+      { x: 3, y: 0 },
+    ]);
+  });
+
+  it("a wall fully blocks line of sight", () => {
+    const a = makeActor({ id: "a", name: "A", position: { x: 0, y: 0 } });
+    const b = makeActor({ id: "b", name: "B", position: { x: 4, y: 0 } });
+    const state = makeState([a, b]);
+    startCombat(state, { participants: ["a", "b"], grid: { w: 10, h: 10, cell_ft: 5 }, terrain: [{ x: 2, y: 0, kind: "wall" }] });
+    const c = coverBetween(state, { x: 0, y: 0 }, { x: 4, y: 0 });
+    expect(c.cover).toBe("full");
+    expect(c.clearLineOfSight).toBe(false);
+  });
+
+  it("half cover grants +2 AC and keeps line of sight", () => {
+    const a = makeActor({ id: "a", name: "A", position: { x: 0, y: 0 } });
+    const b = makeActor({ id: "b", name: "B", position: { x: 4, y: 0 } });
+    const state = makeState([a, b]);
+    startCombat(state, { participants: ["a", "b"], grid: { w: 10, h: 10, cell_ft: 5 }, terrain: [{ x: 2, y: 0, kind: "cover-half" }] });
+    const c = coverBetween(state, { x: 0, y: 0 }, { x: 4, y: 0 });
+    expect(c.cover).toBe("half");
+    expect(c.acBonus).toBe(2);
+    expect(c.clearLineOfSight).toBe(true);
+  });
+
+  it("a fully-covered target cannot be hit by an attack", () => {
+    const a = makeActor({ id: "a", name: "A", position: { x: 0, y: 0 }, inventory: [{ id: "longsword", qty: 1, equipped: true }] });
+    const b = makeActor({ id: "b", name: "B", type: "monster", faction: "hostile", position: { x: 4, y: 0 }, srd_ref: "goblin" });
+    const state = makeState([a, b], "cover");
+    startCombat(state, { participants: ["a", "b"], grid: { w: 10, h: 10, cell_ft: 5 }, terrain: [{ x: 2, y: 0, kind: "wall" }] });
+    const r = attack(state, { attacker: "a", target: "b", weapon: "longsword" });
+    expect(r.hit).toBe(false);
+    expect(r.detail).toContain("plně kryt");
   });
 });
 

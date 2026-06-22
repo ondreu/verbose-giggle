@@ -1,6 +1,7 @@
 import type { Actor, ActiveCondition, ConditionName, DamageType } from "@adm/schemas";
 import { roll, rollD20 } from "./dice.js";
 import { savingThrow, type Advantage } from "./checks.js";
+import { coverBetween } from "./grid.js";
 import { abilityMod, actorAc, getActor, log, type GameState } from "./state.js";
 
 function damageMultiplier(actor: Actor, type?: string): { mult: number; tag: string } {
@@ -168,8 +169,25 @@ export function attack(
   const target = getActor(state, args.target);
   const profile = resolveAttackProfile(state, attacker, args.weapon);
 
+  // Cover / line-of-sight from encounter terrain (§8.1).
+  const combat = state.session.combat;
+  const from = combat ? (combat.tokens[args.attacker] ?? attacker.position) : attacker.position;
+  const to = combat ? (combat.tokens[args.target] ?? target.position) : target.position;
+  let coverNote = "";
+  let coverAc = 0;
+  if (combat && from && to) {
+    const cov = coverBetween(state, from, to);
+    if (!cov.clearLineOfSight) {
+      const detail = `${attacker.name} nemůže zasáhnout ${target.name} — plně kryt (mimo dohled)`;
+      log(state, { kind: "attack", actor: args.attacker, target: args.target, detail, tool: "attack" });
+      return { to_hit: 0, hit: false, crit: false, detail };
+    }
+    coverAc = cov.acBonus;
+    if (cov.cover !== "none") coverNote = ` (kryt ${cov.cover}: +${cov.acBonus} AC)`;
+  }
+
   const d20 = rollD20(state.rng, profile.toHitMod, args.advantage ?? "none");
-  const ac = actorAc(target);
+  const ac = actorAc(target) + coverAc;
   const crit = d20.natural === 20;
   const autoMiss = d20.natural === 1;
   const hit = !autoMiss && (crit || d20.total >= ac);
@@ -189,7 +207,7 @@ export function attack(
     damageDetail = `; ${profile.damageExpr}${crit ? " (crit ×2 dice)" : ""} = ${damage} ${profile.damageType}`;
   }
 
-  const detail = `${attacker.name} attacks ${target.name} with ${profile.name}: ${d20.detail} vs AC ${ac} → ${
+  const detail = `${attacker.name} attacks ${target.name} with ${profile.name}: ${d20.detail} vs AC ${ac}${coverNote} → ${
     crit ? "CRIT" : hit ? "hit" : "miss"
   }${damageDetail}`;
   log(state, {

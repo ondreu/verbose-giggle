@@ -164,6 +164,28 @@ export function TacticalGrid({ embedded = false }: { embedded?: boolean }) {
             />
           ))}
 
+          {/* Static terrain: walls, difficult ground, hazards, cover */}
+          {combat.terrain.map((t) => {
+            const style: Record<string, { fill: string; opacity: number; label?: string }> = {
+              wall: { fill: "#4a423a", opacity: 1 },
+              difficult: { fill: "var(--verdigris)", opacity: 0.18 },
+              hazard: { fill: "var(--blood)", opacity: 0.22 },
+              "cover-half": { fill: "var(--steel)", opacity: 0.22, label: "½" },
+              "cover-three-quarter": { fill: "var(--steel)", opacity: 0.35, label: "¾" },
+            };
+            const s = style[t.kind] ?? { fill: "var(--surface2)", opacity: 0.3 };
+            return (
+              <g key={`t${t.x}-${t.y}`} pointerEvents="none">
+                <rect x={t.x * CELL} y={t.y * CELL} width={CELL} height={CELL} fill={s.fill} opacity={s.opacity} />
+                {s.label && (
+                  <text x={t.x * CELL + CELL / 2} y={t.y * CELL + CELL / 2 + 4} textAnchor="middle" fontSize={12} fill="var(--bone)" opacity={0.8}>
+                    {s.label}
+                  </text>
+                )}
+              </g>
+            );
+          })}
+
           {/* Reachable cells for the active actor (engine-computed) */}
           {reachable.map((c) => (
             <rect

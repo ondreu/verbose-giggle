@@ -208,6 +208,69 @@ export function reachableCells(
   return { cells, budget };
 }
 
+/** Cells the straight line a→b passes through, excluding the endpoints. */
+export function cellsOnLine(a: Position, b: Position): Position[] {
+  let x0 = a.x;
+  let y0 = a.y;
+  const dx = Math.abs(b.x - x0);
+  const dy = Math.abs(b.y - y0);
+  const sx = x0 < b.x ? 1 : -1;
+  const sy = y0 < b.y ? 1 : -1;
+  let err = dx - dy;
+  const cells: Position[] = [];
+  for (;;) {
+    const atEnd = (x0 === a.x && y0 === a.y) || (x0 === b.x && y0 === b.y);
+    if (!atEnd) cells.push({ x: x0, y: y0 });
+    if (x0 === b.x && y0 === b.y) break;
+    const e2 = 2 * err;
+    if (e2 > -dy) {
+      err -= dy;
+      x0 += sx;
+    }
+    if (e2 < dx) {
+      err += dx;
+      y0 += sy;
+    }
+  }
+  return cells;
+}
+
+export type Cover = "none" | "half" | "three-quarter" | "full";
+
+const COVER_AC: Record<Cover, number> = { none: 0, half: 2, "three-quarter": 5, full: 99 };
+
+/**
+ * Cover and line-of-sight between two cells from the encounter's static
+ * terrain (§8.1). A wall fully blocks (no line of sight / can't be targeted);
+ * cover-three-quarter → +5 AC; cover-half → +2 AC. Engine-computed.
+ */
+export function coverBetween(
+  state: GameState,
+  from: Position,
+  to: Position,
+): { cover: Cover; acBonus: number; clearLineOfSight: boolean } {
+  const terrain = state.session.combat?.terrain ?? [];
+  const byKey = new Map(terrain.map((t) => [key(t.x, t.y), t.kind]));
+  let best: Cover = "none";
+  for (const cell of cellsOnLine(from, to)) {
+    const kind = byKey.get(key(cell.x, cell.y));
+    if (kind === "wall") {
+      best = "full";
+      break;
+    }
+    if (kind === "cover-three-quarter" && COVER_AC[best] < COVER_AC["three-quarter"]) {
+      best = "three-quarter";
+    } else if (kind === "cover-half" && COVER_AC[best] < COVER_AC.half) {
+      best = "half";
+    }
+  }
+  return {
+    cover: best,
+    acBonus: best === "full" ? 0 : COVER_AC[best],
+    clearLineOfSight: best !== "full",
+  };
+}
+
 export type AoeShape = "sphere" | "cube" | "cone" | "line";
 
 export interface AoeResult {

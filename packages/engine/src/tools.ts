@@ -12,7 +12,7 @@ import {
   removeCondition,
 } from "./combat.js";
 import { castSpell, concentrationCheck } from "./spells.js";
-import { aoe, move, reachableCells } from "./grid.js";
+import { aoe, coverBetween, move, reachableCells } from "./grid.js";
 import { endCombat, nextTurn, startCombat } from "./turns.js";
 import { longRest, shortRest } from "./rest.js";
 
@@ -295,6 +295,26 @@ export const TOOLS: ToolDef[] = [
     schema: z.object({ actor: z.string() }),
     parameters: { type: "object", properties: { actor: { type: "string" } }, required: ["actor"] },
     handler: (state, args) => deathSave(state, args),
+  }),
+  def({
+    name: "cover",
+    description: "Read-only: cover and line-of-sight between two actors (terrain-based).",
+    readOnly: true,
+    schema: z.object({ attacker: z.string(), target: z.string() }),
+    parameters: {
+      type: "object",
+      properties: { attacker: { type: "string" }, target: { type: "string" } },
+      required: ["attacker", "target"],
+    },
+    handler: (state, args) => {
+      const c = state.session.combat;
+      const a = getActor(state, args.attacker);
+      const t = getActor(state, args.target);
+      const from = c?.tokens[args.attacker] ?? a.position;
+      const to = c?.tokens[args.target] ?? t.position;
+      if (!from || !to) return { cover: "none", acBonus: 0, clearLineOfSight: true };
+      return coverBetween(state, from, to);
+    },
   }),
   def({
     name: "reachable",
