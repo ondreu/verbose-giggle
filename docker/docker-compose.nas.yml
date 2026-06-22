@@ -1,0 +1,67 @@
+# AI Dungeon Master — Ugreen NAS / Docker GUI deployment
+#
+# Tato varianta docker-compose souboru je určena pro NAS s Docker GUI
+# (Ugreen, Synology, QNAP apod.) kde nelze snadno předávat --profile přepínač.
+#
+# Co tento soubor dělá jinak než docker-compose.yml:
+#   - cloudflared je standardní service (žádný profil) — vždy se spustí
+#   - Caddy je vynechán — veřejný přístup zajišťuje Cloudflare Tunnel
+#   - piper používá předem sestavenou image z GHCR (žádný lokální build)
+#
+# Před spuštěním:
+#   1. Nastav CLOUDFLARE_TUNNEL_TOKEN (viz níže).
+#   2. Stáhni hlasový model pro Piper (cs_CZ-jirka-medium.onnx + .onnx.json)
+#      a ulož ho do ./piper-voices/ (viz README).
+#   3. Zkopíruj data/vault.example do ./vault nebo nastav vlastní kampaň.
+#   4. (Volitelné) Nastav LLM_API_KEY pro živý LLM; bez klíče běží offline mock.
+
+services:
+  app:
+    image: ghcr.io/ondreu/ai-dungeon-master:latest
+    restart: unless-stopped
+    environment:
+      - LLM_API_KEY=${LLM_API_KEY:-}
+      - LLM_BASE_URL=${LLM_BASE_URL:-https://api.mistral.ai/v1}
+      - LLM_MODEL=${LLM_MODEL:-mistral-medium-3.5}
+      - VAULT_PATH=/data/vault
+      - PIPER_URL=http://piper:5000
+      - BASIC_AUTH=${BASIC_AUTH:-}
+    volumes:
+      - ./vault:/data/vault
+      - ./maps:/data/maps
+      - ./srd:/data/srd
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+    depends_on:
+      - piper
+    expose:
+      - "3000"
+
+  piper:
+    # Předem sestavená image publikovaná CI — žádný lokální build není potřeba.
+    image: ghcr.io/ondreu/piper-http:latest
+    restart: unless-stopped
+    environment:
+      - PIPER_VOICE=/voices/cs_CZ-jirka-medium.onnx
+    volumes:
+      - ./piper-voices:/voices
+    expose:
+      - "5000"
+
+  cloudflared:
+    # Cloudflare Tunnel — HTTPS bez otevřených portů 80/443 na NAS.
+    # Token získáš v Zero Trust dashboardu (viz README — sekce Cloudflare Tunnel).
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
+    depends_on:
+      - app
+
+  watchtower:
+    image: containrrr/watchtower
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: --interval 3600 --label-enable
