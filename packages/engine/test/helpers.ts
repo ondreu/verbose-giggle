@@ -48,6 +48,6 @@ export function makeState(actors: Actor[], seed: string | number = "test-seed"):
     session,
     srd: createSrdIndex(),
     rng: makeRng(seed),
-    variant: { flanking: false, diagonals: "5-5-5" },
+    variant: { flanking: false, diagonals: "5-5-5", gridShape: "square" },
   };
 }

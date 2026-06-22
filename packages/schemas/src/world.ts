@@ -114,6 +114,7 @@ export const CampaignSchema = z
       .object({
         flanking: z.boolean().default(false),
         diagonals: z.enum(["5-5-5", "5-10-5"]).default("5-5-5"),
+        grid_shape: z.enum(["square", "hex"]).default("square"),
       })
       .default({}),
   })

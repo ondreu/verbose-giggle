@@ -5,6 +5,8 @@ import type { RNG } from "./rng.js";
 export interface VariantRules {
   flanking: boolean;
   diagonals: "5-5-5" | "5-10-5";
+  /** Default tactical-grid topology for this campaign (#6b). */
+  gridShape: "square" | "hex";
 }
 
 /**

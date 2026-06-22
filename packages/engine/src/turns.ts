@@ -75,7 +75,8 @@ export function startCombat(
     w: args.grid?.w ?? 16,
     h: args.grid?.h ?? 12,
     cell_ft: args.grid?.cell_ft ?? 5,
-    shape: args.grid?.shape ?? ("square" as const),
+    // Explicit arg wins; otherwise fall back to the campaign default (#6b).
+    shape: args.grid?.shape ?? state.variant.gridShape ?? "square",
   };
   autoPlaceParticipants(state, args.participants, grid);
 

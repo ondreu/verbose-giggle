@@ -38,6 +38,14 @@ describe("hex grid (#6b)", () => {
     expect(new Set(hexNeighbors(4, 4).map((n) => `${n.x},${n.y}`)).size).toBe(6);
   });
 
+  it("start_combat inherits the campaign's default grid shape", () => {
+    const a = makeActor({ id: "a", name: "Mover", position: { x: 0, y: 0 } });
+    const state = makeState([a]);
+    state.variant.gridShape = "hex"; // campaign default
+    startCombat(state, { participants: ["a"] });
+    expect(state.session.combat?.grid.shape).toBe("hex");
+  });
+
   it("reachable on a hex grid uses 6-neighbour spread", () => {
     const a = makeActor({ id: "a", name: "Mover", speed: 10, position: { x: 3, y: 3 } });
     const state = makeState([a]);

@@ -188,8 +188,9 @@ on old code and items **#15, #17, #18** are likely already resolved by updating.
   (`square`|`hex`, default square) and `start_combat` accepts it. Render:
   `TacticalGrid` draws a pointy-top hex board (floor/terrain/reachable/AoE/
   tokens/click) when the grid is hex. Square remains the default; covered by
-  engine tests. (A campaign/encounter-level toggle to choose hex is a small
-  follow-up.)
+  engine tests. A **campaign-level default** is authorable via
+  `campaign.yaml` → `variant_rules.grid_shape: hex`, threaded through
+  `GameState.variant.gridShape` so `start_combat` inherits it unless overridden.
 - **[x] #39 — More granular / detailed tactical battle map.** Done (core). The
   default board is roomier (16×12 in `start_combat`), and `TacticalGrid` gained
   **zoom** (50–250 %, via a crisp SVG `viewBox` so it stays sharp) and a **hand
