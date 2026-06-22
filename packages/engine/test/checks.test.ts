@@ -10,6 +10,9 @@ describe("ability checks & saves", () => {
     // STR mod +3, prof +2 → modifier 5.
     expect(r.modifier).toBe(5);
     expect(r.detail).toContain("(zdatnost)");
+    // Skill label is localized to Czech, never the raw SRD id.
+    expect(r.detail).toContain("atletika");
+    expect(r.detail).not.toContain("athletics");
   });
 
   it("proficient save adds proficiency, success compares to DC", () => {

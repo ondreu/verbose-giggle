@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useGame } from "../store/store";
 import { Icon } from "../components/Icon";
+import { Markdown } from "../components/Markdown";
 import { DiaryModal } from "./DiaryModal";
 
 
@@ -60,7 +61,7 @@ export function ChatPanel() {
             disabled={busy || imageLoading}
             title="Vygenerovat obrázek aktuální scény"
           >
-            <Icon name="scroll" size={12} />
+            <Icon name="camera" size={13} />
             {imageLoading ? "…" : "vizualizovat"}
           </button>
           <button
@@ -84,21 +85,25 @@ export function ChatPanel() {
           </p>
         )}
         {narration.map((line) => (
-          <p
+          <div
             key={line.id}
             className={
               line.role === "dm"
-                ? "mb-4 font-body text-[1.05rem] leading-relaxed text-text"
+                ? "mb-4 font-body text-[1.12rem] font-medium leading-relaxed text-text"
                 : "mb-4 border-l-2 border-gold/40 pl-3 font-body italic text-subtext1"
             }
           >
-            {line.role === "player" && (
-              <span className="mr-1 font-display text-xs uppercase tracking-wider text-gold">
-                Hráč ·{" "}
-              </span>
+            {line.role === "dm" ? (
+              <Markdown text={line.text} />
+            ) : (
+              <p>
+                <span className="mr-1 font-display text-xs uppercase tracking-wider text-gold">
+                  {line.actor ?? "Hráč"} ·{" "}
+                </span>
+                {line.text}
+              </p>
             )}
-            {line.text}
-          </p>
+          </div>
         ))}
         {aiActing && (
           <p className="mb-2 flex items-center gap-1.5 font-display text-sm tracking-wide text-arcane">

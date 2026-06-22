@@ -5,6 +5,9 @@ import { Icon } from "../components/Icon";
 
 const mod = (score: number) => Math.floor((score - 10) / 2);
 const fmt = (m: number) => (m >= 0 ? `+${m}` : `${m}`);
+/** Prettify an SRD spell id ("fire-bolt") into a readable label ("Fire Bolt"). */
+const spellLabel = (id: string) =>
+  id.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 
 const ABILITY_LABELS: [keyof Abilities, string][] = [
   ["str", "SIL"],
@@ -20,6 +23,8 @@ export function SheetPanel() {
   const session = useGame((s) => s.session);
   const actors = useGame((s) => s.actors);
   const sendCommand = useGame((s) => s.sendCommand);
+  const sendAction = useGame((s) => s.sendAction);
+  const busy = useGame((s) => s.busy);
   const generateImage = useGame((s) => s.generateImage);
   const imageLoading = useGame((s) => s.imageLoading);
   const activeId = session?.active_player ?? null;
@@ -54,7 +59,7 @@ export function SheetPanel() {
             disabled={imageLoading}
             title="Vygenerovat portrét postavy"
           >
-            <Icon name="scroll" size={11} />
+            <Icon name="camera" size={12} />
             portrét
           </button>
         </div>
@@ -117,6 +122,34 @@ export function SheetPanel() {
                     }}
                   />
                 ))}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Known / prepared spells (casters) — each is castable via the DM loop */}
+      {actor.spells_known.length > 0 && (
+        <div className="mt-3">
+          <div className="mb-1 flex items-center gap-1 text-[11px] uppercase tracking-wider text-ink/60">
+            <Icon name="flame" size={11} className="text-arcane" />
+            Kouzla
+          </div>
+          <div className="flex flex-col gap-1">
+            {actor.spells_known.map((spell) => (
+              <div
+                key={spell}
+                className="flex items-center justify-between rounded-sm border border-ink/15 bg-ink/5 px-2 py-1"
+              >
+                <span className="font-body text-sm">{spellLabel(spell)}</span>
+                <button
+                  className="btn-gold px-2 py-0.5 text-[11px] disabled:opacity-40"
+                  onClick={() => void sendAction(`Sešlu kouzlo ${spellLabel(spell)} (${spell}).`)}
+                  disabled={busy || downed}
+                  title={`Seslat ${spellLabel(spell)}`}
+                >
+                  seslat
+                </button>
               </div>
             ))}
           </div>
