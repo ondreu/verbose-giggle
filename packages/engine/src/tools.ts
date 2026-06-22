@@ -15,7 +15,7 @@ import { castSpell, concentrationCheck } from "./spells.js";
 import { aoe, coverBetween, move, reachableCells } from "./grid.js";
 import { endCombat, nextTurn, startCombat } from "./turns.js";
 import { longRest, shortRest } from "./rest.js";
-import { awardXp, levelUp } from "./leveling.js";
+import { applyAbilityIncrease, awardXp, learnSpells, levelUp } from "./leveling.js";
 
 const Advantage = z.enum(["advantage", "disadvantage", "none"]).optional();
 
@@ -453,6 +453,36 @@ export const TOOLS: ToolDef[] = [
     schema: z.object({ actor: z.string() }),
     parameters: { type: "object", properties: { actor: { type: "string" } }, required: ["actor"] },
     handler: (state, args) => levelUp(state, args),
+  }),
+  def({
+    name: "ability_increase",
+    description: "Apply an Ability Score Improvement: up to +2 total across abilities (each capped at 20).",
+    readOnly: false,
+    schema: z.object({
+      actor: z.string(),
+      increments: z.record(z.enum(["str", "dex", "con", "int", "wis", "cha"]), z.number().int()),
+    }),
+    parameters: {
+      type: "object",
+      properties: {
+        actor: { type: "string" },
+        increments: { type: "object", description: "e.g. { str: 2 } or { dex: 1, con: 1 }" },
+      },
+      required: ["actor", "increments"],
+    },
+    handler: (state, args) => applyAbilityIncrease(state, args),
+  }),
+  def({
+    name: "learn_spell",
+    description: "Add one or more spells to an actor's known/prepared list.",
+    readOnly: false,
+    schema: z.object({ actor: z.string(), spells: z.array(z.string()) }),
+    parameters: {
+      type: "object",
+      properties: { actor: { type: "string" }, spells: { type: "array", items: { type: "string" } } },
+      required: ["actor", "spells"],
+    },
+    handler: (state, args) => learnSpells(state, args),
   }),
   def({
     name: "update_sheet",

@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { awardXp, levelUp, proficiencyForLevel } from "../src/index.js";
+import {
+  applyAbilityIncrease,
+  awardXp,
+  learnSpells,
+  levelUp,
+  proficiencyForLevel,
+} from "../src/index.js";
 import { makeActor, makeState } from "./helpers.js";
 
 describe("proficiency by level", () => {
@@ -48,6 +54,32 @@ describe("level up", () => {
     w.level = 20;
     const r = levelUp(state, { actor: "w" });
     expect(r).toHaveProperty("error");
+  });
+});
+
+describe("ability score improvement", () => {
+  it("distributes up to +2 and caps each score at 20", () => {
+    const a = makeActor({ id: "a", name: "A", abilities: { str: 19, dex: 14, con: 12, int: 10, wis: 10, cha: 10 } });
+    const state = makeState([a]);
+    applyAbilityIncrease(state, { actor: "a", increments: { str: 2 } });
+    expect(a.abilities.str).toBe(20); // 19 + 2 capped at 20
+  });
+
+  it("rejects more than +2 total", () => {
+    const a = makeActor({ id: "a", name: "A" });
+    const state = makeState([a]);
+    const r = applyAbilityIncrease(state, { actor: "a", increments: { str: 2, dex: 1 } });
+    expect(r).toHaveProperty("error");
+  });
+});
+
+describe("learn spells", () => {
+  it("adds new spells and de-duplicates", () => {
+    const a = makeActor({ id: "a", name: "A", spells_known: ["fire-bolt"] });
+    const state = makeState([a]);
+    const r = learnSpells(state, { actor: "a", spells: ["fire-bolt", "shield", "shield"] });
+    expect(a.spells_known).toEqual(["fire-bolt", "shield"]);
+    expect(r.added).toEqual(["shield"]);
   });
 });
 

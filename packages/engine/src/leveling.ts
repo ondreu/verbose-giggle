@@ -1,4 +1,8 @@
+import type { AbilityKey } from "@adm/schemas";
 import { abilityMod, getActor, log, type GameState } from "./state.js";
+
+/** Levels at which most classes grant an Ability Score Improvement (or feat). */
+export const ASI_LEVELS = [4, 8, 12, 16, 19];
 
 /** Cumulative XP required to REACH each level (index 0 = level 1). SRD. */
 export const XP_THRESHOLDS = [
@@ -86,6 +90,64 @@ export function levelUp(state: GameState, args: { actor: string }): LevelUpResul
     hp_max: actor.hp.max,
     detail,
   };
+}
+
+/**
+ * Apply an Ability Score Improvement (§8.1, level-up choice): distribute up to
+ * +2 total across abilities, each score capped at 20. Validated so a level-up
+ * can never inflate a sheet beyond the rules.
+ */
+export function applyAbilityIncrease(
+  state: GameState,
+  args: { actor: string; increments: Partial<Record<AbilityKey, number>> },
+): { abilities: Record<string, number> } | { error: string } {
+  const actor = getActor(state, args.actor);
+  const inc = args.increments ?? {};
+  const values = Object.values(inc).map((v) => v ?? 0);
+  if (values.some((v) => v < 0 || !Number.isInteger(v))) return { error: "ASI increments must be non-negative integers" };
+  const total = values.reduce((a, b) => a + b, 0);
+  if (total > 2) return { error: "An ASI grants at most +2 total" };
+
+  const applied: string[] = [];
+  for (const [k, v] of Object.entries(inc)) {
+    if (!v) continue;
+    const key = k as AbilityKey;
+    const before = actor.abilities[key];
+    actor.abilities[key] = Math.min(20, before + v);
+    if (actor.abilities[key] !== before) applied.push(`${key} → ${actor.abilities[key]}`);
+  }
+  log(state, {
+    kind: "level",
+    actor: args.actor,
+    detail: `${actor.name} zvyšuje vlastnosti: ${applied.join(", ") || "beze změny"}`,
+    tool: "ability_increase",
+  });
+  return { abilities: actor.abilities };
+}
+
+/** Learn one or more spells (level-up / training), de-duplicated. */
+export function learnSpells(
+  state: GameState,
+  args: { actor: string; spells: string[] },
+): { spells_known: string[]; added: string[] } {
+  const actor = getActor(state, args.actor);
+  const added: string[] = [];
+  for (const raw of args.spells ?? []) {
+    const id = raw.trim();
+    if (id && !actor.spells_known.includes(id)) {
+      actor.spells_known.push(id);
+      added.push(id);
+    }
+  }
+  if (added.length) {
+    log(state, {
+      kind: "level",
+      actor: args.actor,
+      detail: `${actor.name} se učí kouzla: ${added.join(", ")}`,
+      tool: "learn_spell",
+    });
+  }
+  return { spells_known: actor.spells_known, added };
 }
 
 export interface AwardXpResult {

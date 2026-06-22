@@ -95,6 +95,10 @@ interface GameStore {
   restoreSnapshot: (id: string) => Promise<void>;
   deleteSnapshot: (id: string) => Promise<void>;
   createCharacter: (draft: unknown) => Promise<{ ok: boolean; error?: string; id?: string }>;
+  levelUp: (
+    actor: string,
+    choices?: { asi?: Record<string, number>; spells?: string[] },
+  ) => Promise<{ ok: boolean; error?: string }>;
 }
 
 let lineSeq = 0;
@@ -420,6 +424,26 @@ export const useGame = create<GameStore>((set, get) => ({
       }
       // Server emits `reload`, which re-hydrates the new actor into the store.
       return { ok: true, id: data.id };
+    } finally {
+      set({ busy: false });
+    }
+  },
+
+  levelUp: async (actor, choices) => {
+    set({ busy: true, error: null });
+    try {
+      const res = await fetch("/api/level-up", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ actor, ...choices }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        set({ error: data.error ?? `Chyba ${res.status}` });
+        return { ok: false, error: data.error };
+      }
+      // Server emits `reload`; the updated sheet re-hydrates into the store.
+      return { ok: true };
     } finally {
       set({ busy: false });
     }

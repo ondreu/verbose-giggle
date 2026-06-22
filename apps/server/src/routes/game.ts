@@ -299,6 +299,34 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
     }
   });
 
+  // --- Level-up (#13): wire the GUI choices through the engine --------------
+  app.post<{ Body: { actor: string; asi?: Record<string, number>; spells?: string[] } }>(
+    "/api/level-up",
+    async (req, reply) => {
+      const actor = req.body?.actor;
+      if (!actor) return reply.code(400).send({ error: "missing actor" });
+      const gs = ctx.manager.buildGameState();
+      const before = ctx.manager.session.log.length;
+
+      const lv = await ctx.manager.applyTool(gs, "level_up", { actor });
+      if (!lv.ok) return reply.code(400).send({ error: lv.error });
+      if (req.body?.asi && Object.keys(req.body.asi).length) {
+        const r = await ctx.manager.applyTool(gs, "ability_increase", { actor, increments: req.body.asi });
+        if (!r.ok) return reply.code(400).send({ error: r.error });
+      }
+      if (Array.isArray(req.body?.spells) && req.body.spells.length) {
+        await ctx.manager.applyTool(gs, "learn_spell", { actor, spells: req.body.spells });
+      }
+
+      for (const entry of ctx.manager.session.log.slice(before)) ctx.bus.emit({ type: "log", entry });
+      // Level-up is a durable sheet change; persist notes and reload in place.
+      await ctx.manager.flushDurable(gs);
+      await reopenManager();
+      ctx.bus.emit({ type: "reload", reason: "level-up" });
+      return { ok: true, result: lv.result };
+    },
+  );
+
   /** Full scene + state snapshot for initial client hydration. */
   app.get("/api/state", async () => ({
     campaign: ctx.manager.campaign.config,

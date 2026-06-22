@@ -1,6 +1,8 @@
+import { useState } from "react";
 import { csCondition } from "@adm/schemas";
 import { useGame } from "../store/store";
 import { Icon } from "../components/Icon";
+import { LevelUpModal } from "../components/LevelUpModal";
 
 
 const mod = (score: number) => Math.floor((score - 10) / 2);
@@ -27,6 +29,7 @@ export function SheetPanel() {
   const busy = useGame((s) => s.busy);
   const generateImage = useGame((s) => s.generateImage);
   const imageLoading = useGame((s) => s.imageLoading);
+  const [levelUpOpen, setLevelUpOpen] = useState(false);
   const activeId = session?.active_player ?? null;
   const actor = activeId ? actors[activeId] : null;
 
@@ -45,14 +48,28 @@ export function SheetPanel() {
   const downed = overlayHp <= 0;
   const ds = actor.death_saves ?? { success: 0, fail: 0 };
 
+  const canLevel = actor.type === "character" && actor.faction === "party" && actor.level < 20;
+
   return (
     <section className="parchment flex flex-col p-4 font-body">
+      {levelUpOpen && <LevelUpModal actor={actor} onClose={() => setLevelUpOpen(false)} />}
       <div className="flex items-baseline justify-between border-b border-ink/20 pb-1">
         <h2 className="font-display text-xl">{actor.name}</h2>
         <div className="flex items-center gap-2">
           <span className="text-xs uppercase tracking-wider text-ink/70">
             {actor.race} {actor.class} · úr. {actor.level}
           </span>
+          {canLevel && (
+            <button
+              className="flex items-center gap-0.5 font-log text-[10px] text-gold/80 hover:text-gold disabled:opacity-40"
+              onClick={() => setLevelUpOpen(true)}
+              disabled={busy}
+              title="Postup na vyšší úroveň"
+            >
+              <Icon name="d20" size={12} />
+              úroveň
+            </button>
+          )}
           <button
             className="flex items-center gap-0.5 font-log text-[10px] text-ink/50 hover:text-ink disabled:opacity-40"
             onClick={() => void generateImage("character", actor.id, `Portrét — ${actor.name}`)}
