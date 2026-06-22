@@ -195,22 +195,11 @@ on old code and items **#15, #17, #18** are likely already resolved by updating.
 - **#6b — Hex grid for the tactical map.** Switch the square grid to hexagons
   (render + distance/range math). Engine work in `packages/engine/src/grid.ts`
   plus `TacticalGrid.tsx`. Schedule after #6 (maps must render first).
-- **#39 — More granular / detailed tactical battle map.** The current grid is
-  coarse: a fixed 44px cell, a default 12×10 board (`start_combat` default in
-  `packages/engine/src/turns.ts`), and chunky one-cell terrain/tokens. Make the
-  battlefield finer-grained and richer:
-  - **Finer grid:** smaller cells / larger boards (e.g. configurable cell size
-    or a higher cell count), so positioning and ranges feel tactical rather than
-    blocky. Keep `cell_ft` honest for distance math (`packages/engine/src/grid.ts`).
-  - **Zoom & pan:** the SVG already scrolls (`overflow-auto`); add zoom in/out and
-    drag-pan so big maps stay readable (`apps/web/src/map/TacticalGrid.tsx`,
-    `CELL`/viewBox).
-  - **Richer rendering:** sub-cell token sizing, clearer terrain at higher
-    resolution, optional multi-cell creatures (Large/Huge footprints), and
-    snappier tokens. Coordinate with the authored `battle_map_image` backdrop so
-    art and grid line up.
-  - Pairs with #6 (maps render), #6b (hex option), and #38 (click-to-target wants
-    legible tokens to click).
+- **[x] #39 — More granular / detailed tactical battle map.** Done (core). The
+  default board is roomier (16×12 in `start_combat`), and `TacticalGrid` gained
+  **zoom** (50–250 %, via a crisp SVG `viewBox` so it stays sharp) and a **hand
+  tool for drag-panning** the board, plus native scroll. `cell_ft` stays honest
+  for distance math. (Multi-cell Large/Huge footprints left as a follow-up.)
 - **#5 — Bigger, better showcase vault.** More locations/NPCs/encounters/lore so
   the demo sells the experience. Build guide in `docs/SHOWCASE.md`; the showcase
   vault content can be authored and dropped into `data/vault.example` (or a new

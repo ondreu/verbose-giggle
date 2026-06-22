@@ -1,6 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useGame } from "../store/store";
 import { Icon } from "../components/Icon";
+
+const ZOOM_MIN = 0.5;
+const ZOOM_MAX = 2.5;
 
 const AOE_SHAPES = [
   { shape: "sphere", label: "Koule", icon: "flame", needsDir: false },
@@ -33,6 +36,10 @@ export function TacticalGrid({ embedded = false }: { embedded?: boolean }) {
   const [aoeShape, setAoeShape] = useState<string | null>(null);
   const [aoeSize, setAoeSize] = useState(15);
   const [aoeOrigin, setAoeOrigin] = useState<{ x: number; y: number } | null>(null);
+  // Zoom & pan for larger/more detailed boards (#39).
+  const [zoom, setZoom] = useState(1);
+  const [panMode, setPanMode] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const combat = session?.combat;
   const activeForFetch = combat?.order[combat.turn_index]?.actor ?? null;
   const tokenKey = combat ? JSON.stringify(combat.tokens) : "";
@@ -65,7 +72,30 @@ export function TacticalGrid({ embedded = false }: { embedded?: boolean }) {
     ? encounters[combat.encounter]?.battle_map_image
     : undefined;
 
+  // Drag-to-pan the scroll container when the hand tool is active (#39).
+  const startPan = (e: React.PointerEvent) => {
+    if (!panMode) return;
+    const el = scrollRef.current;
+    if (!el) return;
+    e.preventDefault();
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const sl = el.scrollLeft;
+    const st = el.scrollTop;
+    const move = (ev: PointerEvent) => {
+      el.scrollLeft = sl - (ev.clientX - startX);
+      el.scrollTop = st - (ev.clientY - startY);
+    };
+    const up = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  };
+
   const handleCell = (x: number, y: number) => {
+    if (panMode) return; // hand tool: clicks pan, not move
     if (aoeShape) {
       const def = AOE_SHAPES.find((s) => s.shape === aoeShape)!;
       if (def.needsDir) {
@@ -135,16 +165,55 @@ export function TacticalGrid({ embedded = false }: { embedded?: boolean }) {
               setAoeOrigin(null);
               clearAoe();
             }}
-            className="ml-auto font-log text-[10px] text-subtext0 hover:text-gold"
+            className="font-log text-[10px] text-subtext0 hover:text-gold"
           >
             zrušit
           </button>
         )}
+        {/* Zoom & pan (#39) */}
+        <div className="ml-auto flex items-center gap-1">
+          <button
+            onClick={() => setPanMode((p) => !p)}
+            title="Posun mapy tažením (ruka)"
+            className={`flex items-center gap-1 rounded-sm border px-1.5 py-0.5 font-log text-[10px] ${
+              panMode ? "border-gold text-gold" : "border-surface2 text-subtext0 hover:text-subtext1"
+            }`}
+          >
+            <Icon name="footprints" size={11} /> posun
+          </button>
+          <button
+            onClick={() => setZoom((z) => Math.max(ZOOM_MIN, Math.round((z - 0.25) * 100) / 100))}
+            className="rounded-sm border border-surface2 px-1.5 py-0.5 font-log text-[11px] text-subtext0 hover:text-gold"
+            title="Oddálit"
+          >
+            −
+          </button>
+          <button
+            onClick={() => setZoom(1)}
+            className="rounded-sm border border-surface2 px-1.5 py-0.5 font-log text-[10px] text-subtext0 hover:text-gold"
+            title="Výchozí přiblížení"
+          >
+            {Math.round(zoom * 100)}%
+          </button>
+          <button
+            onClick={() => setZoom((z) => Math.min(ZOOM_MAX, Math.round((z + 0.25) * 100) / 100))}
+            className="rounded-sm border border-surface2 px-1.5 py-0.5 font-log text-[11px] text-subtext0 hover:text-gold"
+            title="Přiblížit"
+          >
+            +
+          </button>
+        </div>
       </div>
-    <div className="flex-1 overflow-auto p-4">
+    <div
+        ref={scrollRef}
+        className="flex-1 overflow-auto p-4"
+        style={{ cursor: panMode ? "grab" : "default" }}
+        onPointerDown={startPan}
+      >
         <svg
-          width={w * CELL}
-          height={h * CELL}
+          width={w * CELL * zoom}
+          height={h * CELL * zoom}
+          viewBox={`0 0 ${w * CELL} ${h * CELL}`}
           className="mx-auto block"
           style={{ background: "var(--bg-crust)" }}
         >

@@ -70,7 +70,8 @@ export function startCombat(
     }
   }
   // Anyone still unplaced gets a sensible default spot so the map isn't empty.
-  const grid = args.grid ?? { w: 12, h: 10, cell_ft: 5 };
+  // A roomier default board makes positioning feel tactical (#39).
+  const grid = args.grid ?? { w: 16, h: 12, cell_ft: 5 };
   autoPlaceParticipants(state, args.participants, grid);
 
   const rolls = args.participants.map((id) => {
