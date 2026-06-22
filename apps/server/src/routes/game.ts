@@ -97,6 +97,16 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
         // The image side reuses the LLM key when no dedicated key is set.
         usesLlmKey: config.image != null && !stored.image?.apiKey,
       },
+      // TTS: Azure (expressive Czech) is GUI-editable; Piper URL stays env.
+      tts: {
+        engine: config.azureTts ? "azure" : config.piperUrl ? "piper" : "off",
+        azureRegion: config.azureTts?.region ?? "",
+        voice: config.azureTts?.voice ?? "cs-CZ-AntoninNeural",
+        rate: config.azureTts?.rate ?? "-6%",
+        pitch: config.azureTts?.pitch ?? "-2%",
+        azureKeySet: Boolean(config.azureTts?.key),
+        piperFallback: config.piperUrl != null,
+      },
       srdPath: config.srdPath,
       // The selectable identity is the campaign *folder*, not its display name.
       campaign: stored.campaign ?? path.basename(ctx.manager.campaign.dir),
@@ -105,9 +115,6 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
       activeNarrator: !config.llm.apiKey || config.llm.provider === "mock" ? "mock" : "llm",
       // Bootstrap values that stay in the environment (shown read-only).
       env: {
-        // Active TTS engine: Azure (expressive) is primary, Piper the fallback.
-        tts: config.azureTts ? "azure" : config.piperUrl ? "piper" : "off",
-        piperConfigured: config.piperUrl != null,
         basicAuth: config.basicAuth != null,
       },
     };
@@ -133,6 +140,15 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
       if (patch.image.apiKey !== undefined) clean.image.apiKey = patch.image.apiKey;
       if (patch.image.baseUrl !== undefined) clean.image.baseUrl = patch.image.baseUrl;
       if (patch.image.model !== undefined) clean.image.model = patch.image.model;
+    }
+    if (patch.tts) {
+      clean.tts = {};
+      if (patch.tts.azureKey !== undefined) clean.tts.azureKey = patch.tts.azureKey;
+      if (patch.tts.azureRegion !== undefined) clean.tts.azureRegion = patch.tts.azureRegion;
+      if (patch.tts.voice !== undefined) clean.tts.voice = patch.tts.voice;
+      if (patch.tts.rate !== undefined) clean.tts.rate = patch.tts.rate;
+      if (patch.tts.pitch !== undefined) clean.tts.pitch = patch.tts.pitch;
+      if (patch.tts.style !== undefined) clean.tts.style = patch.tts.style;
     }
     if (patch.srdPath !== undefined) clean.srdPath = patch.srdPath;
     if (patch.campaign !== undefined) clean.campaign = patch.campaign;

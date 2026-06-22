@@ -7,11 +7,20 @@ import { Icon } from "../components/Icon";
 interface SettingsView {
   llm: { baseUrl: string; model: string; provider: "auto" | "mock"; apiKeySet: boolean };
   image: { enabled: boolean; baseUrl: string; model: string; apiKeySet: boolean; usesLlmKey: boolean };
+  tts: {
+    engine: "azure" | "piper" | "off";
+    azureRegion: string;
+    voice: string;
+    rate: string;
+    pitch: string;
+    azureKeySet: boolean;
+    piperFallback: boolean;
+  };
   srdPath: string;
   campaign: string;
   campaigns: string[];
   activeNarrator: "mock" | "llm";
-  env: { tts: "azure" | "piper" | "off"; piperConfigured: boolean; basicAuth: boolean };
+  env: { basicAuth: boolean };
 }
 
 /**
@@ -35,6 +44,11 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
   const [imageBaseUrl, setImageBaseUrl] = useState("");
   const [imageModel, setImageModel] = useState("");
   const [imageKey, setImageKey] = useState("");
+  const [ttsRegion, setTtsRegion] = useState("");
+  const [ttsVoice, setTtsVoice] = useState("cs-CZ-AntoninNeural");
+  const [ttsRate, setTtsRate] = useState("-6%");
+  const [ttsPitch, setTtsPitch] = useState("-2%");
+  const [ttsKey, setTtsKey] = useState("");
   const [srdPath, setSrdPath] = useState("");
   const [campaign, setCampaign] = useState("");
 
@@ -48,6 +62,11 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
     setImageBaseUrl(v.image.baseUrl);
     setImageModel(v.image.model);
     setImageKey("");
+    setTtsRegion(v.tts.azureRegion);
+    setTtsVoice(v.tts.voice);
+    setTtsRate(v.tts.rate);
+    setTtsPitch(v.tts.pitch);
+    setTtsKey("");
     setSrdPath(v.srdPath);
     setCampaign(v.campaign);
   }
@@ -80,6 +99,13 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
           baseUrl: imageBaseUrl,
           model: imageModel,
           ...(imageKey ? { apiKey: imageKey } : {}),
+        },
+        tts: {
+          azureRegion: ttsRegion,
+          voice: ttsVoice,
+          rate: ttsRate,
+          pitch: ttsPitch,
+          ...(ttsKey ? { azureKey: ttsKey } : {}),
         },
         srdPath,
         campaign,
@@ -212,6 +238,54 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
               )}
             </fieldset>
 
+            {/* Voice (TTS) */}
+            <fieldset className="flex flex-col gap-2">
+              <legend className="font-display text-sm uppercase tracking-wider">Hlas (Azure AI Speech)</legend>
+              <p className="text-xs italic text-ink/60">
+                Expresivní česká narace. Prázdný klíč → použije se záložní Piper
+                {view.tts.piperFallback ? " (nastaven)" : " (nenastaven)"}.
+              </p>
+              <Field label="API klíč (Azure Speech)">
+                <input
+                  type="password"
+                  className="settings-input"
+                  placeholder={view.tts.azureKeySet ? "•••••• (uloženo — prázdné = beze změny)" : "nenastaveno → záložní Piper"}
+                  value={ttsKey}
+                  onChange={(e) => setTtsKey(e.target.value)}
+                  autoComplete="off"
+                />
+              </Field>
+              <Field label="Region">
+                <input
+                  className="settings-input"
+                  placeholder="westeurope"
+                  value={ttsRegion}
+                  onChange={(e) => setTtsRegion(e.target.value)}
+                />
+              </Field>
+              <Field label="Hlas">
+                <select className="settings-input" value={ttsVoice} onChange={(e) => setTtsVoice(e.target.value)}>
+                  {!["cs-CZ-AntoninNeural", "cs-CZ-VlastaNeural"].includes(ttsVoice) && (
+                    <option value={ttsVoice}>{ttsVoice}</option>
+                  )}
+                  <option value="cs-CZ-AntoninNeural">cs-CZ-AntoninNeural (mužský)</option>
+                  <option value="cs-CZ-VlastaNeural">cs-CZ-VlastaNeural (ženský)</option>
+                </select>
+              </Field>
+              <div className="grid grid-cols-2 gap-2">
+                <Field label="Tempo (rate)">
+                  <input className="settings-input" placeholder="-6%" value={ttsRate} onChange={(e) => setTtsRate(e.target.value)} />
+                </Field>
+                <Field label="Výška (pitch)">
+                  <input className="settings-input" placeholder="-2%" value={ttsPitch} onChange={(e) => setTtsPitch(e.target.value)} />
+                </Field>
+              </div>
+              <p className="text-xs italic text-ink/50">
+                Pomalejší tempo a nižší výška = dramatičtější projev. Aktivní engine:{" "}
+                {view.tts.engine === "azure" ? "Azure" : view.tts.engine === "piper" ? "Piper (záložní)" : "vypnuto"}.
+              </p>
+            </fieldset>
+
             {/* Content */}
             <fieldset className="flex flex-col gap-2">
               <legend className="font-display text-sm uppercase tracking-wider">Obsah</legend>
@@ -242,14 +316,8 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
             </fieldset>
 
             <p className="text-xs italic text-ink/50">
-              Hlas (TTS:{" "}
-              {view.env.tts === "azure"
-                ? "Azure – expresivní čeština"
-                : view.env.tts === "piper"
-                  ? "Piper – záložní"
-                  : "vypnuto"}
-              ) a přihlášení ({view.env.basicAuth ? "zapnuto" : "vypnuto"}) se konfigurují v prostředí
-              (.env), ne zde.
+              Přihlášení ({view.env.basicAuth ? "zapnuto" : "vypnuto"}) a adresa záložního Piperu se
+              konfigurují v prostředí (.env), ne zde.
             </p>
 
             {error && <p className="text-sm text-blood">{error}</p>}

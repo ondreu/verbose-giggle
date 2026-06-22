@@ -30,6 +30,15 @@ export interface Settings {
     apiKey?: string;
     model?: string;
   };
+  /** Azure AI Speech TTS (expressive Czech). Piper URL stays env-only. */
+  tts?: {
+    azureKey?: string;
+    azureRegion?: string;
+    voice?: string;
+    rate?: string;
+    pitch?: string;
+    style?: string;
+  };
   srdPath?: string;
   /** Campaign folder name under <vault>/campaigns (applied on next start). */
   campaign?: string;
@@ -62,10 +71,12 @@ export async function saveSettings(vaultPath: string, patch: Settings): Promise<
     ...patch,
     llm: { ...current.llm, ...patch.llm },
     image: { ...current.image, ...patch.image },
+    tts: { ...current.tts, ...patch.tts },
   };
   // Drop empty sub-objects so the file stays tidy.
   if (merged.llm && Object.keys(merged.llm).length === 0) delete merged.llm;
   if (merged.image && Object.keys(merged.image).length === 0) delete merged.image;
+  if (merged.tts && Object.keys(merged.tts).length === 0) delete merged.tts;
 
   const file = settingsPath(vaultPath);
   const tmp = `${file}.tmp`;

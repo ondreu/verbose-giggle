@@ -111,10 +111,28 @@ export function applySettings(base: Config, s: Settings): Config {
         }
       : null;
 
+  // Azure TTS: active when a key + region are present from either source.
+  // Settings win per-field; voice/rate/pitch fall back to env then defaults.
+  const azureKey = s.tts?.azureKey ?? base.azureTts?.key ?? "";
+  const azureRegion = s.tts?.azureRegion?.trim() || base.azureTts?.region || "";
+  const azureTts =
+    azureKey && azureRegion
+      ? {
+          key: azureKey,
+          region: azureRegion,
+          voice: s.tts?.voice?.trim() || base.azureTts?.voice || "cs-CZ-AntoninNeural",
+          rate: s.tts?.rate?.trim() || base.azureTts?.rate || "-6%",
+          pitch: s.tts?.pitch?.trim() || base.azureTts?.pitch || "-2%",
+          style: (s.tts?.style?.trim() || base.azureTts?.style) || null,
+          format: base.azureTts?.format ?? "riff-24khz-16bit-mono-pcm",
+        }
+      : null;
+
   return {
     ...base,
     srdPath: s.srdPath?.trim() || base.srdPath,
     llm,
     image,
+    azureTts,
   };
 }

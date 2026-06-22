@@ -77,7 +77,7 @@ This starts Vite with hot reload (talking to the running server's API).
 
 Read by `apps/server/src/config.ts`. See [`.env.example`](.env.example) for the full template.
 
-> **In-app settings.** The LLM provider/key/model, image generation, the campaign selection, and the SRD path can also be configured from the web UI (gear icon, top-right) without editing `.env`. They are stored in `<vault>/settings.json` and **override** the environment defaults below — so `.env` only needs a minimal bootstrap (vault path, port/host, `PIPER_URL`, optional `BASIC_AUTH`, Cloudflare token). LLM changes apply live; campaign and SRD path apply on the next server start. Secrets are write-only over the API (the UI shows only whether a key is set, never its value), and `BASIC_AUTH` deliberately stays env-only as the gate that guards the settings UI itself.
+> **In-app settings.** The LLM provider/key/model, image generation, **Azure TTS (key/region/voice/drama)**, the campaign selection, and the SRD path can all be configured from the web UI (gear icon, top-right) without editing `.env`. They are stored in `<vault>/settings.json` and **override** the environment defaults below — so `.env` only needs a minimal bootstrap (vault path, port/host, the fallback `PIPER_URL`, optional `BASIC_AUTH`, Cloudflare token). LLM and TTS changes apply live; campaign and SRD path apply on the next server start. Secrets are write-only over the API (the UI shows only whether a key is set, never its value), and `BASIC_AUTH` deliberately stays env-only as the gate that guards the settings UI itself.
 
 | Variable | Default | Required | Description |
 |---|---|---|---|
@@ -123,8 +123,8 @@ docker compose up -d
 For a vivid, dramatic Czech narrator the recommended primary engine is **Azure AI Speech** — no GPU or extra container required, the server calls it directly:
 
 1. In the [Azure portal](https://portal.azure.com) create a **Speech** resource (the free **F0** tier covers ≈500k characters/month). Copy a **KEY** and the **REGION** (e.g. `westeurope`).
-2. Put `AZURE_SPEECH_KEY` and `AZURE_SPEECH_REGION` in `.env`. Pick a voice with `AZURE_TTS_VOICE` (`cs-CZ-AntoninNeural` or `cs-CZ-VlastaNeural`).
-3. Tune the drama with `AZURE_TTS_RATE` / `AZURE_TTS_PITCH` (a slightly slower, lower read carries more gravitas). The server wraps each line in SSML prosody automatically.
+2. Enter the key/region in the web UI (**gear → Hlas**) — or put `AZURE_SPEECH_KEY` / `AZURE_SPEECH_REGION` in `.env`. Pick a voice (`cs-CZ-AntoninNeural` or `cs-CZ-VlastaNeural`).
+3. Tune the drama with the rate/pitch fields (a slightly slower, lower read carries more gravitas; env equivalents `AZURE_TTS_RATE` / `AZURE_TTS_PITCH`). The server wraps each line in SSML prosody automatically.
 
 **Piper** remains the offline fallback (used automatically when Azure is unset or errors). It is flat by design — fine for dev/CI, but Azure is the recommended table voice. The bundled Piper sidecar is an HTTP adapter (`services/piper-http`) implementing the same `POST /tts {text} -> audio/wav` contract; mount a `cs_CZ` voice at `./piper-voices` and set `PIPER_VOICE` (without one it returns silence, so the pipeline stays wired).
 
