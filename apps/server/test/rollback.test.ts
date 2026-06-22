@@ -58,8 +58,9 @@ describe("campaign rollback via snapshots", () => {
   });
 
   it("scaffolds a valid new campaign folder", async () => {
-    const dir = await freshCampaign();
-    const vault = path.dirname(path.dirname(dir)); // <tmp>/<root> containing campaigns/
+    // An isolated, empty vault so the test never collides with shared tmp state.
+    const vault = await fs.mkdtemp(path.join(os.tmpdir(), "adm-vault-"));
+    tmpRoots.push(vault);
     const folder = await createCampaign(vault, { name: "Stíny nad Tří Řekami" });
     expect(folder).toBe(slugify("Stíny nad Tří Řekami"));
 

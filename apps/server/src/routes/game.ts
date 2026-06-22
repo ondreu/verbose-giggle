@@ -11,6 +11,7 @@ import { startEncounter } from "../session/encounter.js";
 import type { EventBus } from "../session/events.js";
 import { SessionManager } from "../session/manager.js";
 import { createCampaign } from "../vault/scaffold.js";
+import { createCharacter, creationOptions, type CharacterDraft } from "../vault/creation.js";
 import {
   createSnapshot,
   deleteSnapshot,
@@ -273,6 +274,26 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
     try {
       await deleteSnapshot(ctx.manager.campaign.dir, req.params.id);
       return { ok: true };
+    } catch (err) {
+      return reply.code(400).send({ error: err instanceof Error ? err.message : String(err) });
+    }
+  });
+
+  // --- Character creation (#14) --------------------------------------------
+  app.get("/api/creation/options", async () => creationOptions());
+
+  app.post<{ Body: CharacterDraft }>("/api/characters", async (req, reply) => {
+    try {
+      const { id } = await createCharacter(ctx.manager.campaign, req.body as CharacterDraft);
+      // Reload so the new actor + party membership are live, then point the
+      // hotseat at the new character if no one is active yet.
+      await reopenManager();
+      if (!ctx.manager.session.active_player) {
+        ctx.manager.session.active_player = id;
+        await ctx.manager.persist();
+      }
+      ctx.bus.emit({ type: "reload", reason: "character-created" });
+      return { ok: true, id };
     } catch (err) {
       return reply.code(400).send({ error: err instanceof Error ? err.message : String(err) });
     }

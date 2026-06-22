@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useGame, type CampaignInfo } from "../store/store";
 import { Icon } from "./Icon";
+import { CharacterCreate } from "./CharacterCreate";
 
 /**
  * First-run / home screen (#2): continue the current campaign, switch or create
@@ -21,10 +22,12 @@ export function StartMenu({ onSettings }: { onSettings: () => void }) {
     void listSnapshots();
   }, [listCampaigns, listSnapshots]);
 
+  const [createChar, setCreateChar] = useState(false);
   const active = campaigns.find((c) => c.active);
 
   return (
     <div className="min-h-full overflow-y-auto bg-bg-crust">
+      {createChar && <CharacterCreate onClose={() => setCreateChar(false)} />}
       <div className="mx-auto flex max-w-3xl flex-col gap-5 px-5 py-10">
         <div className="flex items-center gap-3">
           <Icon name="d20" size={34} className="text-gold" />
@@ -49,6 +52,12 @@ export function StartMenu({ onSettings }: { onSettings: () => void }) {
                 {active ? `${active.party} postav v družině` : "aktivní kampaň"}
               </div>
             </div>
+            <button
+              className="flex items-center gap-1.5 rounded-sm border border-surface2 px-3 py-2.5 font-log text-sm text-subtext1 hover:border-gold/60 hover:text-gold"
+              onClick={() => setCreateChar(true)}
+            >
+              <Icon name="scroll" size={14} /> Nová postava
+            </button>
             <button className="btn-gold px-5 py-2.5 text-sm" onClick={() => setView("play")}>
               Pokračovat ve hře
             </button>
