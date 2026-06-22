@@ -195,6 +195,8 @@ export async function resolveAiTurns(opts: {
   const { manager, llm, bus, gs } = opts;
 
   for (let i = 0; i < MAX_AI_TURNS; i++) {
+    // The campaign has reached a terminal state (e.g. party wipe, #23): stop.
+    if (manager.session.ending) return;
     const combat = manager.session.combat;
     if (!combat) return;
     const activeId = combat.order[combat.turn_index]?.actor;

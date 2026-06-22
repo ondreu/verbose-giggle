@@ -153,3 +153,25 @@ export function endCombat(state: GameState): void {
   log(state, { kind: "combat", detail: "Boj končí.", tool: "end_combat" });
   state.session.combat = null;
 }
+
+/**
+ * Remove an actor from the active initiative order (e.g. on death, #23),
+ * keeping the turn pointer aimed at the same upcoming actor. Drops their token
+ * and ends combat if no one is left in the order.
+ */
+export function removeFromCombat(state: GameState, actorId: string): void {
+  const c = state.session.combat;
+  if (!c) return;
+  const idx = c.order.findIndex((o) => o.actor === actorId);
+  if (idx === -1) return;
+  c.order.splice(idx, 1);
+  delete c.tokens[actorId];
+  if (c.order.length === 0) {
+    endCombat(state);
+    return;
+  }
+  // Removing someone before the pointer shifts the upcoming actor down a slot.
+  if (idx < c.turn_index) c.turn_index -= 1;
+  // Clamp in case the removed actor sat at (or past) the end of the order.
+  if (c.turn_index >= c.order.length) c.turn_index = 0;
+}

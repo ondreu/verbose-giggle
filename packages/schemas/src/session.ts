@@ -30,6 +30,8 @@ export const ActorOverlay = z.object({
     .object({ spell: z.string(), dc_to_maintain: z.number().int().optional() })
     .nullable()
     .optional(),
+  /** Persisted death flag so a fallen hero stays dead across reloads (#23). */
+  dead: z.boolean().optional(),
 });
 export type ActorOverlay = z.infer<typeof ActorOverlay>;
 
@@ -71,5 +73,11 @@ export const SessionState = z.object({
   combat: CombatState.nullable().default(null),
   log: z.array(LogEntry).default([]),
   chat: z.array(ChatMessage).default([]),
+  /** Set when the campaign reaches a terminal state (e.g. the party is wiped
+   *  out, #23). The UI shows a game-over screen and offers a rollback. */
+  ending: z
+    .object({ reason: z.string(), actor: z.string().optional() })
+    .nullable()
+    .default(null),
 });
 export type SessionState = z.infer<typeof SessionState>;

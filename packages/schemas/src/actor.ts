@@ -82,6 +82,9 @@ export const ActorSchema = z
     inventory: z.array(InventoryEntry).default([]),
     attunement: z.array(Slug).max(3).default([]),
     death_saves: DeathSaves.default({ success: 0, fail: 0 }),
+    /** True once the actor has failed three death saves — permanently dead,
+     *  removed from initiative, not recoverable without a specific spell (#23). */
+    dead: z.boolean().default(false),
     position: Position.nullable().default(null),
     srd_ref: z.string().nullable().default(null),
     ai_profile: z.string().nullable().default(null),

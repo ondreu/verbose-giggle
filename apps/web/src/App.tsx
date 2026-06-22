@@ -11,6 +11,7 @@ import { Icon } from "./components/Icon";
 import { ImageModal } from "./components/ImageModal";
 import { SettingsModal } from "./components/SettingsModal";
 import { StartMenu } from "./components/StartMenu";
+import { GameOverModal } from "./components/GameOverModal";
 
 export default function App() {
   const hydrate = useGame((s) => s.hydrate);
@@ -40,6 +41,7 @@ export default function App() {
   return (
     <div className="flex h-full flex-col">
       <ImageModal />
+      <GameOverModal />
       {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
       <header className="flex items-center gap-3 border-b border-black bg-bg-mantle px-4 py-2">
         <button

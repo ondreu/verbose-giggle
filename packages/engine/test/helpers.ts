@@ -41,6 +41,7 @@ export function makeState(actors: Actor[], seed: string | number = "test-seed"):
     combat: null,
     log: [],
     chat: [],
+    ending: null,
   };
   return {
     actors: actorMap,

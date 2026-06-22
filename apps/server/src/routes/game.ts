@@ -446,6 +446,10 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
   app.post<{ Body: { input: string } }>("/api/action", async (req, reply) => {
     const input = (req.body?.input ?? "").trim();
     if (!input) return reply.code(400).send({ error: "empty input" });
+    // A finished campaign (party wipe, #23) accepts no further actions until
+    // the player rolls back to an earlier snapshot.
+    if (ctx.manager.session.ending)
+      return reply.code(409).send({ error: ctx.manager.session.ending.reason });
     try {
       // Checkpoint the pre-turn state so the player can undo this message.
       await checkpointTurn(ctx.manager.campaign.dir, `Před: „${input.slice(0, 40)}“`);

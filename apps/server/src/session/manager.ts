@@ -58,6 +58,7 @@ export class SessionManager {
       if (overlay?.position !== undefined) resolved.position = overlay.position;
       if (overlay?.conditions) resolved.conditions = clone(overlay.conditions);
       if (overlay?.concentration !== undefined) resolved.concentration = clone(overlay.concentration);
+      if (overlay?.dead !== undefined) resolved.dead = overlay.dead;
       actors[id] = resolved;
     }
     return {
@@ -80,6 +81,7 @@ export class SessionManager {
         position: actor.position,
         conditions: actor.conditions,
         concentration: actor.concentration,
+        dead: actor.dead,
       };
     }
   }

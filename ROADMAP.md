@@ -61,14 +61,18 @@ on old code and items **#15, #17, #18** are likely already resolved by updating.
   rehydrate on app boot. The store init in `apps/web/src/store/store.ts` should
   load from `localStorage` before applying defaults; the Settings panel write
   path should mirror every change there.
-- **#23 — Character cannot die; death saving throws have no consequence.** After
-  three failed death saves the engine should mark the actor dead, remove them
-  from the initiative order, and flag the session as ended (campaign over /
-  load-last-save prompt). Currently the loop ignores the third failure. Fix in
-  `packages/engine/src/turns.ts` (death-save accumulation) and
-  `apps/server/src/session/loop.ts` (terminal state on death). The LLM must
-  narrate the death and the session must stop — a dead character is not
-  recoverable without a specific spell.
+  - **[x] Partially done:** server-owned settings (model, Azure keys, campaign)
+    already persist to `settings.json`; the client-only voice toggles
+    (`ttsEnabled`, `ttsProvider`) now persist to `localStorage` and rehydrate on
+    boot (`apps/web/src/store/store.ts`). Remaining: anything else found to reset.
+- **[x] #23 — Character cannot die; death saving throws have no consequence.**
+  Done. A third failed death save now marks the actor `dead`
+  (`packages/engine/src/combat.ts` → `markDead`), removes them from initiative
+  (`removeFromCombat` in `turns.ts`), and — once no party hero is left standing
+  — sets `session.ending`. The loop stops (`resolveAiTurns`), `/api/action`
+  refuses further input (409), the death flag persists via the session overlay,
+  and the web app shows a game-over screen with a load-last-save / main-menu
+  prompt (`apps/web/src/components/GameOverModal.tsx`).
 - **#29 — AI validates ability use against the character sheet; HP not updated.**
   Repro: player said *"použiji lay on hands a vyléčím se"*; the engine ran an
   ability-check tool (MDR DC 10 → success) and the prose narrated a heal, but
@@ -138,23 +142,21 @@ on old code and items **#15, #17, #18** are likely already resolved by updating.
   raw Markdown source (`**bold**`, `## heading`) instead of formatted text.
   Apply the same safe Markdown renderer used (or planned, see #1) for chat.
   `apps/web/src/panels/JournalPanel.tsx`.
-- **#27 — TTS reads Markdown formatting aloud.** The text-to-speech path strips
-  no Markdown before sending to Azure/Piper, so players hear "asterisk asterisk
-  bold asterisk asterisk". Strip Markdown tokens (regex or a lightweight
-  strip-markdown utility) from the string before passing to the TTS endpoint.
-  `apps/server/src/routes/game.ts` or the client-side `speak()` in
-  `apps/web/src/store/store.ts`.
+- **[x] #27 — TTS reads Markdown formatting aloud.** Done. `speak()` now runs
+  narration through a `stripMarkdown` helper (emphasis/code/headings/lists/
+  quotes/links) before hitting `/api/tts`, so the voice reads clean prose.
+  `apps/web/src/store/store.ts` (+ unit tests).
 - **#28 — Visualization context menu renders under the map (z-index).** The
   "vizualizovat" right-click / dropdown menu is clipped behind the map canvas.
   Raise its `z-index` above the map layer (map is likely `z-index: 10` or
   similar; menu needs a higher stacking context). Check
   `apps/web/src/panels/ChatPanel.tsx` or the shared `ContextMenu` component.
-- **#30 — Extended voice controls.** Currently TTS starts and can't be stopped.
-  Add: (a) a **pause/stop** button that cancels the currently playing
-  `AudioBufferSourceNode` or `HTMLAudioElement`; (b) a **provider toggle**
-  (Azure ↔ Piper) accessible without reloading — one click in the toolbar or
-  Settings panel, persisted to `localStorage`. `apps/web/src/store/store.ts`
-  (`speak`/`stopSpeech`), `apps/web/src/panels/SettingsPanel.tsx`.
+- **[x] #30 — Extended voice controls.** Done. The in-flight narration audio is
+  tracked so `stopSpeech` can cancel it mid-sentence (a "stop" button appears
+  while speaking), and a one-click engine toggle (auto → Azure → Piper) in the
+  chat toolbar is persisted to `localStorage` and honoured server-side via a
+  `provider` field on `/api/tts`. `apps/web/src/store/store.ts`,
+  `apps/web/src/panels/ChatPanel.tsx`, `apps/server/src/routes/game.ts`.
 
 ## P2 — Polish & feel
 

@@ -3,6 +3,7 @@ import { roll, rollD20 } from "./dice.js";
 import { savingThrow } from "./checks.js";
 import { attackMods, combineAdv, type Advantage } from "./conditions.js";
 import { coverBetween, distanceFt } from "./grid.js";
+import { removeFromCombat } from "./turns.js";
 import { csCondition, csDamage } from "@adm/schemas";
 import { abilityMod, actorAc, getActor, log, type GameState } from "./state.js";
 
@@ -298,6 +299,7 @@ export function deathSave(state: GameState, args: { actor: string }): DeathSaveR
       actor.death_saves = { success: 0, fail: 0 };
     } else if (ds.fail >= 3) {
       outcome = "dead";
+      markDead(state, actor);
     }
   }
 
@@ -319,6 +321,42 @@ export function deathSave(state: GameState, args: { actor: string }): DeathSaveR
     outcome,
     detail,
   };
+}
+
+/**
+ * Mark an actor permanently dead (#23): set the flag, pull them out of the
+ * initiative order, and — if every party hero is now dead — flag the session
+ * as ended so the loop stops and the UI can offer a rollback. Death is not
+ * recoverable here; only a dedicated revival spell (not yet modelled) would be.
+ */
+function markDead(state: GameState, actor: Actor): void {
+  actor.dead = true;
+  // The body is no longer a combatant; keep it unconscious for narration.
+  if (!actor.conditions.some((c) => c.name === "unconscious")) {
+    actor.conditions.push({ name: "unconscious", source: "mrtev", duration: null });
+  }
+  removeFromCombat(state, actor.id);
+
+  // A dead hero ends the campaign once no party member is left standing.
+  if (actor.faction === "party") {
+    const heroes = Object.values(state.actors).filter((a) => a.faction === "party");
+    const wiped = heroes.length > 0 && heroes.every((a) => a.dead === true);
+    if (wiped && !state.session.ending) {
+      state.session.ending = {
+        reason:
+          heroes.length === 1
+            ? `${actor.name} nepřežívá záchrany před smrtí. Výprava končí.`
+            : "Celá družina padla. Výprava končí.",
+        actor: actor.id,
+      };
+      log(state, {
+        kind: "death",
+        actor: actor.id,
+        detail: `${actor.name} umírá. ${state.session.ending.reason}`,
+        tool: "death_save",
+      });
+    }
+  }
 }
 
 export function applyCondition(

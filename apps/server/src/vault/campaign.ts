@@ -110,6 +110,7 @@ export async function loadSession(c: LoadedCampaign): Promise<SessionState> {
       combat: null,
       log: [],
       chat: [],
+      ending: null,
     };
     return SessionState.parse(seeded);
   }

@@ -115,6 +115,69 @@ describe("death saves", () => {
   });
 });
 
+describe("death consequence (#23)", () => {
+  function downedHero(fail: number) {
+    return makeActor({
+      id: "h",
+      name: "Hrdina",
+      faction: "party",
+      hp: { max: 10, current: 0, temp: 0 },
+      death_saves: { success: 0, fail },
+      conditions: [{ name: "unconscious", duration: null }],
+    });
+  }
+  function withCombat(state: ReturnType<typeof makeState>, order: string[]) {
+    state.session.combat = {
+      round: 1,
+      order: order.map((actor, i) => ({ actor, initiative: 20 - i })),
+      turn_index: 0,
+      grid: { w: 5, h: 5, cell_ft: 5 },
+      tokens: Object.fromEntries(order.map((a, i) => [a, { x: i, y: 0 }])),
+      terrain: [],
+      budget: { action: true, bonus: true, reaction: true, movement: 30 },
+    };
+  }
+
+  it("third failed save kills a solo hero, pulls them from initiative, and ends the campaign", () => {
+    let died = false;
+    for (let s = 0; s < 200 && !died; s++) {
+      const hero = downedHero(2);
+      const goblin = makeActor({ id: "g", name: "Goblin", faction: "hostile" });
+      const state = makeState([hero, goblin], `dead-${s}`);
+      withCombat(state, ["g", "h"]);
+      const r = deathSave(state, { actor: "h" });
+      if (r.outcome === "dead") {
+        died = true;
+        expect(hero.dead).toBe(true);
+        expect(state.session.combat?.order.some((o) => o.actor === "h")).toBe(false);
+        expect(state.session.ending).not.toBeNull();
+        expect(state.session.ending?.actor).toBe("h");
+      } else {
+        expect(hero.dead).toBe(false);
+        expect(state.session.ending).toBeNull();
+      }
+    }
+    expect(died).toBe(true);
+  });
+
+  it("does not end the campaign while another party hero still stands", () => {
+    let died = false;
+    for (let s = 0; s < 200 && !died; s++) {
+      const hero = downedHero(2);
+      const ally = makeActor({ id: "a", name: "Druh", faction: "party" });
+      const state = makeState([hero, ally], `ally-${s}`);
+      withCombat(state, ["a", "h"]);
+      const r = deathSave(state, { actor: "h" });
+      if (r.outcome === "dead") {
+        died = true;
+        expect(hero.dead).toBe(true);
+        expect(state.session.ending).toBeNull(); // ally still alive → no game-over
+      }
+    }
+    expect(died).toBe(true);
+  });
+});
+
 describe("attack", () => {
   it("nat 1 always misses, logs to the dice log", () => {
     // Find a seed where the first d20 is a 1 is overkill; instead assert structure.
