@@ -39,10 +39,10 @@ on old code and items **#15, #17, #18** are likely already resolved by updating.
   engine `attack` refuses a strike on a party/ally member unless `allow_friendly`
   is set after explicit player confirmation (`packages/engine/src/combat.ts`,
   `tools.ts`, prompt in `apps/server/src/llm/prompt.ts`). Covered by engine tests.
-- **#16 — Combat shows only your own HP.** The turn tracker lists initiative but
-  no HP for other combatants; the sheet shows only the active actor. Add HP
-  (number + bar, faction-coloured) per combatant in
-  `apps/web/src/panels/TurnTracker.tsx`.
+- **[x] #16 — Combat shows only your own HP.** Done. The turn tracker
+  (`apps/web/src/panels/TurnTracker.tsx`) now renders a faction-coloured HP bar
+  + current/max number for every combatant in the initiative order (live HP from
+  the session overlay), so the whole fight's state is visible at a glance.
 - **#6 — Maps render nothing.** Overworld: moving between locations showed no
   token/position change; tactical (combat) map was all black. Investigate the
   Leaflet overworld token/camera layer (`apps/web/src/map/OverworldMap.tsx`) and
