@@ -6,6 +6,8 @@ export interface MockContext {
   partyIds: string[];
   hostileIds: string[];
   inCombat: boolean;
+  /** First alive opposing-faction actor for the given actor, or null. */
+  enemyOf: (actorId: string) => string | null;
 }
 
 /**
@@ -30,11 +32,18 @@ export class MockLlmClient implements Llm {
     const userMsg =
       [...messages].reverse().find((m) => m.role === "user")?.content ?? "";
     const text = userMsg.toLowerCase();
-    const { activePlayer, partyIds, hostileIds, inCombat } = this.ctx();
+    const { activePlayer, partyIds, hostileIds, inCombat, enemyOf } = this.ctx();
     const mk = (name: string, args: unknown): LlmResponse => ({
       content: null,
       toolCalls: [{ id: `mock-${Date.now()}`, name, args }],
     });
+
+    // AI-controlled actor's turn (§8.3): attack the nearest enemy, else idle.
+    if (text.includes("[ai-tah]") && activePlayer) {
+      const target = enemyOf(activePlayer);
+      if (target) return mk("attack", { attacker: activePlayer, target });
+      return { content: "[mock DM] Postava vyčkává a kryje se.", toolCalls: [] };
+    }
 
     if (/\b(boj|combat|iniciativ|fight|útok začín|napad)/.test(text) && !inCombat) {
       const participants = [...partyIds, ...hostileIds];

@@ -31,6 +31,31 @@ STYL:
 - Próza pro vyprávění; tool calls pro mechaniku. Nikdy obojí: neuváděj číslo
   v próze a zároveň nevynechej nástroj.`;
 
+/**
+ * Instruction handed to the model when it must take an AI-controlled actor's
+ * turn (§8.3). The actor acts through the SAME engine tools as a human, so AI
+ * companions and enemies are bound by identical determinism. The `[AI-TAH]`
+ * marker also lets the offline mock narrator branch deterministically.
+ */
+export function aiTurnInstruction(
+  actor: Actor,
+  enemies: string[],
+  allies: string[],
+): string {
+  return [
+    `[AI-TAH] Je řada na postavě ${actor.name} (${actor.id}, frakce: ${actor.faction}).`,
+    actor.ai_profile ? `Profil chování: ${actor.ai_profile}` : "",
+    `Jako Pán jeskyně ovládni tuto postavu na jejím tahu: zvol JEDNU rozumnou akci`,
+    `pomocí nástrojů (např. attack, move, cast_spell, apply_condition) a poté ji`,
+    `stručně a obrazně popiš v jednom až dvou větách (např. „Shadowpaw vyklouzne ze stínu…").`,
+    enemies.length ? `Nepřátelé: ${enemies.join(", ")}.` : "Žádní zjevní nepřátelé.",
+    allies.length ? `Spojenci: ${allies.join(", ")}.` : "",
+    `Respektuj profil chování a aktuální stav (HP, vzdálenosti). Čísla musí pocházet z nástrojů.`,
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
+
 /** A compact scene snapshot fed alongside the system prompt each turn. */
 export function sceneSnapshot(state: SessionState, actors: Record<string, Actor>): string {
   const lines: string[] = [];

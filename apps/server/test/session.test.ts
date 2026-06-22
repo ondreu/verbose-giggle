@@ -2,7 +2,7 @@ import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it } from "vitest";
 import { toolSpecs } from "@adm/engine";
 import { SessionManager } from "../src/session/manager.js";
 import { runTurn } from "../src/session/loop.js";
@@ -13,26 +13,29 @@ const SOURCE = fileURLToPath(
   new URL("../../../data/vault.example/campaigns/velen-roads", import.meta.url),
 );
 
-// Work on a throwaway copy so write-back never touches the committed vault.
-let CAMPAIGN = "";
-beforeAll(async () => {
-  CAMPAIGN = path.join(await fs.mkdtemp(path.join(os.tmpdir(), "adm-test-")), "velen-roads");
-  await fs.cp(SOURCE, CAMPAIGN, { recursive: true });
-});
+// Each test gets its own throwaway copy so persisted session.json never leaks
+// between tests, and the committed vault is never touched.
+const tmpDirs: string[] = [];
+async function freshCampaign(): Promise<string> {
+  const dir = path.join(await fs.mkdtemp(path.join(os.tmpdir(), "adm-test-")), "velen-roads");
+  await fs.cp(SOURCE, dir, { recursive: true });
+  tmpDirs.push(path.dirname(dir));
+  return dir;
+}
 afterAll(async () => {
-  if (CAMPAIGN) await fs.rm(path.dirname(CAMPAIGN), { recursive: true, force: true });
+  await Promise.all(tmpDirs.map((d) => fs.rm(d, { recursive: true, force: true })));
 });
 
 describe("SessionManager + example vault", () => {
   it("loads the example campaign actors and config", async () => {
-    const mgr = await SessionManager.open(CAMPAIGN);
+    const mgr = await SessionManager.open(await freshCampaign());
     expect(mgr.campaign.config.name).toBe("The Velen Roads");
     expect(mgr.campaign.actors.thorin?.name).toBe("Thorin");
     expect(mgr.campaign.actors["goblin-boss"]?.faction).toBe("hostile");
   });
 
   it("dispatches a deterministic engine command and records the dice log", async () => {
-    const mgr = await SessionManager.open(CAMPAIGN);
+    const mgr = await SessionManager.open(await freshCampaign());
     const gs = mgr.buildGameState();
     const res = await mgr.applyTool(gs, "start_combat", {
       participants: ["thorin", "goblin-1"],
@@ -45,7 +48,7 @@ describe("SessionManager + example vault", () => {
 
 describe("LLM turn loop (mocked model)", () => {
   it("executes the model's tool call through the engine, then narrates", async () => {
-    const mgr = await SessionManager.open(CAMPAIGN);
+    const mgr = await SessionManager.open(await freshCampaign());
 
     // Mock LLM: first response requests an attack tool, second narrates.
     let call = 0;
@@ -81,18 +84,60 @@ describe("LLM turn loop (mocked model)", () => {
 
   it("the offline mock narrator drives a real engine attack with no API key", async () => {
     const { MockLlmClient } = await import("../src/llm/mock.js");
-    const mgr = await SessionManager.open(CAMPAIGN);
+    const mgr = await SessionManager.open(await freshCampaign());
     const llm = new MockLlmClient(() => ({
       activePlayer: "thorin",
       partyIds: ["thorin", "elara"],
       hostileIds: ["goblin-1"],
       inCombat: false,
+      enemyOf: (id: string) => (id === "thorin" ? "goblin-1" : "thorin"),
     }));
     const bus = { emit: () => undefined, subscribe: () => () => undefined } as unknown as EventBus;
 
     const { narration } = await runTurn({ manager: mgr, llm, bus, input: "Zaútočím na goblina!" });
     expect(narration).toContain("[mock DM]");
     expect(mgr.session.log.some((l) => l.kind === "attack")).toBe(true);
+  });
+
+  it("auto-resolves an AI enemy's turn until it is a human's turn (§8.3)", async () => {
+    const { MockLlmClient } = await import("../src/llm/mock.js");
+    const { resolveAiTurns } = await import("../src/session/loop.js");
+    const mgr = await SessionManager.open(await freshCampaign());
+    const friendly = new Set(["party", "ally"]);
+    const liveActors = () => mgr.campaign.actors;
+    const alive = (id: string) => (mgr.session.actors[id]?.hp?.current ?? 1) > 0;
+
+    const llm = new MockLlmClient(() => ({
+      activePlayer: mgr.session.active_player,
+      partyIds: Object.values(liveActors()).filter((a) => friendly.has(a.faction)).map((a) => a.id),
+      hostileIds: Object.values(liveActors()).filter((a) => a.faction === "hostile").map((a) => a.id),
+      inCombat: mgr.session.combat !== null,
+      enemyOf: (actorId: string) => {
+        const self = liveActors()[actorId];
+        if (!self) return null;
+        const wantHostile = friendly.has(self.faction);
+        const t = Object.values(liveActors()).find(
+          (a) => a.id !== actorId && alive(a.id) && (wantHostile ? a.faction === "hostile" : friendly.has(a.faction)),
+        );
+        return t?.id ?? null;
+      },
+    }));
+    const bus = { emit: () => undefined, subscribe: () => () => undefined } as unknown as EventBus;
+
+    const gs = mgr.buildGameState();
+    // Combat with one human (thorin) and one AI enemy (goblin-1).
+    await mgr.applyTool(gs, "start_combat", { participants: ["thorin", "goblin-1"] });
+    // Advance until the AI goblin is on point, then auto-resolve.
+    while (mgr.session.combat && mgr.campaign.actors[mgr.session.combat.order[mgr.session.combat.turn_index]!.actor]?.controller !== "ai") {
+      await mgr.applyTool(gs, "next_turn", {});
+    }
+    await resolveAiTurns({ manager: mgr, llm, bus, gs });
+
+    // The goblin took its turn (an attack it authored is in the log) and the
+    // pointer has come to rest on a human.
+    expect(mgr.session.log.some((l) => l.kind === "attack" && l.actor === "goblin-1")).toBe(true);
+    const active = mgr.session.combat?.order[mgr.session.combat.turn_index]?.actor;
+    expect(active ? mgr.campaign.actors[active]?.controller : "human").toBe("human");
   });
 
   it("exposes all engine tools to the model", () => {

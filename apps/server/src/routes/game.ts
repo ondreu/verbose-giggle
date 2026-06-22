@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { LlmClient, type Llm } from "../llm/client.js";
 import { MockLlmClient } from "../llm/mock.js";
-import { runTurn } from "../session/loop.js";
+import { resolveAiTurns, runTurn } from "../session/loop.js";
 import type { EventBus } from "../session/events.js";
 import type { SessionManager } from "../session/manager.js";
 import type { Config } from "../config.js";
@@ -20,15 +20,28 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
     ? new MockLlmClient(() => {
         const actors = ctx.manager.campaign.actors;
         const alive = (id: string) => (ctx.manager.session.actors[id]?.hp?.current ?? 1) > 0;
+        const friendly = new Set(["party", "ally"]);
         return {
           activePlayer: ctx.manager.session.active_player,
           partyIds: Object.values(actors)
-            .filter((a) => a.faction === "party" || a.faction === "ally")
+            .filter((a) => friendly.has(a.faction))
             .map((a) => a.id),
           hostileIds: Object.values(actors)
             .filter((a) => a.faction === "hostile" && alive(a.id))
             .map((a) => a.id),
           inCombat: ctx.manager.session.combat !== null,
+          enemyOf: (actorId: string) => {
+            const self = actors[actorId];
+            if (!self) return null;
+            const wantHostile = friendly.has(self.faction);
+            const target = Object.values(actors).find(
+              (a) =>
+                a.id !== actorId &&
+                alive(a.id) &&
+                (wantHostile ? a.faction === "hostile" : friendly.has(a.faction)),
+            );
+            return target?.id ?? null;
+          },
         };
       })
     : new LlmClient(ctx.config);
@@ -68,6 +81,9 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
     }
     await ctx.manager.checkpoint(gs);
     ctx.bus.emit({ type: "state", state: ctx.manager.session });
+    // If the command (start_combat / next_turn) put an AI actor on point,
+    // auto-resolve AI turns until it's a human's turn again (§8.3).
+    await resolveAiTurns({ manager: ctx.manager, llm, bus: ctx.bus, gs });
     return result;
   });
 
