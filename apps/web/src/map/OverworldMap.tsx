@@ -18,6 +18,7 @@ export function OverworldMap() {
   const elRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const layerRef = useRef<L.LayerGroup | null>(null);
+  const lastLocRef = useRef<string | null>(null);
 
   // Init the map once.
   useEffect(() => {
@@ -117,6 +118,13 @@ export function OverworldMap() {
         }).addTo(layer);
       }
     }
+
+    // Follow the party: pan the camera to the current location, but only when
+    // it actually changes (the `state` event fires for many other reasons).
+    if (currentNode?.coords && lastLocRef.current !== current) {
+      map.panTo(toLatLng(currentNode.coords.x, currentNode.coords.y), { animate: true, duration: 0.6 });
+    }
+    lastLocRef.current = current;
   }, [session, locations, sendCommand]);
 
   return <div ref={elRef} className="h-full w-full" style={{ background: "var(--bg-crust)" }} />;

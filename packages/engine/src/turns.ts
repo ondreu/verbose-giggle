@@ -6,6 +6,44 @@ function freshBudget(speed: number): CombatState["budget"] {
   return { action: true, bonus: true, reaction: true, movement: speed };
 }
 
+/**
+ * Ensure every participant has a grid position so the tactical map always
+ * renders tokens — even when combat is started ad hoc by the DM (no authored
+ * encounter, no positions). Friendly factions line up on the left edge, hostile
+ * and neutral on the right; both stack down rows, then step inward. Actors that
+ * already have a position (authored spawns / party_start) are left untouched.
+ */
+function autoPlaceParticipants(
+  state: GameState,
+  participants: string[],
+  grid: { w: number; h: number },
+): void {
+  const taken = new Set<string>();
+  for (const id of participants) {
+    const p = state.actors[id]?.position;
+    if (p) taken.add(`${p.x},${p.y}`);
+  }
+  const cellFor = (side: "left" | "right", idx: number) => {
+    const inward = Math.floor(idx / grid.h);
+    const x = side === "left" ? Math.min(inward, grid.w - 1) : Math.max(grid.w - 1 - inward, 0);
+    return { x, y: idx % grid.h };
+  };
+  let leftIdx = 0;
+  let rightIdx = 0;
+  for (const id of participants) {
+    const a = state.actors[id];
+    if (!a || a.position) continue;
+    const friendly = a.faction === "party" || a.faction === "ally";
+    let cell = cellFor(friendly ? "left" : "right", friendly ? leftIdx++ : rightIdx++);
+    // Skip occupied cells, bounded by the grid size so this always terminates.
+    for (let guard = 0; taken.has(`${cell.x},${cell.y}`) && guard < grid.w * grid.h; guard++) {
+      cell = cellFor(friendly ? "left" : "right", friendly ? leftIdx++ : rightIdx++);
+    }
+    a.position = cell;
+    taken.add(`${cell.x},${cell.y}`);
+  }
+}
+
 export interface StartCombatResult {
   order: { actor: string; initiative: number }[];
   round: number;
@@ -31,6 +69,10 @@ export function startCombat(
       if (a) a.position = { x: pos.x, y: pos.y };
     }
   }
+  // Anyone still unplaced gets a sensible default spot so the map isn't empty.
+  const grid = args.grid ?? { w: 12, h: 10, cell_ft: 5 };
+  autoPlaceParticipants(state, args.participants, grid);
+
   const rolls = args.participants.map((id) => {
     const actor = getActor(state, id);
     const mod = abilityMod(actor.abilities.dex);
@@ -58,7 +100,7 @@ export function startCombat(
     round: 1,
     order,
     turn_index: 0,
-    grid: args.grid ?? { w: 12, h: 10, cell_ft: 5 },
+    grid,
     tokens,
     terrain: args.terrain ?? [],
     budget: freshBudget(first.speed),
