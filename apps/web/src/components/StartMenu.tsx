@@ -65,6 +65,7 @@ export function StartMenu({ onSettings }: { onSettings: () => void }) {
         )}
 
         <CampaignList campaigns={campaigns} busy={busy} onSelect={selectCampaign} />
+        <ForgeCampaign />
         <CreateCampaign />
         <RollbackPanel />
       </div>
@@ -114,6 +115,103 @@ function CampaignList({
           </li>
         ))}
       </ul>
+    </section>
+  );
+}
+
+function ForgeCampaign() {
+  const forge = useGame((s) => s.forgeCampaign);
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+  const [premise, setPremise] = useState("");
+  const [length, setLength] = useState<"short" | "medium" | "long">("medium");
+  const [detail, setDetail] = useState<"sparse" | "normal" | "rich">("normal");
+  const [working, setWorking] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const submit = async () => {
+    if (!name.trim() || working) return;
+    setWorking(true);
+    setError(null);
+    const res = await forge({ name, premise: premise || undefined, length, detail });
+    setWorking(false);
+    if (!res.ok) {
+      setError(res.error ?? "Stavba kampaně selhala");
+      return;
+    }
+    // On success the campaign hot-swaps in; the menu re-hydrates.
+    setOpen(false);
+    setName("");
+    setPremise("");
+  };
+
+  return (
+    <section className="panel p-4">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Icon name="flame" size={15} className="text-arcane" />
+          <h2 className="panel-title pb-0">Postavit kampaň s AI</h2>
+        </div>
+        <button
+          className="flex items-center gap-1 font-log text-xs text-subtext1 hover:text-gold"
+          onClick={() => setOpen((o) => !o)}
+        >
+          {open ? "zavřít" : "spustit průvodce"}
+        </button>
+      </div>
+      <p className="mt-1 font-body text-sm text-subtext0">
+        Řekni AI tolik nebo málo, kolik chceš — postaví ti svět, NPC i úvodní úkol.
+      </p>
+      {open && (
+        <div className="mt-3 flex flex-col gap-2">
+          <input
+            className="settings-input bg-bg-crust text-text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Název kampaně"
+            autoFocus
+          />
+          <textarea
+            className="settings-input min-h-[4.5rem] resize-y bg-bg-crust text-text"
+            value={premise}
+            onChange={(e) => setPremise(e.target.value)}
+            placeholder="Námět (volitelné) — téma, tón, zápletka, postavy… nech prázdné a AI vymyslí vše."
+          />
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="font-log text-[10px] uppercase tracking-wider text-subtext0">Délka</label>
+              <select
+                className="settings-input bg-bg-crust text-text"
+                value={length}
+                onChange={(e) => setLength(e.target.value as typeof length)}
+              >
+                <option value="short">Krátká (3 lokace)</option>
+                <option value="medium">Střední (5 lokací)</option>
+                <option value="long">Dlouhá (8 lokací)</option>
+              </select>
+            </div>
+            <div>
+              <label className="font-log text-[10px] uppercase tracking-wider text-subtext0">Detail</label>
+              <select
+                className="settings-input bg-bg-crust text-text"
+                value={detail}
+                onChange={(e) => setDetail(e.target.value as typeof detail)}
+              >
+                <option value="sparse">Stručný</option>
+                <option value="normal">Běžný</option>
+                <option value="rich">Bohatý</option>
+              </select>
+            </div>
+          </div>
+          {error && <p className="font-log text-xs text-blood">{error}</p>}
+          <div className="mt-1 flex items-center justify-end gap-2">
+            {working && <span className="font-log text-xs text-subtext0">AI staví svět…</span>}
+            <button className="btn-gold px-4 py-2 text-sm" disabled={!name.trim() || working} onClick={() => void submit()}>
+              {working ? "…" : "Postavit a otevřít"}
+            </button>
+          </div>
+        </div>
+      )}
     </section>
   );
 }

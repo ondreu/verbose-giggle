@@ -13,7 +13,7 @@ export function slugify(input: string): string {
     .slice(0, 48);
 }
 
-const CAMPAIGN_DIRS = [
+export const CAMPAIGN_DIRS = [
   "characters",
   "companions",
   "bestiary",
@@ -24,6 +24,25 @@ const CAMPAIGN_DIRS = [
   "maps",
   "state",
 ];
+
+/**
+ * Create an empty campaign folder with the standard sub-dirs, refusing to
+ * clobber an existing one. Returns the absolute campaign dir.
+ */
+export async function ensureCampaignDir(vaultPath: string, folder: string): Promise<string> {
+  const dir = path.join(vaultPath, "campaigns", folder);
+  try {
+    await fs.access(dir);
+    throw new Error(`Campaign folder "${folder}" already exists`);
+  } catch (err) {
+    if (err instanceof Error && err.message.includes("already exists")) throw err;
+    // ENOENT (not found) is the happy path; anything else propagates.
+  }
+  for (const sub of CAMPAIGN_DIRS) {
+    await fs.mkdir(path.join(dir, sub), { recursive: true });
+  }
+  return dir;
+}
 
 export interface NewCampaignInput {
   name: string;
@@ -44,21 +63,7 @@ export async function createCampaign(vaultPath: string, input: NewCampaignInput)
   const folder = slugify(input.folder || name);
   if (!folder) throw new Error("Could not derive a folder name");
 
-  const root = path.join(vaultPath, "campaigns");
-  const dir = path.join(root, folder);
-  // Refuse to clobber an existing campaign.
-  try {
-    await fs.access(dir);
-    throw new Error(`Campaign folder "${folder}" already exists`);
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code !== "ENOENT") {
-      if (err instanceof Error && err.message.includes("already exists")) throw err;
-    }
-  }
-
-  for (const sub of CAMPAIGN_DIRS) {
-    await fs.mkdir(path.join(dir, sub), { recursive: true });
-  }
+  const dir = await ensureCampaignDir(vaultPath, folder);
 
   const startName = input.startingLocationName?.trim() || "Domovská osada";
   const startId = slugify(startName) || "start";

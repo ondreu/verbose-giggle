@@ -11,6 +11,7 @@ import { startEncounter } from "../session/encounter.js";
 import type { EventBus } from "../session/events.js";
 import { SessionManager } from "../session/manager.js";
 import { createCampaign } from "../vault/scaffold.js";
+import { forgeCampaign, type ForgeInput } from "../vault/forge.js";
 import { createCharacter, creationOptions, type CharacterDraft } from "../vault/creation.js";
 import {
   checkpointTurn,
@@ -232,6 +233,23 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
       }
     },
   );
+
+  /** Build a campaign with the AI from a player brief, then switch to it. */
+  app.post<{ Body: ForgeInput & { select?: boolean } }>("/api/campaigns/forge", async (req, reply) => {
+    try {
+      const { folder, usedLlm } = await forgeCampaign(config.vaultPath, llm, req.body as ForgeInput);
+      if (req.body?.select !== false) {
+        await saveSettings(config.vaultPath, { campaign: folder });
+        config = applySettings(loadConfig(), await loadSettings(config.vaultPath));
+        await reopenManager(folder);
+        llm = makeLlm();
+        ctx.bus.emit({ type: "reload", reason: "campaign-forged" });
+      }
+      return { ok: true, folder, usedLlm };
+    } catch (err) {
+      return reply.code(400).send({ error: err instanceof Error ? err.message : String(err) });
+    }
+  });
 
   /** Switch the active campaign — persists the choice and hot-swaps in place. */
   app.post<{ Body: { folder: string } }>("/api/campaigns/select", async (req, reply) => {

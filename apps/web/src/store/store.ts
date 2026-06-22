@@ -98,6 +98,12 @@ interface GameStore {
     select?: boolean;
   }) => Promise<{ ok: boolean; error?: string; folder?: string }>;
   selectCampaign: (folder: string) => Promise<void>;
+  forgeCampaign: (input: {
+    name: string;
+    premise?: string;
+    length?: "short" | "medium" | "long";
+    detail?: "sparse" | "normal" | "rich";
+  }) => Promise<{ ok: boolean; error?: string; folder?: string; usedLlm?: boolean }>;
   listSnapshots: () => Promise<void>;
   createSnapshot: (label?: string) => Promise<void>;
   restoreSnapshot: (id: string) => Promise<void>;
@@ -388,6 +394,26 @@ export const useGame = create<GameStore>((set, get) => ({
         set({ error: data.error ?? `Chyba ${res.status}` });
       }
       // The server emits a `reload` event which re-hydrates everything.
+    } finally {
+      set({ busy: false });
+    }
+  },
+
+  forgeCampaign: async (input) => {
+    set({ busy: true, error: null });
+    try {
+      const res = await fetch("/api/campaigns/forge", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...input, select: true }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        set({ error: data.error ?? `Chyba ${res.status}` });
+        return { ok: false, error: data.error };
+      }
+      // Server emits `reload`; the new campaign re-hydrates.
+      return { ok: true, folder: data.folder, usedLlm: data.usedLlm };
     } finally {
       set({ busy: false });
     }
