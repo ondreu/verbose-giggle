@@ -65,3 +65,4 @@ Kočkovitý tabaxi s šedou srstí a tichým krokem. Mluví o sobě ve třetí o
 sbírá lesklé drobnosti. Ke skupině se přidal kvůli dluhu, který nikdy nevysvětlil.
 
 
+

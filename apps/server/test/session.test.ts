@@ -156,6 +156,23 @@ describe("LLM turn loop (mocked model)", () => {
     expect(combat.grid.w).toBe(12);
   });
 
+  it("generates a recap from the story so far (mock)", async () => {
+    const { MockLlmClient } = await import("../src/llm/mock.js");
+    const { runRecap } = await import("../src/session/loop.js");
+    const mgr = await SessionManager.open(await freshCampaign());
+    mgr.session.chat.push({ role: "assistant", content: "Družina dorazila na Rozcestí." });
+    const llm = new MockLlmClient(() => ({
+      activePlayer: null,
+      partyIds: [],
+      hostileIds: [],
+      inCombat: false,
+      enemyOf: () => null,
+    }));
+    const bus = { emit: () => undefined, subscribe: () => () => undefined } as unknown as EventBus;
+    const { recap } = await runRecap({ manager: mgr, llm, bus });
+    expect(recap).toContain("V minulém díle");
+  });
+
   it("exposes all engine tools to the model", () => {
     const names = toolSpecs().map((t) => t.function.name);
     expect(names).toContain("attack");

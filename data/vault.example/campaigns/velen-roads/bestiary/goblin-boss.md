@@ -44,3 +44,4 @@ ai_profile: 'Žene goblíny do boje, sám zůstává vzadu. Bojuje jen v koncíc
 Statnější goblin v ukořistěné kroužkové zbroji, s panovačným chřtánem.
 
 
+

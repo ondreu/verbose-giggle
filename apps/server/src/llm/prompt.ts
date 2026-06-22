@@ -56,6 +56,16 @@ export function aiTurnInstruction(
     .join(" ");
 }
 
+/**
+ * Recap instruction (§6.6 /recap). The model retells the story so far in a few
+ * Czech sentences — narration only, no mechanics, no tools. The `[RECAP]`
+ * marker lets the offline mock branch deterministically.
+ */
+export const RECAP_PROMPT = `Jsi vypravěč. Shrň dosavadní děj kampaně ve 3 až 5 větách, ČESKY,
+ve stylu „V minulém díle…". Pouze převyprávěj příběh — nehraj žádné mechaniky,
+nevolej nástroje, neuváděj čísla hodů. Zachyť, kde se družina nachází, co se
+přihodilo a co je v sázce.`;
+
 /** A compact scene snapshot fed alongside the system prompt each turn. */
 export function sceneSnapshot(state: SessionState, actors: Record<string, Actor>): string {
   const lines: string[] = [];

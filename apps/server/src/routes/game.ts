@@ -3,7 +3,7 @@ import path from "node:path";
 import type { FastifyInstance } from "fastify";
 import { LlmClient, type Llm } from "../llm/client.js";
 import { MockLlmClient } from "../llm/mock.js";
-import { resolveAiTurns, runTurn } from "../session/loop.js";
+import { resolveAiTurns, runRecap, runTurn } from "../session/loop.js";
 import { startEncounter } from "../session/encounter.js";
 import type { EventBus } from "../session/events.js";
 import type { SessionManager } from "../session/manager.js";
@@ -100,6 +100,26 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
       return reply.send(data);
     } catch {
       return reply.code(404).send({ error: "not found" });
+    }
+  });
+
+  /** Generate a "previously on…" recap of the story so far (§6.6). */
+  app.post("/api/recap", async (_req, reply) => {
+    try {
+      return await runRecap({ manager: ctx.manager, llm, bus: ctx.bus });
+    } catch (err) {
+      return reply.code(500).send({ error: err instanceof Error ? err.message : String(err) });
+    }
+  });
+
+  /** The append-only human-readable session diary (handoff/inspection, §6.6). */
+  app.get("/api/log", async () => {
+    const file = path.join(ctx.manager.campaign.dir, "state", "session-log.md");
+    try {
+      const text = await fs.readFile(file, "utf8");
+      return { exists: true, text };
+    } catch {
+      return { exists: false, text: "" };
     }
   });
 

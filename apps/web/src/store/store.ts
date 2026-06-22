@@ -41,6 +41,8 @@ interface GameStore {
   clearAoe: () => void;
   startEncounter: (id: string) => Promise<void>;
   fetchReachable: (actor: string) => Promise<void>;
+  recap: () => Promise<void>;
+  fetchLog: () => Promise<string>;
   toggleTts: () => void;
 }
 
@@ -189,6 +191,27 @@ export const useGame = create<GameStore>((set, get) => ({
       set({ reachable: Array.isArray(data.cells) ? data.cells : [] });
     } catch {
       set({ reachable: [] });
+    }
+  },
+
+  recap: async () => {
+    if (get().busy) return;
+    set({ busy: true });
+    try {
+      await fetch("/api/recap", { method: "POST" });
+    } finally {
+      set({ busy: false });
+    }
+  },
+
+  fetchLog: async () => {
+    try {
+      const res = await fetch("/api/log");
+      if (!res.ok) return "";
+      const data = await res.json();
+      return typeof data.text === "string" ? data.text : "";
+    } catch {
+      return "";
     }
   },
 

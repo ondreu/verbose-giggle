@@ -74,3 +74,4 @@ udeří tvrdě. Hledá ztracenou rodovou sekeru a nevěří elfům — kromě El
 jednou zachránila život.
 
 
+

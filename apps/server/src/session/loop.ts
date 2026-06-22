@@ -1,6 +1,6 @@
 import { toolSpecs, type GameState } from "@adm/engine";
 import type { Llm, ChatMsg } from "../llm/client.js";
-import { aiTurnInstruction, sceneSnapshot, SYSTEM_PROMPT } from "../llm/prompt.js";
+import { aiTurnInstruction, RECAP_PROMPT, sceneSnapshot, SYSTEM_PROMPT } from "../llm/prompt.js";
 import type { EventBus } from "./events.js";
 import type { SessionManager } from "./manager.js";
 
@@ -114,6 +114,43 @@ export async function runTurn(opts: {
 
   await resolveAiTurns({ manager, llm, bus, gs });
   return { narration };
+}
+
+/**
+ * Generate a "previously on…" recap from the recent story (§6.6 /recap). Pure
+ * narration: no tools, no state mutation — just retells what happened.
+ */
+export async function runRecap(opts: {
+  manager: SessionManager;
+  llm: Llm;
+  bus: EventBus;
+}): Promise<{ recap: string }> {
+  const { manager, llm, bus } = opts;
+  const transcript = manager.session.chat
+    .filter((m) => m.role === "user" || m.role === "assistant")
+    .slice(-16)
+    .map((m) => `${m.role === "assistant" ? "DM" : "Hráč"}: ${m.content}`)
+    .join("\n");
+  const events = manager.session.log
+    .filter((l) => ["combat", "travel", "death-save"].includes(l.kind))
+    .slice(-8)
+    .map((l) => `- ${l.detail}`)
+    .join("\n");
+
+  const messages: ChatMsg[] = [
+    { role: "system", content: RECAP_PROMPT },
+    {
+      role: "user",
+      content: `[RECAP] Lokace: ${manager.session.current_location}.\n\nKlíčové události:\n${events || "—"}\n\nPřepis:\n${transcript || "(zatím nic)"}`,
+    },
+  ];
+  const resp = await llm.chat(messages, []);
+  const recap = resp.content ?? "";
+  if (recap) {
+    bus.emit({ type: "narration", text: recap });
+    await manager.log(`\n_Shrnutí:_ ${recap}`);
+  }
+  return { recap };
 }
 
 /** Run a single AI-controlled actor's turn through the engine tools (§8.3). */

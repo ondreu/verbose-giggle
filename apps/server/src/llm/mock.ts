@@ -38,6 +38,19 @@ export class MockLlmClient implements Llm {
       toolCalls: [{ id: `mock-${Date.now()}`, name, args }],
     });
 
+    // Recap request (§6.6): summarize from the embedded context deterministically.
+    if (text.includes("[recap]")) {
+      const events = userMsg
+        .split("\n")
+        .filter((l) => l.trim().startsWith("- "))
+        .slice(0, 3)
+        .map((l) => l.replace(/^[-\s]+/, ""));
+      const body = events.length
+        ? events.join(" ")
+        : "Družina se vydala na cestu a osud dosud mlčel.";
+      return { content: `V minulém díle: ${body}`, toolCalls: [] };
+    }
+
     // AI-controlled actor's turn (§8.3): attack the nearest enemy, else idle.
     if (text.includes("[ai-tah]") && activePlayer) {
       const target = enemyOf(activePlayer);

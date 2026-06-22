@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useGame } from "../store/store";
 import { Icon } from "../components/Icon";
+import { DiaryModal } from "./DiaryModal";
 
 export function ChatPanel() {
   const narration = useGame((s) => s.narration);
@@ -11,7 +12,9 @@ export function ChatPanel() {
   const ttsEnabled = useGame((s) => s.ttsEnabled);
   const sendAction = useGame((s) => s.sendAction);
   const toggleTts = useGame((s) => s.toggleTts);
+  const recap = useGame((s) => s.recap);
   const [input, setInput] = useState("");
+  const [diaryOpen, setDiaryOpen] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -30,17 +33,37 @@ export function ChatPanel() {
       <header className="panel-title flex items-center gap-2 px-3 py-2">
         <Icon name="scroll" size={14} />
         Vyprávění
-        <button
-          className={`ml-auto flex items-center gap-1 font-log text-[11px] normal-case ${
-            ttsEnabled ? "text-gold" : "text-subtext0"
-          }`}
-          onClick={toggleTts}
-          title="Předčítání nahlas (Piper TTS)"
-        >
-          <Icon name="flame" size={12} />
-          {ttsEnabled ? "hlas zap" : "hlas vyp"}
-        </button>
+        <div className="ml-auto flex items-center gap-2.5">
+          <button
+            className="flex items-center gap-1 font-log text-[11px] normal-case text-subtext0 hover:text-gold disabled:opacity-50"
+            onClick={() => void recap()}
+            disabled={busy}
+            title="Shrnout dosavadní děj"
+          >
+            <Icon name="hourglass" size={12} />
+            shrnutí
+          </button>
+          <button
+            className="flex items-center gap-1 font-log text-[11px] normal-case text-subtext0 hover:text-gold"
+            onClick={() => setDiaryOpen(true)}
+            title="Otevřít deník výpravy"
+          >
+            <Icon name="scroll" size={12} />
+            deník
+          </button>
+          <button
+            className={`flex items-center gap-1 font-log text-[11px] normal-case ${
+              ttsEnabled ? "text-gold" : "text-subtext0"
+            }`}
+            onClick={toggleTts}
+            title="Předčítání nahlas (Piper TTS)"
+          >
+            <Icon name="flame" size={12} />
+            {ttsEnabled ? "hlas zap" : "hlas vyp"}
+          </button>
+        </div>
       </header>
+      {diaryOpen && <DiaryModal onClose={() => setDiaryOpen(false)} />}
 
       <div className="flex-1 overflow-y-auto px-4 py-3">
         {narration.length === 0 && (

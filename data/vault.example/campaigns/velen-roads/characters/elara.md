@@ -69,3 +69,4 @@ Vysoká elfka s inkoustem ušpiněnými prsty a věčně rozevřeným grimoárem
 až neopatrná. Studuje pradávná run­ová písma a tají, proč opustila věž svého mistra.
 
 
+

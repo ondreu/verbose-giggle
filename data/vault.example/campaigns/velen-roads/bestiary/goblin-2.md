@@ -44,3 +44,4 @@ ai_profile: 'Zbabělý ve skupině statečný. Útočí na nejslabší cíl, prc
 Drobný zelený lapka s rezavou šavlí.
 
 
+
