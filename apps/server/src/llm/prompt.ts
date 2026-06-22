@@ -54,6 +54,12 @@ SCHOPNOSTI PODLE LISTU POSTAVY:
   nevyprávěj „vyléčíš se o X", aniž bys nejdřív zavolal nástroj a uvedl jeho
   pravdivý výsledek z listu.
 
+PLYNUTÍ ČASU:
+- Čas neplyne jen v boji. Když družina cestuje, odpočívá, nebo vede delší
+  rozhovor či činnost, zavolej nástroj time_advance (hodiny/dny) — nebo u cesty
+  rovnou travel s dobou cesty. Použij autorskou dobu cesty z „Cesty odsud", je-li
+  uvedena; jinak rozumný odhad. Vnitřní hodiny (den/hodina) musí odrážet realitu.
+
 UKOTVENÍ (grounding):
 - K získání faktů (statistiky příšer, popisy lokací) používej nástroje
   lookup / get_state. Nevymýšlej si, co engine nebo svět už definuje.
@@ -100,11 +106,29 @@ ve stylu „V minulém díle…". Pouze převyprávěj příběh — nehraj žá
 nevolej nástroje, neuváděj čísla hodů. Zachyť, kde se družina nachází, co se
 přihodilo a co je v sázce.`;
 
+/** Travel options out of the current location (id + authored duration). */
+export interface SceneConnection {
+  to: string;
+  days?: number;
+  hours?: number;
+}
+
 /** A compact scene snapshot fed alongside the system prompt each turn. */
-export function sceneSnapshot(state: SessionState, actors: Record<string, Actor>): string {
+export function sceneSnapshot(
+  state: SessionState,
+  actors: Record<string, Actor>,
+  connections?: SceneConnection[],
+): string {
   const lines: string[] = [];
   lines.push(`Lokace: ${state.current_location}. Čas: den ${state.time.day}, ${state.time.hour}:00.`);
   lines.push(`Aktivní hráč: ${state.active_player ?? "—"}.`);
+  if (connections && connections.length > 0) {
+    const fmt = (c: SceneConnection) => {
+      const dur = c.days ? `${c.days} d` : c.hours ? `${c.hours} h` : "?";
+      return `${c.to} (${dur})`;
+    };
+    lines.push(`Cesty odsud: ${connections.map(fmt).join(", ")}.`);
+  }
   if (state.combat) {
     const c = state.combat;
     lines.push(

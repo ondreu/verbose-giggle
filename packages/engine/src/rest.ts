@@ -1,5 +1,6 @@
 import { roll } from "./dice.js";
 import { abilityMod, getActor, log, type GameState } from "./state.js";
+import { advanceTime } from "./time.js";
 
 export interface RestResult {
   actor: string;
@@ -37,6 +38,8 @@ export function shortRest(
     }
     results.push({ actor: id, hp_after: actor.hp.current, hit_dice_spent: spent });
   }
+  // A short rest is ~1 hour of in-world time (#24).
+  advanceTime(state, { hours: 1, reason: "krátký odpočinek" });
   return { results };
 }
 
@@ -63,11 +66,7 @@ export function longRest(state: GameState, args: { actors: string[] }): { result
     });
     results.push({ actor: id, hp_after: actor.hp.current });
   }
-  // Advance the world clock by 8 hours.
-  state.session.time.hour += 8;
-  while (state.session.time.hour >= 24) {
-    state.session.time.hour -= 24;
-    state.session.time.day += 1;
-  }
+  // A long rest is 8 hours of in-world time (#24).
+  advanceTime(state, { hours: 8, reason: "dlouhý odpočinek" });
   return { results };
 }

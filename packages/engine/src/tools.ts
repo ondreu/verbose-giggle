@@ -15,6 +15,7 @@ import { castSpell, concentrationCheck } from "./spells.js";
 import { aoe, coverBetween, move, reachableCells } from "./grid.js";
 import { endCombat, nextTurn, startCombat } from "./turns.js";
 import { longRest, shortRest } from "./rest.js";
+import { advanceTime } from "./time.js";
 import { applyAbilityIncrease, awardXp, learnSpells, levelUp } from "./leveling.js";
 
 const Advantage = z.enum(["advantage", "disadvantage", "none"]).optional();
@@ -565,18 +566,55 @@ export const TOOLS: ToolDef[] = [
   }),
   def({
     name: "travel",
-    description: "Resolve a point-crawl travel edge to a connected location.",
+    description:
+      "Resolve a point-crawl travel edge to a connected location. Pass the journey's duration (days/hours, from the location's authored travel time when known) so the in-world clock advances (#24).",
     readOnly: false,
-    schema: z.object({ to: z.string() }),
-    parameters: { type: "object", properties: { to: { type: "string" } }, required: ["to"] },
+    schema: z.object({
+      to: z.string(),
+      days: z.number().int().min(0).optional(),
+      hours: z.number().int().min(0).optional(),
+    }),
+    parameters: {
+      type: "object",
+      properties: {
+        to: { type: "string" },
+        days: { type: "integer", minimum: 0, description: "Journey length in days" },
+        hours: { type: "integer", minimum: 0, description: "Journey length in hours" },
+      },
+      required: ["to"],
+    },
     handler: (state, args) => {
       state.session.current_location = args.to;
       if (!state.session.revealed_locations.includes(args.to)) {
         state.session.revealed_locations.push(args.to);
       }
-      log(state, { kind: "travel", detail: `Party travels to ${args.to}`, tool: "travel" });
+      log(state, { kind: "travel", detail: `Družina putuje do ${args.to}`, tool: "travel" });
+      // Travel consumes time; advance the clock by the journey's duration.
+      if (args.days || args.hours) {
+        advanceTime(state, { days: args.days, hours: args.hours, reason: `cesta do ${args.to}` });
+      }
       return { arrived: args.to };
     },
+  }),
+  def({
+    name: "time_advance",
+    description:
+      "Advance the in-world clock for travel, downtime, or an extended conversation. The clock must move outside combat too — call this whenever meaningful time passes.",
+    readOnly: false,
+    schema: z.object({
+      hours: z.number().int().min(0).optional(),
+      days: z.number().int().min(0).optional(),
+      reason: z.string().optional(),
+    }),
+    parameters: {
+      type: "object",
+      properties: {
+        hours: { type: "integer", minimum: 0 },
+        days: { type: "integer", minimum: 0 },
+        reason: { type: "string", description: "Short cause, e.g. 'rozhovor s kupcem'" },
+      },
+    },
+    handler: (state, args) => advanceTime(state, args),
   }),
   def({
     name: "show_location",

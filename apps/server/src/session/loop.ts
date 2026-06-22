@@ -1,8 +1,18 @@
 import { toolSpecs, type GameState } from "@adm/engine";
 import type { Llm, ChatMsg } from "../llm/client.js";
-import { aiTurnInstruction, RECAP_PROMPT, sceneSnapshot, SYSTEM_PROMPT } from "../llm/prompt.js";
+import { aiTurnInstruction, RECAP_PROMPT, sceneSnapshot, type SceneConnection, SYSTEM_PROMPT } from "../llm/prompt.js";
 import type { EventBus } from "./events.js";
 import type { SessionManager } from "./manager.js";
+
+/** Authored travel options out of the current location, for the scene snapshot (#24). */
+function sceneConnections(manager: SessionManager): SceneConnection[] {
+  const here = manager.campaign.locations[manager.session.current_location];
+  return (here?.connections ?? []).map((c) => ({
+    to: c.to,
+    days: c.travel?.days,
+    hours: (c.travel as { hours?: number } | undefined)?.hours,
+  }));
+}
 
 const MAX_TOOL_ROUNDS = 8; // turn budget to avoid loops (§9.2)
 const HISTORY_WINDOW = 20;
@@ -96,7 +106,7 @@ export async function runTurn(opts: {
   );
   const messages: ChatMsg[] = [
     { role: "system", content: SYSTEM_PROMPT },
-    { role: "system", content: sceneSnapshot(manager.session, gs.actors) },
+    { role: "system", content: sceneSnapshot(manager.session, gs.actors, sceneConnections(manager)) },
     ...recent,
     { role: "user", content: input },
   ];

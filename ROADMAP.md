@@ -129,14 +129,14 @@ on old code and items **#15, #17, #18** are likely already resolved by updating.
   links. Give them a clear camera/image icon and put a visible button next to
   the recap/summary as requested. `ChatPanel.tsx`, `SheetPanel.tsx`,
   `components/Icon.tsx`.
-- **#24 — Time does not pass during travel or conversation.** The in-world clock
-  only advances during combat (per-round). Travel between locations and extended
-  conversations should consume hours/days (configurable per location link, or a
-  DM-authored travel time). Add a `time_advance` engine tool and call it from
-  the loop when the player moves to a new location or when the DM narrates
-  extended downtime. Surface the current in-world date/time somewhere visible
-  (sheet sidebar or HUD). `packages/engine/src/time.ts`,
-  `apps/server/src/session/loop.ts`.
+- **[x] #24 — Time does not pass during travel or conversation.** Done. New
+  `packages/engine/src/time.ts` `advanceTime` rolls hours into days on a 24h
+  clock and logs the passage. A `time_advance` engine tool lets the DM advance
+  the clock for downtime/conversation; `travel` now takes a journey duration and
+  advances it; short/long rest advance 1h/8h. The DM prompt instructs the model
+  to advance time outside combat, and the scene snapshot now lists authored
+  travel durations ("Cesty odsud") from the location's connections so the model
+  uses real numbers. The in-world date/time was already shown in the app header.
 - **[x] #25 — "Shrnutí" and "Vrátit tah" share the same icon.** Done. Added two
   distinct icons (`undo` curved back-arrow, `document` lined page) to
   `Icon.tsx`; the chat toolbar now uses `undo` for Vrátit tah and `document` for
