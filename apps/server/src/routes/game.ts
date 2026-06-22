@@ -372,7 +372,7 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
   }>("/api/tts/preview", async (req, reply) => {
     const b = req.body ?? {};
     const text = (b.text?.trim() ||
-      "Vítej, poutníče. Stíny se prodlužují a cesta ke starému mlýnu je dlouhá.").slice(0, 500);
+      "Měl bys být nadšený, ale pohled na zemi, kterou opouštíš, tvůj smutek nijak nezmírňuje.\n\nJak symbol září, proudí tebou síla. Autorita.").slice(0, 500);
 
     const base = config.azureTts;
     const key = b.azureKey || base?.key || "";
