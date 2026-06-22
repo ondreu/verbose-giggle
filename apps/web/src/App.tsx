@@ -3,6 +3,7 @@ import { useGame } from "./store/store";
 import { ChatPanel } from "./panels/ChatPanel";
 import { DiceLog } from "./panels/DiceLog";
 import { SheetPanel } from "./panels/SheetPanel";
+import { ActionsPanel } from "./panels/ActionsPanel";
 import { TurnTracker } from "./panels/TurnTracker";
 import { InventoryPanel } from "./panels/InventoryPanel";
 import { MapPanel } from "./map/MapPanel";
@@ -91,6 +92,7 @@ export default function App() {
         </div>
         <aside className="flex min-h-0 flex-col gap-3 overflow-y-auto">
           <SheetPanel />
+          <ActionsPanel />
           <TurnTracker />
           <InventoryPanel />
           <div className="min-h-[14rem] flex-1">
