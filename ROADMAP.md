@@ -162,26 +162,21 @@ on old code and items **#15, #17, #18** are likely already resolved by updating.
   `provider` field on `/api/tts`. `apps/web/src/store/store.ts`,
   `apps/web/src/panels/ChatPanel.tsx`, `apps/server/src/routes/game.ts`.
 
-- **#38 — Target picker for spells/actions that need a target.** Today clicking
-  a spell or attack just fires a generic natural-language action with no target
-  — e.g. `ActionsPanel.tsx` sends *"Sešlu kouzlo Fire Bolt (fire-bolt)."* and
-  *"Zaútočím … na cíl."*, and the new sheet cast buttons (#8) do the same — so
-  the DM has to guess who the target is. When an action requires a target, prompt
-  the player to choose one:
-  - **Pick from a list:** a small popover of valid targets drawn from the scene/
-    combat actors, grouped and faction-coloured (enemies vs allies/self), so the
-    player taps the intended creature. Resolve the selection to the actor id and
-    dispatch directly (`cast_spell` `targets`, `attack` `target`) or bake the id
-    into the action text. Self/ally targets for buffs/heals; hostiles for harmful
-    spells — and respect the friendly-fire confirmation from #12.
-  - **Type a name/target:** a free-text field for off-board or improvised targets
-    (an object, an unlisted NPC), passed through to the DM loop as named intent.
-  - **[stretch] Click-to-target on the tactical map:** add a "targeting mode" to
-    `apps/web/src/map/TacticalGrid.tsx` (tokens render ~L305) where, instead of
-    moving the active actor, a click selects that token as the target for the
-    pending spell/attack. Pairs with maps rendering (#6) and the granular map
-    (#39). Wire through the store (`sendCommand`/`sendAction`) and the engine
-    tools (`packages/engine/src/tools.ts` — `attack`/`cast_spell`).
+- **[x] #38 — Target picker for spells/actions that need a target.** Done (list +
+  free-text); map click-to-target remains a stretch goal. Clicking a spell (sheet
+  #8 or Actions panel) or an attack (Actions panel) now opens a `TargetPicker`
+  (`apps/web/src/components/TargetPicker.tsx`):
+  - **[x] Pick from a list:** a popover of living scene actors, grouped and
+    faction-coloured (Nepřátelé vs Spojenci, self flagged "(ty)"), with HP. The
+    chosen actor id is woven into the action text (`na <jméno> (<id>)`) so the DM
+    loop resolves it through the engine (which enforces spell-sheet validation
+    #29 and friendly-fire confirmation #12). Attacks force a target; spells allow
+    "no specific target" (self / AoE).
+  - **[x] Type a name/target:** a free-text field for off-board / improvised
+    targets, passed through as named intent.
+  - **[ ] Click-to-target on the tactical map (stretch):** add a "targeting mode"
+    to `apps/web/src/map/TacticalGrid.tsx` (tokens render ~L305) where a click
+    selects that token as the pending action's target. Pairs with #6 and #39.
 
 ## P2 — Polish & feel
 

@@ -3,6 +3,13 @@ import { csCondition } from "@adm/schemas";
 import { useGame } from "../store/store";
 import { Icon } from "../components/Icon";
 import { LevelUpModal } from "../components/LevelUpModal";
+import { TargetPicker, type PickedTarget } from "../components/TargetPicker";
+
+/** Turn a picked target into a Czech "na <cíl>" clause for the action sentence. */
+export function targetClause(t: PickedTarget): string {
+  if (!t) return "";
+  return t.id ? ` na ${t.label} (${t.id})` : ` na ${t.label}`;
+}
 
 
 const mod = (score: number) => Math.floor((score - 10) / 2);
@@ -35,6 +42,7 @@ export function SheetPanel() {
   const generateImage = useGame((s) => s.generateImage);
   const imageLoading = useGame((s) => s.imageLoading);
   const [levelUpOpen, setLevelUpOpen] = useState(false);
+  const [castSpell, setCastSpell] = useState<string | null>(null);
   const activeId = session?.active_player ?? null;
   const actor = activeId ? actors[activeId] : null;
 
@@ -66,6 +74,16 @@ export function SheetPanel() {
   return (
     <section className="parchment flex flex-col p-4 font-body">
       {levelUpOpen && <LevelUpModal actor={actor} onClose={() => setLevelUpOpen(false)} />}
+      {castSpell && (
+        <TargetPicker
+          title={`Cíl pro ${prettySpell(castSpell)}`}
+          onClose={() => setCastSpell(null)}
+          onPick={(t) => {
+            void sendAction(`Sešlu kouzlo ${prettySpell(castSpell)} (${castSpell})${targetClause(t)}.`);
+            setCastSpell(null);
+          }}
+        />
+      )}
       <div className="flex items-baseline justify-between border-b border-ink/20 pb-1">
         <h2 className="font-display text-xl">{actor.name}</h2>
         <div className="flex items-center gap-2">
@@ -191,7 +209,7 @@ export function SheetPanel() {
                 key={spell}
                 disabled={busy || downed}
                 title={`Seslat ${prettySpell(spell)}`}
-                onClick={() => void sendAction(`Sešlu kouzlo ${prettySpell(spell)} (${spell}).`)}
+                onClick={() => setCastSpell(spell)}
                 className="flex items-center gap-1 rounded-sm border border-arcane/50 bg-arcane/10 px-1.5 py-0.5 font-body text-[12px] text-arcane transition-colors hover:bg-arcane/20 disabled:opacity-40"
               >
                 <Icon name="flame" size={11} />

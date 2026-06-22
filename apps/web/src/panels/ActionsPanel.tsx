@@ -1,6 +1,9 @@
+import { useState } from "react";
 import { csSkill } from "@adm/schemas";
 import { useGame } from "../store/store";
 import { Icon } from "../components/Icon";
+import { TargetPicker, type PickedTarget } from "../components/TargetPicker";
+import { targetClause } from "./SheetPanel";
 
 /** Prettify an id ("fire-bolt" / "longsword") into a readable label. */
 const pretty = (id: string) => id.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -32,6 +35,11 @@ export function ActionsPanel() {
   const sendAction = useGame((s) => s.sendAction);
   const busy = useGame((s) => s.busy);
 
+  // A pending targeted action: chosen verb + how to weave the target into it.
+  const [pending, setPending] = useState<
+    { title: string; allowNone: boolean; build: (clause: string) => string } | null
+  >(null);
+
   const activeId = session?.active_player ?? null;
   const actor = activeId ? actors[activeId] : null;
 
@@ -58,26 +66,49 @@ export function ActionsPanel() {
   const act = (text: string) => {
     if (!disabled) void sendAction(text);
   };
+  /** Open the target picker, then send the built action with the chosen target. */
+  const aim = (title: string, build: (clause: string) => string, allowNone = true) => {
+    if (!disabled) setPending({ title, allowNone, build });
+  };
 
   return (
     <section className="panel flex flex-col">
+      {pending && (
+        <TargetPicker
+          title={pending.title}
+          allowNone={pending.allowNone}
+          onClose={() => setPending(null)}
+          onPick={(t: PickedTarget) => {
+            void sendAction(pending.build(targetClause(t)));
+            setPending(null);
+          }}
+        />
+      )}
       <header className="panel-title flex items-center gap-2 px-3 py-2">
         <Icon name="sword" size={14} />
         Akce — {actor.name}
       </header>
       <div className="flex flex-col gap-3 px-3 py-2.5">
-        {/* Attacks */}
+        {/* Attacks — every attack needs a target, so pick one first. */}
         <Group label="Útoky" icon="sword">
-          <Chip label="Útok zbraní" disabled={disabled} onClick={() => act("Zaútočím vybranou zbraní na nejbližšího nepřítele.")} />
+          <Chip
+            label="Útok zbraní"
+            disabled={disabled}
+            onClick={() => aim("Cíl útoku", (c) => `Zaútočím vybranou zbraní${c}.`, false)}
+          />
           {equipped.map((i) => (
             <Chip
               key={i.id}
               label={pretty(i.id)}
               disabled={disabled}
-              onClick={() => act(`Zaútočím zbraní ${pretty(i.id)} (${i.id}) na cíl.`)}
+              onClick={() => aim(`Cíl pro ${pretty(i.id)}`, (c) => `Zaútočím zbraní ${pretty(i.id)} (${i.id})${c}.`, false)}
             />
           ))}
-          <Chip label="Beze zbraně" disabled={disabled} onClick={() => act("Zaútočím beze zbraně (unarmed strike).")} />
+          <Chip
+            label="Beze zbraně"
+            disabled={disabled}
+            onClick={() => aim("Cíl útoku beze zbraně", (c) => `Zaútočím beze zbraně (unarmed strike)${c}.`, false)}
+          />
         </Group>
 
         {/* Standard actions */}
@@ -96,7 +127,7 @@ export function ActionsPanel() {
                 label={pretty(spell)}
                 accent
                 disabled={disabled}
-                onClick={() => act(`Sešlu kouzlo ${pretty(spell)} (${spell}).`)}
+                onClick={() => aim(`Cíl pro ${pretty(spell)}`, (c) => `Sešlu kouzlo ${pretty(spell)} (${spell})${c}.`)}
               />
             ))}
           </Group>
