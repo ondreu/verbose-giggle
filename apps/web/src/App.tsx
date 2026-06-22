@@ -21,12 +21,19 @@ export default function App() {
   const time = useGame((s) => s.session?.time);
   const view = useGame((s) => s.view);
   const setView = useGame((s) => s.setView);
+  const intro = useGame((s) => s.intro);
+  const narrationLen = useGame((s) => s.narration.length);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   useEffect(() => {
     void hydrate();
     connect();
   }, [hydrate, connect]);
+
+  // Fresh campaign with no narration yet → ask the DM for an opening scene (#31).
+  useEffect(() => {
+    if (view === "play" && campaign && narrationLen === 0) void intro();
+  }, [view, campaign, narrationLen, intro]);
 
   if (view === "home") {
     return (

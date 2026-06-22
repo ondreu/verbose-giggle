@@ -38,6 +38,15 @@ export class MockLlmClient implements Llm {
       toolCalls: [{ id: `mock-${Date.now()}`, name, args }],
     });
 
+    // Campaign opening scene (#31): a short atmospheric intro + a prompt to act.
+    if (text.includes("[začátek")) {
+      return {
+        content:
+          "[mock DM] Cesta vás dovedla na práh nového dobrodružství. Vzduch je cítit dálkou a nevyřčeným příslibem. Stíny minulosti i naděje zítřka čekají, až je probudíte. Co podnikneš jako první?",
+        toolCalls: [],
+      };
+    }
+
     // Recap request (§6.6): summarize from the embedded context deterministically.
     if (text.includes("[recap]")) {
       const events = userMsg

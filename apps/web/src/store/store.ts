@@ -128,6 +128,8 @@ interface GameStore {
   startEncounter: (id: string) => Promise<void>;
   fetchReachable: (actor: string) => Promise<void>;
   recap: () => Promise<void>;
+  /** Fetch the DM's opening scene for a fresh campaign (#31), once. */
+  intro: () => Promise<void>;
   undoTurn: () => Promise<void>;
   fetchLog: () => Promise<string>;
   toggleTts: () => void;
@@ -163,6 +165,8 @@ interface GameStore {
 }
 
 let lineSeq = 0;
+// Guards the one-shot campaign intro against concurrent re-entry (#31).
+let introInFlight = false;
 
 const initialPrefs = loadPrefs();
 
@@ -352,6 +356,24 @@ export const useGame = create<GameStore>((set, get) => ({
       await fetch("/api/recap", { method: "POST" });
     } finally {
       set({ busy: false });
+    }
+  },
+
+  intro: async () => {
+    if (introInFlight || get().narration.length > 0) return;
+    introInFlight = true;
+    try {
+      const res = await fetch("/api/intro", { method: "POST" });
+      if (!res.ok) return;
+      const data = (await res.json()) as { started?: boolean; intro?: string };
+      // Append directly (rather than via SSE) to avoid a race on first load.
+      if (data.started && data.intro) {
+        set((s) => ({ narration: [...s.narration, { id: lineSeq++, role: "dm", text: data.intro! }] }));
+      }
+    } catch {
+      /* best-effort; the scene can still start silently */
+    } finally {
+      introInFlight = false;
     }
   },
 

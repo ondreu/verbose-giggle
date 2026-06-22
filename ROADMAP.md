@@ -212,12 +212,14 @@ on old code and items **#15, #17, #18** are likely already resolved by updating.
   the demo sells the experience. Build guide in `docs/SHOWCASE.md`; the showcase
   vault content can be authored and dropped into `data/vault.example` (or a new
   `data/vault.showcase`).
-- **#31 — DM campaign intro and "how to begin" prompt.** When a new campaign
-  session starts the DM should narrate a short scene-setting intro (world,
-  location, hook) and then explicitly ask the player how they want to begin —
-  rather than dropping them in silently. Add a `campaign_start` system prompt
-  section that instructs the AI DM to do this. `apps/server/src/llm/prompt.ts`,
-  session init in `apps/server/src/session/loop.ts`.
+- **[x] #31 — DM campaign intro and "how to begin" prompt.** Done. A new
+  `CAMPAIGN_START` instruction (`apps/server/src/llm/prompt.ts`) has the DM set
+  the scene (world/location/hook) in a few sentences and then explicitly ask the
+  player how they want to begin. `runIntro` (`apps/server/src/session/loop.ts`)
+  runs it through the tool loop and records the intro as an assistant message;
+  the `/api/intro` endpoint fires it once (no-op if any chat history exists), and
+  the web app calls it on entering play with empty narration. The offline mock
+  narrator has a matching opening-scene branch. Covered by a server test.
 - **#32 — Streaming / lazy-loading of AI text.** AI narration currently appears
   all at once after the full response arrives. Stream tokens to the client as
   they are generated (server-sent events or WebSocket stream) so text appears

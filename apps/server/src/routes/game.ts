@@ -6,7 +6,7 @@ import { LlmClient, type Llm } from "../llm/client.js";
 import { MockLlmClient } from "../llm/mock.js";
 import { ImageClient, buildPrompt, type ImageSubject } from "../llm/image.js";
 import { synthesizeAzure } from "../tts/azure.js";
-import { resolveAiTurns, runRecap, runTurn } from "../session/loop.js";
+import { resolveAiTurns, runIntro, runRecap, runTurn } from "../session/loop.js";
 import { startEncounter } from "../session/encounter.js";
 import type { EventBus } from "../session/events.js";
 import { SessionManager } from "../session/manager.js";
@@ -422,6 +422,21 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
       return reply.send(data);
     } catch {
       return reply.code(404).send({ error: "not found" });
+    }
+  });
+
+  /** DM opening scene for a fresh campaign (#31). Runs once — a no-op if the
+      session already has any chat history, so reloads never re-trigger it. */
+  app.post("/api/intro", async (_req, reply) => {
+    const hasHistory = ctx.manager.session.chat.some(
+      (m) => m.role === "user" || m.role === "assistant",
+    );
+    if (hasHistory || ctx.manager.session.ending) return { started: false };
+    try {
+      const { intro } = await runIntro({ manager: ctx.manager, llm, bus: ctx.bus });
+      return { started: true, intro };
+    } catch (err) {
+      return reply.code(500).send({ error: err instanceof Error ? err.message : String(err) });
     }
   });
 

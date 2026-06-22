@@ -97,6 +97,14 @@ export function aiTurnInstruction(
 }
 
 /**
+ * Campaign-start instruction (#31). Fired once when a fresh campaign session
+ * begins (no chat history): the DM sets the scene and explicitly invites the
+ * player to act, rather than dropping them into silence. The `[ZAČÁTEK]` marker
+ * lets the offline mock branch deterministically.
+ */
+export const CAMPAIGN_START = `[ZAČÁTEK KAMPANĚ] Toto je úvodní scéna nové hry. Ve 3 až 5 větách, česky a atmosféricky, uveď svět a místo, kde družina začíná, a nastiň háček či zápletku, která ji pohání. Poté se hráče VÝSLOVNĚ zeptej, jak chce začít — co dělá jako první. Zatím nehraj žádné mechaniky (žádné hody, zkoušky ani boj); smíš pouze odhalit počáteční lokaci nástrojem show_location.`;
+
+/**
  * Recap instruction (§6.6 /recap). The model retells the story so far in a few
  * Czech sentences — narration only, no mechanics, no tools. The `[RECAP]`
  * marker lets the offline mock branch deterministically.

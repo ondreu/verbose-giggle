@@ -1,6 +1,6 @@
 import { toolSpecs, type GameState } from "@adm/engine";
 import type { Llm, ChatMsg } from "../llm/client.js";
-import { aiTurnInstruction, RECAP_PROMPT, sceneSnapshot, type SceneConnection, SYSTEM_PROMPT } from "../llm/prompt.js";
+import { aiTurnInstruction, CAMPAIGN_START, RECAP_PROMPT, sceneSnapshot, type SceneConnection, SYSTEM_PROMPT } from "../llm/prompt.js";
 import type { EventBus } from "./events.js";
 import type { SessionManager } from "./manager.js";
 
@@ -124,6 +124,34 @@ export async function runTurn(opts: {
 
   await resolveAiTurns({ manager, llm, bus, gs });
   return { narration };
+}
+
+/**
+ * Narrate the opening scene of a fresh campaign and invite the player to act
+ * (#31). The caller guards against re-running once there is chat history. The
+ * intro text is returned (the client appends it directly, avoiding an SSE race
+ * on first load); state changes (e.g. revealed starting location) still emit.
+ */
+export async function runIntro(opts: {
+  manager: SessionManager;
+  llm: Llm;
+  bus: EventBus;
+}): Promise<{ intro: string }> {
+  const { manager, llm, bus } = opts;
+  const gs = manager.buildGameState();
+  const messages: ChatMsg[] = [
+    { role: "system", content: SYSTEM_PROMPT },
+    { role: "system", content: sceneSnapshot(manager.session, gs.actors, sceneConnections(manager)) },
+    { role: "user", content: CAMPAIGN_START },
+  ];
+  const intro = await executeToolLoop({ manager, llm, bus, gs, messages });
+  if (intro) {
+    manager.session.chat.push({ role: "assistant", content: intro });
+    await manager.log(`\n**DM (úvod):** ${intro}`);
+  }
+  await manager.checkpoint(gs);
+  bus.emit({ type: "state", state: manager.session });
+  return { intro };
 }
 
 /**

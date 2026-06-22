@@ -91,6 +91,25 @@ describe("LLM turn loop (mocked model)", () => {
     expect(events).toContain("narration");
   });
 
+  it("runIntro narrates an opening scene and records it once (#31)", async () => {
+    const { MockLlmClient } = await import("../src/llm/mock.js");
+    const { runIntro } = await import("../src/session/loop.js");
+    const mgr = await SessionManager.open(await freshCampaign());
+    const llm = new MockLlmClient(() => ({
+      activePlayer: mgr.session.active_player,
+      partyIds: ["thorin", "elara"],
+      hostileIds: [],
+      inCombat: false,
+      enemyOf: () => null,
+    }));
+    const bus = { emit: () => undefined, subscribe: () => () => undefined } as unknown as EventBus;
+
+    const { intro } = await runIntro({ manager: mgr, llm, bus });
+    expect(intro).toContain("[mock DM]");
+    // The intro is recorded as an assistant message so reloads won't re-trigger.
+    expect(mgr.session.chat.some((m) => m.role === "assistant")).toBe(true);
+  });
+
   it("the offline mock narrator drives a real engine attack with no API key", async () => {
     const { MockLlmClient } = await import("../src/llm/mock.js");
     const mgr = await SessionManager.open(await freshCampaign());
