@@ -43,27 +43,20 @@ on old code and items **#15, #17, #18** are likely already resolved by updating.
   (`apps/web/src/panels/TurnTracker.tsx`) now renders a faction-coloured HP bar
   + current/max number for every combatant in the initiative order (live HP from
   the session overlay), so the whole fight's state is visible at a glance.
-- **#6 — Maps render nothing.** Overworld: moving between locations showed no
-  token/position change; tactical (combat) map was all black. Investigate the
-  Leaflet overworld token/camera layer (`apps/web/src/map/OverworldMap.tsx`) and
-  the tactical grid render/asset loading (`apps/web/src/map/TacticalGrid.tsx`,
-  `MapPanel.tsx`). Confirm `current_location` → marker and combatant positions →
-  grid tokens actually bind. (Hex-grid request is **#6b**, see P2.)
+- **[x] #6 — Maps render nothing.** Done (earlier work). The Leaflet overworld
+  binds `current_location` → marker + camera and draws the `world_map` overlay
+  (`apps/web/src/map/OverworldMap.tsx`); the tactical grid renders tokens,
+  terrain, and the battle-map backdrop (`TacticalGrid.tsx`). (Hex-grid is #6b.)
 - **#17 — Voice (TTS) doesn't play.** Verify end-to-end: Azure key/region set in
   Settings → `/api/tts` returns audio → client plays it. Most likely a config
   gap (no Azure key, or stale image without the Settings panel) rather than code
   — confirm against the P0 deploy note first. `apps/web/src/store/store.ts`
   (`speak`), `apps/server/src/routes/game.ts` (`/api/tts`).
-- **#22 — Settings do not persist (model resets on reload).** Selected model and
-  other settings revert to defaults on page reload. Persist all settings (model,
-  voice provider, Azure keys, etc.) to `localStorage` on every change and
-  rehydrate on app boot. The store init in `apps/web/src/store/store.ts` should
-  load from `localStorage` before applying defaults; the Settings panel write
-  path should mirror every change there.
-  - **[x] Partially done:** server-owned settings (model, Azure keys, campaign)
-    already persist to `settings.json`; the client-only voice toggles
-    (`ttsEnabled`, `ttsProvider`) now persist to `localStorage` and rehydrate on
-    boot (`apps/web/src/store/store.ts`). Remaining: anything else found to reset.
+- **[~] #22 — Settings do not persist (model resets on reload).** Mostly done.
+  Server-owned settings (model, Azure keys, campaign) persist to `settings.json`;
+  the client-only voice toggles (`ttsEnabled`, `ttsProvider`) persist to
+  `localStorage` and rehydrate on boot (`apps/web/src/store/store.ts`). Remaining:
+  audit for any other UI state that still resets on reload.
 - **[x] #23 — Character cannot die; death saving throws have no consequence.**
   Done. A third failed death save marks the actor `dead`
   (`packages/engine/src/combat.ts` → `markDead`) and removes them from
@@ -90,18 +83,16 @@ on old code and items **#15, #17, #18** are likely already resolved by updating.
 
 ## P1 — Important correctness & UX
 
-- **#1 — Render Markdown from the LLM in chat.** Narration is printed as plain
-  text (`{line.text}` in `apps/web/src/panels/ChatPanel.tsx:100`). Add a small,
-  safe Markdown renderer (bold/italic/lists/headings/hr/inline-code at minimum).
-  This also helps legibility (#7).
-- **#9 — Show who is acting instead of "Hráč".** Chat hardcodes the label
-  "Hráč ·" (`ChatPanel.tsx:96`). Show the acting character's name, or "Družina"
-  for party-wide actions. Requires carrying the actor id/name on narration
-  lines (`store.ts` narration mapping currently keeps only role dm/player).
-- **#10 — Verify action economy.** Playtest felt like too many actions per turn.
-  Audit action/bonus-action/move/reaction limits and how the loop gates them in
-  `packages/engine/src/turns.ts` and the turn loop; add a test if a limit is
-  missing.
+- **[x] #1 — Render Markdown from the LLM in chat.** Done (earlier work). DM
+  narration renders through the safe `<Markdown>` component (bold/italic/lists/
+  headings/hr/inline-code) in `apps/web/src/panels/ChatPanel.tsx`.
+- **[x] #9 — Show who is acting instead of "Hráč".** Done (earlier work). Player
+  narration lines carry the acting character's name (`store.ts` adds `actor`),
+  and the chat shows it, falling back to "Hráč" only when unknown.
+- **[x] #10 — Verify action economy.** Done (earlier work). Action/bonus/
+  reaction/movement limits are enforced in `spendEconomy`/`dispatch`
+  (`packages/engine/src/tools.ts`) with the turn budget reset per turn
+  (`turns.ts`); covered by `packages/engine/test/economy.test.ts`.
 - **[x] #4 — Remove leftover English UI text and abbreviations.** Done. The
   two-letter Czech shorthand (SIL/OBR/ODL/MDR) is gone: `ABILITY_CS` now holds
   full Czech names (Síla, Obratnost…) and a new `ABILITY_ABBR`/`csAbilityAbbr`
@@ -111,26 +102,23 @@ on old code and items **#15, #17, #18** are likely already resolved by updating.
   dice-log checks/saves (which also now localise the condition list). The
   hardcoded "Unarmed Strike" fallback reads "úder beze zbraně". (SRD-sourced
   weapon/spell names stay English pending the localization pass in #21.)
-- **#2 — Start-up / home menu.** A first-run screen with: open Settings, import
-  a campaign, import maps, and **create a new campaign** (no map required yet).
-  New top-level view in the web app; campaign create/import endpoints on the
-  server (write into the vault).
-- **#14 — Character creation GUI (BG3-style guided flow).** Full guided creation
-  for a campaign: choose race/subrace → class/subclass → ability score point
-  buy (pool of 27 pts, standard array option) → select starting skills, feats
-  (if applicable), and cantrips/spells known. Output a valid actor note. Blur
-  the background while the dialog is open (CSS `backdrop-filter: blur`). Wire to
-  SRD data (#20 — races, classes, feats, spells). Pairs with #2 and #8.
-- **#13 — Level-up GUI and engine-driven leveling.** Levels must be awarded by
-  the engine (XP threshold or milestone) — never by the player asking. On
-  level-up the engine emits a `level_up` event; the UI opens a guided modal
-  (ASI or feat pick, HP roll/take-average, new spells/features from SRD class
-  data). Wire to `packages/engine/src/leveling.ts`. Remove any player-declared
-  level-up path.
-- **#15 — Image generation is undiscoverable.** Buttons exist ("vizualizovat" in
-  chat, "portrét" on the sheet) but use the generic scroll icon and read as
-  links. Give them a clear camera/image icon and put a visible button next to
-  the recap/summary as requested. `ChatPanel.tsx`, `SheetPanel.tsx`,
+- **[x] #2 — Start-up / home menu.** Done (earlier work). `StartMenu` is the
+  first-run home view: open Settings, switch/create/forge a campaign, manage
+  campaigns (#35), roll back (snapshots), and enter play. Campaign create/forge
+  endpoints write into the vault (`apps/server/src/routes/game.ts`).
+- **[x] #14 — Character creation GUI (BG3-style guided flow).** Done (earlier
+  work). `CharacterCreate` guides race → class → ability scores (standard array)
+  → skills → cantrips/spells and writes a valid actor note + party enrolment
+  (`apps/server/src/vault/creation.ts`, `creation.test.ts`). (Subrace/subclass/
+  feats and full SRD wiring deepen with #20.)
+- **[x] #13 — Level-up GUI and engine-driven leveling.** Done (earlier work).
+  Leveling is engine-driven (`packages/engine/src/leveling.ts` + `leveling.test.ts`):
+  `award_xp` auto-levels across thresholds; the `LevelUpModal` guides ASI/HP/
+  spells wired through `/api/level-up`. (Feat picks and SRD-sourced features
+  expand with #20.)
+- **[x] #15 — Image generation is undiscoverable.** Done (earlier work). The
+  "vizualizovat" (chat) and "portrét" (sheet) actions use a clear `camera` icon
+  and sit as visible toolbar buttons. `ChatPanel.tsx`, `SheetPanel.tsx`,
   `components/Icon.tsx`.
 - **[x] #24 — Time does not pass during travel or conversation.** Done. New
   `packages/engine/src/time.ts` `advanceTime` rolls hours into days on a 24h
@@ -152,11 +140,11 @@ on old code and items **#15, #17, #18** are likely already resolved by updating.
   narration through a `stripMarkdown` helper (emphasis/code/headings/lists/
   quotes/links) before hitting `/api/tts`, so the voice reads clean prose.
   `apps/web/src/store/store.ts` (+ unit tests).
-- **#28 — Visualization context menu renders under the map (z-index).** The
-  "vizualizovat" right-click / dropdown menu is clipped behind the map canvas.
-  Raise its `z-index` above the map layer (map is likely `z-index: 10` or
-  similar; menu needs a higher stacking context). Check
-  `apps/web/src/panels/ChatPanel.tsx` or the shared `ContextMenu` component.
+- **[N/A] #28 — Visualization context menu renders under the map (z-index).**
+  Not applicable in the current UI: there is no right-click/dropdown menu — the
+  "vizualizovat" action is a plain toolbar button that opens a full-screen
+  `ImageModal` (`z-[…]` overlay), so nothing is clipped behind the map. Revisit
+  only if a `ContextMenu` is introduced.
 - **[x] #30 — Extended voice controls.** Done. The in-flight narration audio is
   tracked so `stopSpeech` can cancel it mid-sentence (a "stop" button appears
   while speaking), and a one-click engine toggle (auto → Azure → Piper) in the
