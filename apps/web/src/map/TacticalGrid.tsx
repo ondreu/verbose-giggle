@@ -148,8 +148,36 @@ export function TacticalGrid({ embedded = false }: { embedded?: boolean }) {
           className="mx-auto block"
           style={{ background: "var(--bg-crust)" }}
         >
-          {/* Authored battle-map backdrop (under the grid + tokens) */}
-          {battleMap && (
+          {/* Simple terrain textures so the map reads at a glance (#map). */}
+          <defs>
+            <pattern id="tex-floor" width={CELL} height={CELL} patternUnits="userSpaceOnUse">
+              <rect width={CELL} height={CELL} fill="#1f1b17" />
+              <circle cx={CELL / 2} cy={CELL / 2} r={1.2} fill="rgba(216,205,180,0.06)" />
+            </pattern>
+            <pattern id="tex-wall" width={22} height={16} patternUnits="userSpaceOnUse">
+              <rect width={22} height={16} fill="#4a423a" />
+              <g stroke="#241f1b" strokeWidth={1.4} fill="none">
+                <path d="M0 8 H22 M0 16 H22" />
+                <path d="M11 0 V8 M0 0 V8 M22 0 V8" />
+                <path d="M5.5 8 V16 M16.5 8 V16" />
+              </g>
+            </pattern>
+            <pattern id="tex-difficult" width={14} height={14} patternUnits="userSpaceOnUse">
+              <rect width={14} height={14} fill="rgba(74,143,123,0.16)" />
+              <path d="M2 11 l2 -4 l2 4 M8 12 l2 -5 l2 5" stroke="rgba(74,143,123,0.55)" strokeWidth={1} fill="none" />
+            </pattern>
+            <pattern id="tex-hazard" width={14} height={14} patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+              <rect width={14} height={14} fill="rgba(155,34,38,0.18)" />
+              <rect width={7} height={14} fill="rgba(155,34,38,0.5)" />
+            </pattern>
+            <pattern id="tex-cover" width={12} height={12} patternUnits="userSpaceOnUse">
+              <rect width={12} height={12} fill="rgba(90,122,153,0.2)" />
+              <path d="M0 12 L12 0 M-3 3 L3 -3 M9 15 L15 9" stroke="rgba(90,122,153,0.5)" strokeWidth={1.2} />
+            </pattern>
+          </defs>
+
+          {/* Authored battle-map backdrop, or a textured stone floor otherwise. */}
+          {battleMap ? (
             <image
               href={`/api/asset/${battleMap}`}
               x={0}
@@ -159,6 +187,8 @@ export function TacticalGrid({ embedded = false }: { embedded?: boolean }) {
               preserveAspectRatio="xMidYMid slice"
               opacity={0.9}
             />
+          ) : (
+            <rect x={0} y={0} width={w * CELL} height={h * CELL} fill="url(#tex-floor)" />
           )}
 
           {/* Grid lines */}
@@ -183,22 +213,43 @@ export function TacticalGrid({ embedded = false }: { embedded?: boolean }) {
             />
           ))}
 
-          {/* Static terrain: walls, difficult ground, hazards, cover */}
+          {/* Static terrain: textured by kind so walls/cover/hazards are obvious */}
           {combat.terrain.map((t) => {
-            const style: Record<string, { fill: string; opacity: number; label?: string }> = {
-              wall: { fill: "#4a423a", opacity: 1 },
-              difficult: { fill: "var(--verdigris)", opacity: 0.18 },
-              hazard: { fill: "var(--blood)", opacity: 0.22 },
-              "cover-half": { fill: "var(--steel)", opacity: 0.22, label: "½" },
-              "cover-three-quarter": { fill: "var(--steel)", opacity: 0.35, label: "¾" },
+            const fill: Record<string, string> = {
+              wall: "url(#tex-wall)",
+              difficult: "url(#tex-difficult)",
+              hazard: "url(#tex-hazard)",
+              "cover-half": "url(#tex-cover)",
+              "cover-three-quarter": "url(#tex-cover)",
             };
-            const s = style[t.kind] ?? { fill: "var(--surface2)", opacity: 0.3 };
+            const label: Record<string, string> = {
+              difficult: "≈",
+              "cover-half": "½",
+              "cover-three-quarter": "¾",
+            };
             return (
               <g key={`t${t.x}-${t.y}`} pointerEvents="none">
-                <rect x={t.x * CELL} y={t.y * CELL} width={CELL} height={CELL} fill={s.fill} opacity={s.opacity} />
-                {s.label && (
-                  <text x={t.x * CELL + CELL / 2} y={t.y * CELL + CELL / 2 + 4} textAnchor="middle" fontSize={12} fill="var(--bone)" opacity={0.8}>
-                    {s.label}
+                <rect
+                  x={t.x * CELL}
+                  y={t.y * CELL}
+                  width={CELL}
+                  height={CELL}
+                  fill={fill[t.kind] ?? "rgba(74,66,58,0.4)"}
+                />
+                {/* Three-quarter cover reads denser than half. */}
+                {t.kind === "cover-three-quarter" && (
+                  <rect x={t.x * CELL} y={t.y * CELL} width={CELL} height={CELL} fill="rgba(90,122,153,0.22)" />
+                )}
+                {label[t.kind] && (
+                  <text
+                    x={t.x * CELL + CELL - 5}
+                    y={t.y * CELL + 13}
+                    textAnchor="end"
+                    fontSize={11}
+                    fill="var(--bone)"
+                    opacity={0.85}
+                  >
+                    {label[t.kind]}
                   </text>
                 )}
               </g>
