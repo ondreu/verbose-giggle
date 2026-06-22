@@ -1,0 +1,10 @@
+name: The Velen Roads
+ruleset: dnd5e-srd
+world_map: maps/continent.webp
+starting_location: rozcesti
+party: [thorin, elara]
+companions: [shadowpaw]
+language: cs
+tts: { enabled: true, voice: cs_CZ-jirka-medium }
+llm: { model: mistral-medium-3.5 }
+variant_rules: { flanking: false, diagonals: "5-5-5" }
