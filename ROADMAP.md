@@ -55,6 +55,30 @@ on old code and items **#15, #17, #18** are likely already resolved by updating.
   gap (no Azure key, or stale image without the Settings panel) rather than code
   — confirm against the P0 deploy note first. `apps/web/src/store/store.ts`
   (`speak`), `apps/server/src/routes/game.ts` (`/api/tts`).
+- **#22 — Settings do not persist (model resets on reload).** Selected model and
+  other settings revert to defaults on page reload. Persist all settings (model,
+  voice provider, Azure keys, etc.) to `localStorage` on every change and
+  rehydrate on app boot. The store init in `apps/web/src/store/store.ts` should
+  load from `localStorage` before applying defaults; the Settings panel write
+  path should mirror every change there.
+- **#23 — Character cannot die; death saving throws have no consequence.** After
+  three failed death saves the engine should mark the actor dead, remove them
+  from the initiative order, and flag the session as ended (campaign over /
+  load-last-save prompt). Currently the loop ignores the third failure. Fix in
+  `packages/engine/src/turns.ts` (death-save accumulation) and
+  `apps/server/src/session/loop.ts` (terminal state on death). The LLM must
+  narrate the death and the session must stop — a dead character is not
+  recoverable without a specific spell.
+- **#29 — AI validates ability use against the character sheet; HP not updated.**
+  Repro: player said *"použiji lay on hands a vyléčím se"*; the engine ran an
+  ability-check tool (MDR DC 10 → success) and the prose narrated a heal, but
+  the character did not have Lay on Hands in `actor.class_features` and the HP
+  on the sheet stayed unchanged. Two bugs: (a) the tool-dispatch layer must
+  verify the requested ability/spell exists on the actor before calling it —
+  refuse gracefully if not (`packages/engine/src/tools.ts`, prompt guard in
+  `apps/server/src/llm/prompt.ts`); (b) a successful heal tool must write the
+  new HP into session state and the narration must reflect the sheet value, not
+  an invented one. Pair with #8 (spell list) and #12 (determinism).
 
 ## P1 — Important correctness & UX
 
@@ -70,24 +94,67 @@ on old code and items **#15, #17, #18** are likely already resolved by updating.
   Audit action/bonus-action/move/reaction limits and how the loop gates them in
   `packages/engine/src/turns.ts` and the turn loop; add a test if a limit is
   missing.
-- **#4 — Remove leftover English UI text.** e.g. `perception` → *vnímání*.
-  Sweep skill/ability/condition/action labels; route everything through the
-  Czech label maps (`packages/schemas/src/labels.ts`) and check SRD-derived
-  names surfaced to the player.
+- **#4 — Remove leftover English UI text and abbreviations.** e.g. `perception`
+  → *vnímání*, `SIL` → *Síla*, `OBR` → *Obratnost*. Use full Czech words (or
+  standard English abbreviations like STR/DEX/CON). Sweep skill/ability/
+  condition/action labels; route everything through the Czech label maps
+  (`packages/schemas/src/labels.ts`) and check SRD-derived names surfaced to
+  the player. No two-letter Czech shorthand anywhere in the UI.
 - **#2 — Start-up / home menu.** A first-run screen with: open Settings, import
   a campaign, import maps, and **create a new campaign** (no map required yet).
   New top-level view in the web app; campaign create/import endpoints on the
   server (write into the vault).
-- **#14 — Character creation GUI.** Full guided creation for a campaign
-  (race/class/abilities/skills/equipment/spells) that writes a valid actor note.
-  Pairs with #2 and #8.
-- **#13 — Level-up GUI.** Surface choices (ASIs/feats, stat increases, new
-  spells, HP) instead of editing files. Wire to `packages/engine/src/leveling.ts`.
+- **#14 — Character creation GUI (BG3-style guided flow).** Full guided creation
+  for a campaign: choose race/subrace → class/subclass → ability score point
+  buy (pool of 27 pts, standard array option) → select starting skills, feats
+  (if applicable), and cantrips/spells known. Output a valid actor note. Blur
+  the background while the dialog is open (CSS `backdrop-filter: blur`). Wire to
+  SRD data (#20 — races, classes, feats, spells). Pairs with #2 and #8.
+- **#13 — Level-up GUI and engine-driven leveling.** Levels must be awarded by
+  the engine (XP threshold or milestone) — never by the player asking. On
+  level-up the engine emits a `level_up` event; the UI opens a guided modal
+  (ASI or feat pick, HP roll/take-average, new spells/features from SRD class
+  data). Wire to `packages/engine/src/leveling.ts`. Remove any player-declared
+  level-up path.
 - **#15 — Image generation is undiscoverable.** Buttons exist ("vizualizovat" in
   chat, "portrét" on the sheet) but use the generic scroll icon and read as
   links. Give them a clear camera/image icon and put a visible button next to
   the recap/summary as requested. `ChatPanel.tsx`, `SheetPanel.tsx`,
   `components/Icon.tsx`.
+- **#24 — Time does not pass during travel or conversation.** The in-world clock
+  only advances during combat (per-round). Travel between locations and extended
+  conversations should consume hours/days (configurable per location link, or a
+  DM-authored travel time). Add a `time_advance` engine tool and call it from
+  the loop when the player moves to a new location or when the DM narrates
+  extended downtime. Surface the current in-world date/time somewhere visible
+  (sheet sidebar or HUD). `packages/engine/src/time.ts`,
+  `apps/server/src/session/loop.ts`.
+- **#25 — "Shrnutí" and "Vrátit tah" share the same icon.** Two toolbar actions
+  that do opposite things look identical; the user can't tell them apart.
+  Assign distinct icons: e.g. a scroll/book for Shrnutí (summary), an undo
+  arrow for Vrátit tah. `apps/web/src/components/Icon.tsx` and wherever the
+  toolbar is rendered.
+- **#26 — Deník (journal) does not render Markdown.** The journal panel displays
+  raw Markdown source (`**bold**`, `## heading`) instead of formatted text.
+  Apply the same safe Markdown renderer used (or planned, see #1) for chat.
+  `apps/web/src/panels/JournalPanel.tsx`.
+- **#27 — TTS reads Markdown formatting aloud.** The text-to-speech path strips
+  no Markdown before sending to Azure/Piper, so players hear "asterisk asterisk
+  bold asterisk asterisk". Strip Markdown tokens (regex or a lightweight
+  strip-markdown utility) from the string before passing to the TTS endpoint.
+  `apps/server/src/routes/game.ts` or the client-side `speak()` in
+  `apps/web/src/store/store.ts`.
+- **#28 — Visualization context menu renders under the map (z-index).** The
+  "vizualizovat" right-click / dropdown menu is clipped behind the map canvas.
+  Raise its `z-index` above the map layer (map is likely `z-index: 10` or
+  similar; menu needs a higher stacking context). Check
+  `apps/web/src/panels/ChatPanel.tsx` or the shared `ContextMenu` component.
+- **#30 — Extended voice controls.** Currently TTS starts and can't be stopped.
+  Add: (a) a **pause/stop** button that cancels the currently playing
+  `AudioBufferSourceNode` or `HTMLAudioElement`; (b) a **provider toggle**
+  (Azure ↔ Piper) accessible without reloading — one click in the toolbar or
+  Settings panel, persisted to `localStorage`. `apps/web/src/store/store.ts`
+  (`speak`/`stopSpeech`), `apps/web/src/panels/SettingsPanel.tsx`.
 
 ## P2 — Polish & feel
 
@@ -105,6 +172,43 @@ on old code and items **#15, #17, #18** are likely already resolved by updating.
   the demo sells the experience. Build guide in `docs/SHOWCASE.md`; the showcase
   vault content can be authored and dropped into `data/vault.example` (or a new
   `data/vault.showcase`).
+- **#31 — DM campaign intro and "how to begin" prompt.** When a new campaign
+  session starts the DM should narrate a short scene-setting intro (world,
+  location, hook) and then explicitly ask the player how they want to begin —
+  rather than dropping them in silently. Add a `campaign_start` system prompt
+  section that instructs the AI DM to do this. `apps/server/src/llm/prompt.ts`,
+  session init in `apps/server/src/session/loop.ts`.
+- **#32 — Streaming / lazy-loading of AI text.** AI narration currently appears
+  all at once after the full response arrives. Stream tokens to the client as
+  they are generated (server-sent events or WebSocket stream) so text appears
+  progressively. This also makes long responses feel faster. Server: switch the
+  Claude call to streaming mode; client: append tokens to the chat line as they
+  arrive. `apps/server/src/llm/`, `apps/web/src/store/store.ts`.
+- **#33 — Ability-check chips in chat: larger and with dice animation.** Inline
+  roll results (e.g. "d20: 14 +3 = 17 vs DC 10 → úspěch") should be visually
+  prominent — bigger badge, distinct colour — and show a brief CSS dice-spin
+  animation on arrival (similar to the existing dice log animation). Coordinate
+  with the existing dice animation work in `apps/web/src/components/DiceRoll.tsx`
+  or equivalent.
+- **#34 — Character condition/status indicator on the sheet.** Show active
+  conditions (Bezvědomí, Otrávení, Zpomalení, Okouzlení, etc.) as labelled
+  chips or icon badges on the character sheet, not just in the log. Clicking a
+  chip should show the condition's description (from SRD #21 — Conditions).
+  `apps/web/src/panels/SheetPanel.tsx`.
+- **#35 — Campaign management screen.** Allow players/DM to list saved
+  campaigns, delete one, browse its vault files (read-only tree view), and
+  export the campaign folder as a `.zip`. New route/modal in the web app; server
+  endpoints: `GET /api/campaigns`, `DELETE /api/campaigns/:id`,
+  `GET /api/campaigns/:id/export`. Vault is on disk in the configured path.
+- **#36 — Favicon.** The browser tab shows the generic globe icon. Add a
+  thematic favicon (D20 or torch/skull SVG) at `apps/web/public/favicon.ico`
+  (and `favicon.svg` for modern browsers). Reference in `index.html`.
+- **#37 — AI-generated campaign map.** When a campaign is created or when the DM
+  first describes the world, optionally generate a rough overworld map image via
+  the image-generation endpoint and store it as the campaign's base map. This is
+  a stretch goal — scope it so the campaign still works without the image if
+  generation fails or the key is absent. Wire to the existing image-generation
+  path; store result in the vault alongside other campaign assets.
 
 ---
 
