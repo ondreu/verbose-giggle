@@ -229,12 +229,11 @@ on old code and items **#15, #17, #18** are likely already resolved by updating.
   progressively. This also makes long responses feel faster. Server: switch the
   Claude call to streaming mode; client: append tokens to the chat line as they
   arrive. `apps/server/src/llm/`, `apps/web/src/store/store.ts`.
-- **#33 — Ability-check chips in chat: larger and with dice animation.** Inline
-  roll results (e.g. "d20: 14 +3 = 17 vs DC 10 → úspěch") should be visually
-  prominent — bigger badge, distinct colour — and show a brief CSS dice-spin
-  animation on arrival (similar to the existing dice log animation). Coordinate
-  with the existing dice animation work in `apps/web/src/components/DiceRoll.tsx`
-  or equivalent.
+- **[x] #33 — Ability-check chips in chat: larger and with dice animation.**
+  Done. The inline roll cards (`RollLine` in `apps/web/src/panels/ChatPanel.tsx`)
+  are now bigger and bolder — a 2px faction-coloured border with a soft tint, a
+  larger d20 in a tinted ring that spins in via the existing `dice-rolling`
+  keyframes, plus a `log-enter` pop on arrival and an emphasized outcome word.
 - **[x] #34 — Character condition/status indicator on the sheet.** Done. The
   sheet's condition chips are now tappable: clicking one expands its Czech rules
   description (and the text is also a hover tooltip). Descriptions live in

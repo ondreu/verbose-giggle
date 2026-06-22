@@ -189,15 +189,15 @@ export function ChatPanel() {
   );
 }
 
-// Per-kind accent for inline roll cards.
-const ROLL_STYLE: Record<string, { border: string; text: string }> = {
-  attack: { border: "border-gold/50", text: "text-gold" },
-  damage: { border: "border-blood/50", text: "text-blood" },
-  spell: { border: "border-arcane/50", text: "text-arcane" },
-  save: { border: "border-steel/50", text: "text-steel" },
-  check: { border: "border-arcane/40", text: "text-arcane" },
-  "death-save": { border: "border-blood/50", text: "text-blood" },
-  initiative: { border: "border-bone/40", text: "text-bone" },
+// Per-kind accent for inline roll cards (#33): border, text, and a soft tint.
+const ROLL_STYLE: Record<string, { border: string; text: string; bg: string }> = {
+  attack: { border: "border-gold/60", text: "text-gold", bg: "bg-gold/10" },
+  damage: { border: "border-blood/60", text: "text-blood", bg: "bg-blood/10" },
+  spell: { border: "border-arcane/60", text: "text-arcane", bg: "bg-arcane/10" },
+  save: { border: "border-steel/60", text: "text-steel", bg: "bg-steel/10" },
+  check: { border: "border-arcane/50", text: "text-arcane", bg: "bg-arcane/10" },
+  "death-save": { border: "border-blood/60", text: "text-blood", bg: "bg-blood/10" },
+  initiative: { border: "border-bone/50", text: "text-bone", bg: "bg-bone/10" },
 };
 
 /** Highlight the headline number/outcome so a roll reads at a glance. */
@@ -213,15 +213,20 @@ function emphasize(text: string) {
   );
 }
 
-/** An animated dice-roll card shown inline in the narration stream (#dice). */
+/** A prominent animated dice-roll card shown inline in the narration (#33). */
 function RollLine({ kind, text }: { kind?: string; text: string }) {
-  const style = (kind && ROLL_STYLE[kind]) || { border: "border-surface2", text: "text-subtext1" };
+  const style =
+    (kind && ROLL_STYLE[kind]) || { border: "border-surface2", text: "text-subtext1", bg: "bg-bg-mantle/50" };
   return (
     <div
-      className={`mb-2.5 flex items-center gap-2 rounded-sm border ${style.border} bg-bg-mantle/50 px-2.5 py-1.5`}
+      className={`log-enter mb-3 flex items-center gap-3 rounded-md border-2 ${style.border} ${style.bg} px-3 py-2.5 shadow-sm`}
     >
-      <Icon name="d20" size={18} className={`dice-rolling shrink-0 ${style.text}`} />
-      <span className={`font-log text-[12.5px] leading-snug ${style.text}`}>{emphasize(text)}</span>
+      <span
+        className={`grid h-9 w-9 shrink-0 place-items-center rounded-full border ${style.border} ${style.bg}`}
+      >
+        <Icon name="d20" size={24} className={`dice-rolling ${style.text}`} />
+      </span>
+      <span className={`font-log text-sm font-medium leading-snug ${style.text}`}>{emphasize(text)}</span>
     </div>
   );
 }
