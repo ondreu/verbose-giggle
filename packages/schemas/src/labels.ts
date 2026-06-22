@@ -55,6 +55,28 @@ export const AOE_SHAPE_CS: Record<string, string> = {
   line: "čára",
 };
 
+/** SRD skill ids → Czech labels. Keep in sync with SKILL_ABILITY in the engine. */
+export const SKILL_CS: Record<string, string> = {
+  athletics: "atletika",
+  acrobatics: "akrobacie",
+  "sleight-of-hand": "obratnost rukou",
+  stealth: "nenápadnost",
+  arcana: "magie",
+  history: "historie",
+  investigation: "pátrání",
+  nature: "příroda",
+  religion: "náboženství",
+  "animal-handling": "zacházení se zvířaty",
+  insight: "vhled",
+  medicine: "léčitelství",
+  perception: "vnímání",
+  survival: "přežití",
+  deception: "klamání",
+  intimidation: "zastrašování",
+  performance: "vystupování",
+  persuasion: "přesvědčování",
+};
+
 /** Translate a possibly-unknown key, falling back to the original string. */
 export function csDamage(type?: string): string {
   if (!type) return "";
@@ -68,4 +90,7 @@ export function csAbility(k: string): string {
 }
 export function csAoe(shape: string): string {
   return AOE_SHAPE_CS[shape] ?? shape;
+}
+export function csSkill(skill: string): string {
+  return SKILL_CS[skill] ?? skill;
 }

@@ -1,4 +1,4 @@
-import { csAbility, type AbilityKey } from "@adm/schemas";
+import { csAbility, csSkill, type AbilityKey } from "@adm/schemas";
 import { rollD20 } from "./dice.js";
 import { checkMods, combineAdv, saveMods, type Advantage } from "./conditions.js";
 import { abilityMod, getActor, log, SKILL_ABILITY, type GameState } from "./state.js";
@@ -27,7 +27,7 @@ export function abilityCheck(
   const adv = combineAdv([args.advantage ?? "none", checkMods(actor).advantage]);
   const r = rollD20(state.rng, modifier, adv);
   const success = r.total >= args.dc;
-  const label = args.skill ? `zkouška ${args.skill}` : `zkouška ${csAbility(args.ability)}`;
+  const label = args.skill ? `zkouška ${csSkill(args.skill)}` : `zkouška ${csAbility(args.ability)}`;
   const detail = `${label}: ${r.detail}${proficient ? " (zdatnost)" : ""} vs DC ${args.dc} → ${success ? "úspěch" : "neúspěch"}`;
   log(state, {
     kind: "check",
