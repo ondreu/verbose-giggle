@@ -3,6 +3,7 @@ import path from "node:path";
 import type { FastifyInstance } from "fastify";
 import { LlmClient, type Llm } from "../llm/client.js";
 import { MockLlmClient } from "../llm/mock.js";
+import { ImageClient, buildPrompt, type ImageSubject } from "../llm/image.js";
 import { resolveAiTurns, runRecap, runTurn } from "../session/loop.js";
 import { startEncounter } from "../session/encounter.js";
 import type { EventBus } from "../session/events.js";
@@ -181,6 +182,31 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
       unsubscribe();
     });
   });
+
+  /** On-demand image generation (portrait / location / scene atmosphere). */
+  app.post<{ Body: { subject: ImageSubject; id?: string } }>(
+    "/api/image",
+    async (req, reply) => {
+      if (!ctx.config.image)
+        return reply.code(503).send({ error: "Generování obrázků není nakonfigurováno (IMAGE_BASE_URL chybí)" });
+      const { subject, id } = req.body ?? {};
+      if (!subject) return reply.code(400).send({ error: "Chybí subject" });
+      try {
+        const prompt = buildPrompt(
+          subject,
+          ctx.manager.campaign.actors,
+          ctx.manager.campaign.locations,
+          ctx.manager.session,
+          id,
+        );
+        const client = new ImageClient(ctx.config.image);
+        const result = await client.generate(prompt);
+        return result;
+      } catch (err) {
+        return reply.code(500).send({ error: err instanceof Error ? err.message : String(err) });
+      }
+    },
+  );
 
   /** TTS proxy to Piper (§11). Returns audio/wav. */
   app.post<{ Body: { text: string } }>("/api/tts", async (req, reply) => {

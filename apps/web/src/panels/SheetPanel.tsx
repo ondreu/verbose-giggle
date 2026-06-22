@@ -2,6 +2,7 @@ import { csCondition } from "@adm/schemas";
 import { useGame } from "../store/store";
 import { Icon } from "../components/Icon";
 
+
 const mod = (score: number) => Math.floor((score - 10) / 2);
 const fmt = (m: number) => (m >= 0 ? `+${m}` : `${m}`);
 
@@ -19,6 +20,8 @@ export function SheetPanel() {
   const session = useGame((s) => s.session);
   const actors = useGame((s) => s.actors);
   const sendCommand = useGame((s) => s.sendCommand);
+  const generateImage = useGame((s) => s.generateImage);
+  const imageLoading = useGame((s) => s.imageLoading);
   const activeId = session?.active_player ?? null;
   const actor = activeId ? actors[activeId] : null;
 
@@ -41,9 +44,20 @@ export function SheetPanel() {
     <section className="parchment flex flex-col p-4 font-body">
       <div className="flex items-baseline justify-between border-b border-ink/20 pb-1">
         <h2 className="font-display text-xl">{actor.name}</h2>
-        <span className="text-xs uppercase tracking-wider text-ink/70">
-          {actor.race} {actor.class} · úr. {actor.level}
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="text-xs uppercase tracking-wider text-ink/70">
+            {actor.race} {actor.class} · úr. {actor.level}
+          </span>
+          <button
+            className="flex items-center gap-0.5 font-log text-[10px] text-ink/50 hover:text-ink disabled:opacity-40"
+            onClick={() => void generateImage("character", actor.id, `Portrét — ${actor.name}`)}
+            disabled={imageLoading}
+            title="Vygenerovat portrét postavy"
+          >
+            <Icon name="scroll" size={11} />
+            portrét
+          </button>
+        </div>
       </div>
 
       {/* HP / AC / Speed */}

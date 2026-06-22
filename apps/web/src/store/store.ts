@@ -12,6 +12,14 @@ interface Cell {
   y: number;
 }
 
+export type ImageSubject = "character" | "location" | "scene";
+export interface GeneratedImage {
+  url: string;
+  prompt: string;
+  subject: ImageSubject;
+  label: string;
+}
+
 interface GameStore {
   connected: boolean;
   busy: boolean;
@@ -27,6 +35,9 @@ interface GameStore {
   ttsEnabled: boolean;
   reachable: Cell[];
   aoeCells: Cell[];
+  lastImage: GeneratedImage | null;
+  imageLoading: boolean;
+  imageError: string | null;
 
   hydrate: () => Promise<void>;
   connect: () => void;
@@ -44,6 +55,8 @@ interface GameStore {
   recap: () => Promise<void>;
   fetchLog: () => Promise<string>;
   toggleTts: () => void;
+  generateImage: (subject: ImageSubject, id?: string, label?: string) => Promise<void>;
+  closeImage: () => void;
 }
 
 let lineSeq = 0;
@@ -63,6 +76,9 @@ export const useGame = create<GameStore>((set, get) => ({
   ttsEnabled: false,
   reachable: [],
   aoeCells: [],
+  lastImage: null,
+  imageLoading: false,
+  imageError: null,
 
   hydrate: async () => {
     const res = await fetch("/api/state");
@@ -216,6 +232,30 @@ export const useGame = create<GameStore>((set, get) => ({
   },
 
   toggleTts: () => set((s) => ({ ttsEnabled: !s.ttsEnabled })),
+
+  generateImage: async (subject, id, label) => {
+    set({ imageLoading: true, imageError: null, lastImage: null });
+    try {
+      const res = await fetch("/api/image", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ subject, id }),
+      });
+      const data = await res.json() as { url?: string; prompt?: string; error?: string };
+      if (!res.ok || data.error) {
+        set({ imageError: data.error ?? `Chyba ${res.status}`, imageLoading: false });
+        return;
+      }
+      set({
+        lastImage: { url: data.url!, prompt: data.prompt!, subject, label: label ?? subject },
+        imageLoading: false,
+      });
+    } catch (err) {
+      set({ imageError: err instanceof Error ? err.message : String(err), imageLoading: false });
+    }
+  },
+
+  closeImage: () => set({ lastImage: null, imageError: null }),
 }));
 
 async function speak(text: string): Promise<void> {
