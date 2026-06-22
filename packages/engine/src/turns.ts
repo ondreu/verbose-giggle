@@ -55,7 +55,7 @@ export function startCombat(
   args: {
     encounter?: string;
     participants: string[];
-    grid?: { w: number; h: number; cell_ft: number };
+    grid?: { w: number; h: number; cell_ft: number; shape?: "square" | "hex" };
     /** Optional initial token placement, applied to actor positions. */
     positions?: Record<string, { x: number; y: number }>;
     /** Optional static terrain for the encounter grid. */
@@ -71,7 +71,12 @@ export function startCombat(
   }
   // Anyone still unplaced gets a sensible default spot so the map isn't empty.
   // A roomier default board makes positioning feel tactical (#39).
-  const grid = args.grid ?? { w: 16, h: 12, cell_ft: 5 };
+  const grid = {
+    w: args.grid?.w ?? 16,
+    h: args.grid?.h ?? 12,
+    cell_ft: args.grid?.cell_ft ?? 5,
+    shape: args.grid?.shape ?? ("square" as const),
+  };
   autoPlaceParticipants(state, args.participants, grid);
 
   const rolls = args.participants.map((id) => {

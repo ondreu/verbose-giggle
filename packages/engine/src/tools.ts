@@ -301,7 +301,12 @@ export const TOOLS: ToolDef[] = [
       encounter: z.string().optional(),
       participants: z.array(z.string()).min(1),
       grid: z
-        .object({ w: z.number().int(), h: z.number().int(), cell_ft: z.number().int() })
+        .object({
+          w: z.number().int(),
+          h: z.number().int(),
+          cell_ft: z.number().int(),
+          shape: z.enum(["square", "hex"]).optional(),
+        })
         .optional(),
       positions: z
         .record(z.string(), z.object({ x: z.number().int(), y: z.number().int() }))

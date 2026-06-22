@@ -2,7 +2,7 @@ import type { Actor, ActiveCondition, ConditionName, DamageType } from "@adm/sch
 import { roll, rollD20 } from "./dice.js";
 import { savingThrow } from "./checks.js";
 import { attackMods, combineAdv, type Advantage } from "./conditions.js";
-import { coverBetween, distanceFt } from "./grid.js";
+import { coverBetween, gridDistanceFt } from "./grid.js";
 import { removeFromCombat } from "./turns.js";
 import { csCondition, csDamage } from "@adm/schemas";
 import { abilityMod, actorAc, getActor, log, type GameState } from "./state.js";
@@ -206,7 +206,7 @@ export function attack(
   const ranged = !!weaponEq?.range_ft || (weaponEq?.properties?.includes("ammunition") ?? false);
   const adjacent =
     combat && from && to
-      ? distanceFt(from, to, combat.grid.cell_ft, state.variant.diagonals) <= 5
+      ? gridDistanceFt(from, to, combat.grid.cell_ft, combat.grid.shape, state.variant.diagonals) <= 5
       : true;
   const cmods = attackMods(attacker, target, { ranged, adjacent });
   if (cmods.blocked) {

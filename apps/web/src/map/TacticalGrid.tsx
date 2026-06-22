@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import type { Actor, CombatState } from "@adm/schemas";
 import { useGame } from "../store/store";
 import { Icon } from "../components/Icon";
 
@@ -65,6 +66,7 @@ export function TacticalGrid({ embedded = false }: { embedded?: boolean }) {
   }
 
   const { w, h } = combat.grid;
+  const hex = combat.grid.shape === "hex";
   const activeId = combat.order[combat.turn_index]?.actor;
   // Authored battle-map backdrop for this encounter, if any (§10). Served
   // path-confined via /api/asset; a missing file simply renders nothing.
@@ -210,6 +212,17 @@ export function TacticalGrid({ embedded = false }: { embedded?: boolean }) {
         style={{ cursor: panMode ? "grab" : "default" }}
         onPointerDown={startPan}
       >
+        {hex ? (
+          <HexBoard
+            combat={combat}
+            actors={actors}
+            reachable={reachable}
+            aoeCells={aoeCells}
+            activeId={activeId}
+            zoom={zoom}
+            onCell={handleCell}
+          />
+        ) : (
         <svg
           width={w * CELL * zoom}
           height={h * CELL * zoom}
@@ -404,6 +417,7 @@ export function TacticalGrid({ embedded = false }: { embedded?: boolean }) {
             );
           })}
         </svg>
+        )}
       </div>
     </div>
   );
@@ -417,5 +431,123 @@ export function TacticalGrid({ embedded = false }: { embedded?: boolean }) {
       </header>
       {body}
     </section>
+  );
+}
+
+// --- Hex board (odd-r, pointy-top) renderer (#6b) --------------------------
+const HSIZE = CELL / Math.sqrt(3); // hex "radius"; pointy-top width ≈ CELL
+const HEX_TERRAIN_FILL: Record<string, string> = {
+  wall: "#4a423a",
+  difficult: "rgba(74,143,123,0.30)",
+  hazard: "rgba(155,34,38,0.35)",
+  "cover-half": "rgba(90,122,153,0.30)",
+  "cover-three-quarter": "rgba(90,122,153,0.48)",
+};
+
+function hexCenter(x: number, y: number): { cx: number; cy: number } {
+  return { cx: CELL * (x + 0.5 + 0.5 * (y & 1)), cy: 1.5 * HSIZE * y + HSIZE };
+}
+function hexPoints(cx: number, cy: number, r = HSIZE): string {
+  const p: string[] = [];
+  for (let i = 0; i < 6; i++) {
+    const a = (Math.PI / 180) * (60 * i - 90); // pointy-top
+    p.push(`${(cx + r * Math.cos(a)).toFixed(1)},${(cy + r * Math.sin(a)).toFixed(1)}`);
+  }
+  return p.join(" ");
+}
+
+function HexBoard({
+  combat,
+  actors,
+  reachable,
+  aoeCells,
+  activeId,
+  zoom,
+  onCell,
+}: {
+  combat: CombatState;
+  actors: Record<string, Actor>;
+  reachable: { x: number; y: number }[];
+  aoeCells: { x: number; y: number }[];
+  activeId?: string;
+  zoom: number;
+  onCell: (x: number, y: number) => void;
+}) {
+  const { w, h } = combat.grid;
+  const pxW = CELL * (w + 0.5);
+  const pxH = 1.5 * HSIZE * (h - 1) + 2 * HSIZE;
+  const terrain = new Map(combat.terrain.map((t) => [`${t.x},${t.y}`, t.kind]));
+  const reach = new Set(reachable.map((c) => `${c.x},${c.y}`));
+  const aoe = new Set(aoeCells.map((c) => `${c.x},${c.y}`));
+  const cells: { x: number; y: number }[] = [];
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) cells.push({ x, y });
+
+  return (
+    <svg
+      width={pxW * zoom}
+      height={pxH * zoom}
+      viewBox={`0 0 ${pxW} ${pxH}`}
+      className="mx-auto block"
+      style={{ background: "var(--bg-crust)" }}
+    >
+      {/* Floor + static terrain */}
+      {cells.map(({ x, y }) => {
+        const { cx, cy } = hexCenter(x, y);
+        const k = `${x},${y}`;
+        const terr = terrain.get(k);
+        return (
+          <polygon
+            key={`f${k}`}
+            points={hexPoints(cx, cy)}
+            fill={terr ? (HEX_TERRAIN_FILL[terr] ?? "rgba(74,66,58,0.5)") : "#1f1b17"}
+            stroke="rgba(216,205,180,0.10)"
+            strokeWidth={1}
+          />
+        );
+      })}
+      {/* Reachable cells */}
+      {cells
+        .filter((c) => reach.has(`${c.x},${c.y}`))
+        .map(({ x, y }) => {
+          const { cx, cy } = hexCenter(x, y);
+          return <polygon key={`r${x}-${y}`} points={hexPoints(cx, cy, HSIZE - 2)} fill="var(--arcane)" opacity={0.14} pointerEvents="none" />;
+        })}
+      {/* AoE coverage */}
+      {cells
+        .filter((c) => aoe.has(`${c.x},${c.y}`))
+        .map(({ x, y }) => {
+          const { cx, cy } = hexCenter(x, y);
+          return <polygon key={`a${x}-${y}`} points={hexPoints(cx, cy)} fill="var(--ember)" opacity={0.22} pointerEvents="none" />;
+        })}
+      {/* Clickable hexes */}
+      {cells.map(({ x, y }) => {
+        const { cx, cy } = hexCenter(x, y);
+        return (
+          <polygon
+            key={`c${x}-${y}`}
+            points={hexPoints(cx, cy)}
+            fill="transparent"
+            className="cursor-pointer hover:fill-[rgba(201,162,39,0.10)]"
+            onClick={() => onCell(x, y)}
+          />
+        );
+      })}
+      {/* Tokens */}
+      {Object.entries(combat.tokens).map(([id, pos]) => {
+        const a = actors[id];
+        const { cx, cy } = hexCenter(pos.x, pos.y);
+        const active = id === activeId;
+        const dead = (a?.hp.current ?? 1) <= 0;
+        return (
+          <g key={id} opacity={dead ? 0.35 : 1}>
+            {active && <circle cx={cx} cy={cy} r={HSIZE * 0.82} fill="none" stroke="var(--arcane)" strokeWidth={2} />}
+            <circle cx={cx} cy={cy} r={HSIZE * 0.66} fill={FACTION_FILL[a?.faction ?? "neutral"]} stroke="var(--bg-crust)" strokeWidth={2} />
+            <text x={cx} y={cy + 4} textAnchor="middle" fontFamily="Cinzel, serif" fontSize={13} fill="var(--bg-crust)">
+              {(a?.name ?? id).slice(0, 2).toUpperCase()}
+            </text>
+          </g>
+        );
+      })}
+    </svg>
   );
 }

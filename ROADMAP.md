@@ -192,9 +192,16 @@ on old code and items **#15, #17, #18** are likely already resolved by updating.
   draggable splitters between chat/map and map/rail; widths are stored as
   fractions in `localStorage` (so they survive window resizing) and clamped to
   sane minimums. Below `lg` the columns stack as before (no splitters).
-- **#6b — Hex grid for the tactical map.** Switch the square grid to hexagons
-  (render + distance/range math). Engine work in `packages/engine/src/grid.ts`
-  plus `TacticalGrid.tsx`. Schedule after #6 (maps must render first).
+- **[x] #6b — Hex grid for the tactical map.** Done (opt-in via `grid.shape`).
+  Engine: odd-r hex coords with `hexDistanceFt`/`hexNeighbors`, a shape-aware
+  `gridDistanceFt`, and `move`/`reachableCells` that walk 6 neighbours on hex
+  grids; attack adjacency and the AoE sphere honour hex distance too
+  (`packages/engine/src/grid.ts`). Schema gained `combat.grid.shape`
+  (`square`|`hex`, default square) and `start_combat` accepts it. Render:
+  `TacticalGrid` draws a pointy-top hex board (floor/terrain/reachable/AoE/
+  tokens/click) when the grid is hex. Square remains the default; covered by
+  engine tests. (A campaign/encounter-level toggle to choose hex is a small
+  follow-up.)
 - **[x] #39 — More granular / detailed tactical battle map.** Done (core). The
   default board is roomier (16×12 in `start_combat`), and `TacticalGrid` gained
   **zoom** (50–250 %, via a crisp SVG `viewBox` so it stays sharp) and a **hand

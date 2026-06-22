@@ -44,6 +44,8 @@ export const CombatState = z.object({
     w: z.number().int().positive(),
     h: z.number().int().positive(),
     cell_ft: z.number().int().positive(),
+    /** Grid topology: square (8-neighbour) or hex (odd-r, 6-neighbour) (#6b). */
+    shape: z.enum(["square", "hex"]).default("square"),
   }),
   tokens: z.record(z.string(), Position).default({}),
   /** Static terrain for this encounter (walls, difficult, hazards, cover). */

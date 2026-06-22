@@ -26,6 +26,52 @@ export function distanceFt(
   return (diagCost + straights) * cellFt;
 }
 
+export type GridShape = "square" | "hex";
+
+// --- Hex grid (odd-r offset, pointy-top) -----------------------------------
+// The stored (x,y) are offset coords; we convert to cube coords for distance.
+function oddrToCube(x: number, y: number): { q: number; r: number; s: number } {
+  const q = x - (y - (y & 1)) / 2;
+  const r = y;
+  return { q, r, s: -q - r };
+}
+
+/** Hex distance in feet (odd-r offset → cube). Each step is one cell. */
+export function hexDistanceFt(a: Position, b: Position, cellFt: number): number {
+  const ca = oddrToCube(a.x, a.y);
+  const cb = oddrToCube(b.x, b.y);
+  const steps = (Math.abs(ca.q - cb.q) + Math.abs(ca.r - cb.r) + Math.abs(ca.s - cb.s)) / 2;
+  return steps * cellFt;
+}
+
+// The eight square-grid steps (orthogonal + diagonal).
+const EIGHT_DIRS: [number, number][] = [
+  [-1, -1], [0, -1], [1, -1], [-1, 0], [1, 0], [-1, 1], [0, 1], [1, 1],
+];
+
+// Odd-r neighbour offsets, indexed by row parity (even rows / odd rows).
+const ODDR_DIRS: [number, number][][] = [
+  [[+1, 0], [0, -1], [-1, -1], [-1, 0], [-1, +1], [0, +1]], // even row
+  [[+1, 0], [+1, -1], [0, -1], [-1, 0], [0, +1], [+1, +1]], // odd row
+];
+
+/** The six neighbouring cells of a hex (odd-r), before bounds checking. */
+export function hexNeighbors(x: number, y: number): Position[] {
+  const dirs = ODDR_DIRS[y & 1]!;
+  return dirs.map(([dx, dy]) => ({ x: x + dx, y: y + dy }));
+}
+
+/** Distance between two cells honouring the grid topology (square or hex). */
+export function gridDistanceFt(
+  a: Position,
+  b: Position,
+  cellFt: number,
+  shape: GridShape = "square",
+  rule: DiagonalRule = "5-5-5",
+): number {
+  return shape === "hex" ? hexDistanceFt(a, b, cellFt) : distanceFt(a, b, cellFt, rule);
+}
+
 interface MoveCostMap {
   blocked: Set<string>; // walls + occupied
   difficult: Set<string>; // costs double
@@ -33,6 +79,16 @@ interface MoveCostMap {
 
 function key(x: number, y: number): string {
   return `${x},${y}`;
+}
+
+/** Candidate neighbour cells for BFS, per grid topology. */
+function neighborCells(p: Position, hex: boolean): { x: number; y: number; diagonal: boolean }[] {
+  if (hex) return hexNeighbors(p.x, p.y).map((n) => ({ x: n.x, y: n.y, diagonal: false }));
+  return EIGHT_DIRS.map(([dx, dy]) => ({
+    x: p.x + dx,
+    y: p.y + dy,
+    diagonal: dx !== 0 && dy !== 0,
+  }));
 }
 
 function buildCostMap(state: GameState, mover: string): MoveCostMap {
@@ -85,8 +141,9 @@ export function move(state: GameState, args: { actor: string; to: Position }): M
 
   const budget = c.budget?.movement ?? actor.speed;
   const rule = state.variant.diagonals;
+  const hex = c.grid.shape === "hex";
 
-  // Dijkstra: cost in feet, diagonal stepping allowed.
+  // Dijkstra: cost in feet, neighbours per grid topology (8-dir square / 6 hex).
   const dist = new Map<string, number>();
   const prev = new Map<string, Position>();
   const start = key(from.x, from.y);
@@ -99,31 +156,26 @@ export function move(state: GameState, args: { actor: string; to: Position }): M
     queue.sort((a, b) => a.cost - b.cost);
     const cur = queue.shift()!;
     if (cur.cost > (dist.get(key(cur.pos.x, cur.pos.y)) ?? Infinity)) continue;
-    for (let dx = -1; dx <= 1; dx++) {
-      for (let dy = -1; dy <= 1; dy++) {
-        if (dx === 0 && dy === 0) continue;
-        const nx = cur.pos.x + dx;
-        const ny = cur.pos.y + dy;
-        if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
-        const nk = key(nx, ny);
-        if (blocked.has(nk)) continue;
-        const diagonal = dx !== 0 && dy !== 0;
-        let stepFt = cell_ft;
-        if (diagonal && rule === "5-10-5") {
-          stepFt = cur.diagParity % 2 === 1 ? cell_ft * 2 : cell_ft;
-        }
-        if (difficult.has(nk)) stepFt *= 2;
-        const nextCost = cur.cost + stepFt;
-        if (nextCost > budget) continue;
-        if (nextCost < (dist.get(nk) ?? Infinity)) {
-          dist.set(nk, nextCost);
-          prev.set(nk, cur.pos);
-          queue.push({
-            pos: { x: nx, y: ny },
-            cost: nextCost,
-            diagParity: cur.diagParity + (diagonal ? 1 : 0),
-          });
-        }
+    for (const cand of neighborCells(cur.pos, hex)) {
+      const { x: nx, y: ny, diagonal } = cand;
+      if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+      const nk = key(nx, ny);
+      if (blocked.has(nk)) continue;
+      let stepFt = cell_ft;
+      if (!hex && diagonal && rule === "5-10-5") {
+        stepFt = cur.diagParity % 2 === 1 ? cell_ft * 2 : cell_ft;
+      }
+      if (difficult.has(nk)) stepFt *= 2;
+      const nextCost = cur.cost + stepFt;
+      if (nextCost > budget) continue;
+      if (nextCost < (dist.get(nk) ?? Infinity)) {
+        dist.set(nk, nextCost);
+        prev.set(nk, cur.pos);
+        queue.push({
+          pos: { x: nx, y: ny },
+          cost: nextCost,
+          diagParity: cur.diagParity + (diagonal ? 1 : 0),
+        });
       }
     }
   }
@@ -175,6 +227,7 @@ export function reachableCells(
   const { blocked, difficult } = buildCostMap(state, args.actor);
   const budget = c.budget?.movement ?? actor.speed;
   const rule = state.variant.diagonals;
+  const hex = c.grid.shape === "hex";
 
   const dist = new Map<string, number>();
   dist.set(key(from.x, from.y), 0);
@@ -187,25 +240,20 @@ export function reachableCells(
     queue.sort((a, b) => a.cost - b.cost);
     const cur = queue.shift()!;
     if (cur.cost > (dist.get(key(cur.pos.x, cur.pos.y)) ?? Infinity)) continue;
-    for (let dx = -1; dx <= 1; dx++) {
-      for (let dy = -1; dy <= 1; dy++) {
-        if (dx === 0 && dy === 0) continue;
-        const nx = cur.pos.x + dx;
-        const ny = cur.pos.y + dy;
-        if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
-        const nk = key(nx, ny);
-        if (blocked.has(nk)) continue;
-        const diagonal = dx !== 0 && dy !== 0;
-        let stepFt = cell_ft;
-        if (diagonal && rule === "5-10-5") stepFt = cur.diagParity % 2 === 1 ? cell_ft * 2 : cell_ft;
-        if (difficult.has(nk)) stepFt *= 2;
-        const nextCost = cur.cost + stepFt;
-        if (nextCost > budget) continue;
-        if (nextCost < (dist.get(nk) ?? Infinity)) {
-          dist.set(nk, nextCost);
-          cells.push({ x: nx, y: ny });
-          queue.push({ pos: { x: nx, y: ny }, cost: nextCost, diagParity: cur.diagParity + (diagonal ? 1 : 0) });
-        }
+    for (const cand of neighborCells(cur.pos, hex)) {
+      const { x: nx, y: ny, diagonal } = cand;
+      if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+      const nk = key(nx, ny);
+      if (blocked.has(nk)) continue;
+      let stepFt = cell_ft;
+      if (!hex && diagonal && rule === "5-10-5") stepFt = cur.diagParity % 2 === 1 ? cell_ft * 2 : cell_ft;
+      if (difficult.has(nk)) stepFt *= 2;
+      const nextCost = cur.cost + stepFt;
+      if (nextCost > budget) continue;
+      if (nextCost < (dist.get(nk) ?? Infinity)) {
+        dist.set(nk, nextCost);
+        cells.push({ x: nx, y: ny });
+        queue.push({ pos: { x: nx, y: ny }, cost: nextCost, diagParity: cur.diagParity + (diagonal ? 1 : 0) });
       }
     }
   }
@@ -295,17 +343,21 @@ export function aoe(
   const cellFt = c?.grid.cell_ft ?? 5;
   const w = c?.grid.w ?? 30;
   const h = c?.grid.h ?? 30;
+  const hex = c?.grid.shape === "hex";
   const radius = Math.round(args.size / cellFt);
   const cells: Position[] = [];
 
   const within = (x: number, y: number) => x >= 0 && y >= 0 && x < w && y < h;
 
   if (args.shape === "sphere" || args.shape === "cube") {
-    for (let x = args.origin.x - radius; x <= args.origin.x + radius; x++) {
+    for (let x = args.origin.x - radius - 1; x <= args.origin.x + radius + 1; x++) {
       for (let y = args.origin.y - radius; y <= args.origin.y + radius; y++) {
         if (!within(x, y)) continue;
         if (args.shape === "cube") {
           cells.push({ x, y });
+        } else if (hex) {
+          // True hex radius (in cells) for a circular burst.
+          if (hexDistanceFt({ x, y }, args.origin, 1) <= radius) cells.push({ x, y });
         } else {
           const cheb = Math.max(Math.abs(x - args.origin.x), Math.abs(y - args.origin.y));
           if (cheb <= radius) cells.push({ x, y });

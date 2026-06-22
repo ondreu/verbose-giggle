@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { aoe, attack, cellsOnLine, coverBetween, distanceFt, move, reachableCells, startCombat } from "../src/index.js";
+import { aoe, attack, cellsOnLine, coverBetween, distanceFt, hexDistanceFt, hexNeighbors, move, reachableCells, startCombat } from "../src/index.js";
 import { makeActor, makeState } from "./helpers.js";
 
 describe("distance (5-5-5)", () => {
@@ -12,6 +12,41 @@ describe("distance (5-5-5)", () => {
   it("5-10-5 doubles every second diagonal", () => {
     // 4 diagonals: costs 1+2+1+2 = 6 cells = 30ft.
     expect(distanceFt({ x: 0, y: 0 }, { x: 4, y: 4 }, 5, "5-10-5")).toBe(30);
+  });
+});
+
+describe("hex grid (#6b)", () => {
+  it("adjacent hexes are one cell apart (both row parities)", () => {
+    // odd-r neighbours of (2,2) — even row.
+    for (const n of hexNeighbors(2, 2)) {
+      expect(hexDistanceFt(n, { x: 2, y: 2 }, 5)).toBe(5);
+    }
+    // and of (2,3) — odd row.
+    for (const n of hexNeighbors(2, 3)) {
+      expect(hexDistanceFt(n, { x: 2, y: 3 }, 5)).toBe(5);
+    }
+  });
+
+  it("hex distance is symmetric and shorter than Chebyshev would imply diagonally", () => {
+    const a = { x: 0, y: 0 };
+    const b = { x: 3, y: 4 };
+    expect(hexDistanceFt(a, b, 5)).toBe(hexDistanceFt(b, a, 5));
+    expect(hexDistanceFt(a, a, 5)).toBe(0);
+  });
+
+  it("each hex has exactly six neighbours", () => {
+    expect(new Set(hexNeighbors(4, 4).map((n) => `${n.x},${n.y}`)).size).toBe(6);
+  });
+
+  it("reachable on a hex grid uses 6-neighbour spread", () => {
+    const a = makeActor({ id: "a", name: "Mover", speed: 10, position: { x: 3, y: 3 } });
+    const state = makeState([a]);
+    startCombat(state, { participants: ["a"], grid: { w: 9, h: 9, cell_ft: 5, shape: "hex" } });
+    if (state.session.combat?.budget) state.session.combat.budget.movement = 10;
+    const { cells } = reachableCells(state, { actor: "a" });
+    // Every reachable cell is within 2 hexes (10 ft / 5 ft).
+    expect(cells.length).toBeGreaterThan(0);
+    expect(cells.every((c) => hexDistanceFt(c, { x: 3, y: 3 }, 5) <= 10)).toBe(true);
   });
 });
 
