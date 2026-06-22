@@ -5,6 +5,8 @@ interface NarrationLine {
   id: number;
   role: "dm" | "player";
   text: string;
+  /** Display name of the acting character (player lines only); falls back in UI. */
+  actor?: string;
 }
 
 interface Cell {
@@ -138,10 +140,13 @@ export const useGame = create<GameStore>((set, get) => ({
 
   sendAction: async (input: string) => {
     if (!input.trim() || get().busy) return;
+    const { session, actors } = get();
+    const activeId = session?.active_player ?? null;
+    const actorName = activeId ? actors[activeId]?.name : undefined;
     set((s) => ({
       busy: true,
       error: null,
-      narration: [...s.narration, { id: lineSeq++, role: "player", text: input }],
+      narration: [...s.narration, { id: lineSeq++, role: "player", text: input, actor: actorName }],
     }));
     try {
       const res = await fetch("/api/action", {

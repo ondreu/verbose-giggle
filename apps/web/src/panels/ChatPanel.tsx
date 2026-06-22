@@ -98,7 +98,7 @@ export function ChatPanel() {
             ) : (
               <p>
                 <span className="mr-1 font-display text-xs uppercase tracking-wider text-gold">
-                  Hráč ·{" "}
+                  {line.actor ?? "Hráč"} ·{" "}
                 </span>
                 {line.text}
               </p>
