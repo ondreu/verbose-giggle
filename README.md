@@ -159,9 +159,12 @@ These are non-negotiable (spec §2):
 
 ## Roadmap (abridged)
 
+- **Priority fixes (from playtest):** see [`ROADMAP.md`](ROADMAP.md) — the live list of bugs and UX gaps to close next.
 - **v1 — Playable core (hotseat):** vault adapter + schemas; sheet render/edit; engine (dice, checks, saves, attacks, HP, initiative); LLM loop + dice log; Czech narration; AI companions/enemies; basic tactical grid; Piper TTS; Docker deployment.
 - **v2 — Depth:** full spells/conditions/resistances; full tactical grid (terrain, cover, AoE, LoS); overworld map (Leaflet) + point-crawl travel + fog of war.
 - **v3 — Reach:** networked multiplayer; leveling automation; AI-assisted campaign import.
+
+Authoring & deployment how-to (showcase vault, SRD asset database, NAS updating): [`docs/SHOWCASE.md`](docs/SHOWCASE.md).
 
 ## Documentation & licensing
 
