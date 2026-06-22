@@ -66,6 +66,23 @@ services:
       - caddy_data:/data
       - caddy_config:/config
 
+  cloudflared:
+    # Cloudflare Tunnel — public HTTPS without open ports (spec §14.3).
+    # Create a tunnel at https://one.dash.cloudflare.com → Networks → Tunnels,
+    # copy the token, set CLOUDFLARE_TUNNEL_TOKEN in .env, and route the tunnel
+    # to http://app:3000 in the Zero Trust dashboard.
+    # Start with: docker compose --profile cloudflare up -d
+    # When using this you can remove the caddy service (no ports 80/443 needed),
+    # or keep Caddy running for local LAN access alongside the tunnel.
+    profiles: [cloudflare]
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
+    depends_on:
+      - app
+
   watchtower:
     image: containrrr/watchtower
     restart: unless-stopped
