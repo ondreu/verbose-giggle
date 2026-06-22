@@ -140,6 +140,22 @@ describe("LLM turn loop (mocked model)", () => {
     expect(active ? mgr.campaign.actors[active]?.controller : "human").toBe("human");
   });
 
+  it("instantiates an authored encounter with placed tokens and terrain", async () => {
+    const { startEncounter } = await import("../src/session/encounter.js");
+    const mgr = await SessionManager.open(await freshCampaign());
+    const gs = mgr.buildGameState();
+    const res = await startEncounter(mgr, gs, "mill-ambush");
+    expect(res.ok).toBe(true);
+    const combat = mgr.session.combat!;
+    expect(combat).not.toBeNull();
+    // Party placed at party_start; spawns placed at their cells.
+    expect(combat.tokens["thorin"]).toEqual({ x: 2, y: 7 });
+    expect(combat.tokens["goblin-boss"]).toEqual({ x: 7, y: 3 });
+    // Encounter terrain carried into the combat snapshot.
+    expect(combat.terrain.some((t) => t.kind === "wall")).toBe(true);
+    expect(combat.grid.w).toBe(12);
+  });
+
   it("exposes all engine tools to the model", () => {
     const names = toolSpecs().map((t) => t.function.name);
     expect(names).toContain("attack");

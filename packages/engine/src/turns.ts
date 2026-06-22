@@ -14,8 +14,23 @@ export interface StartCombatResult {
 /** Roll initiative for participants and build the turn order (desc, DEX tiebreak). */
 export function startCombat(
   state: GameState,
-  args: { encounter?: string; participants: string[]; grid?: { w: number; h: number; cell_ft: number } },
+  args: {
+    encounter?: string;
+    participants: string[];
+    grid?: { w: number; h: number; cell_ft: number };
+    /** Optional initial token placement, applied to actor positions. */
+    positions?: Record<string, { x: number; y: number }>;
+    /** Optional static terrain for the encounter grid. */
+    terrain?: { x: number; y: number; kind: string }[];
+  },
 ): StartCombatResult {
+  // Place tokens before rolling, so the combat snapshot has positions.
+  if (args.positions) {
+    for (const [id, pos] of Object.entries(args.positions)) {
+      const a = state.actors[id];
+      if (a) a.position = { x: pos.x, y: pos.y };
+    }
+  }
   const rolls = args.participants.map((id) => {
     const actor = getActor(state, id);
     const mod = abilityMod(actor.abilities.dex);
@@ -45,6 +60,7 @@ export function startCombat(
     turn_index: 0,
     grid: args.grid ?? { w: 12, h: 10, cell_ft: 5 },
     tokens,
+    terrain: args.terrain ?? [],
     budget: freshBudget(first.speed),
   };
   state.session.active_player = order[0]!.actor;

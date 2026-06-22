@@ -42,14 +42,10 @@ function buildCostMap(state: GameState, mover: string): MoveCostMap {
     for (const [id, pos] of Object.entries(c.tokens)) {
       if (id !== mover) blocked.add(key(pos.x, pos.y));
     }
-    // Encounter terrain is provided via session combat? We read from actors'
-    // overlay-free terrain map if present on combat (set by server on start).
-    const terrain = (c as unknown as { terrain?: { x: number; y: number; kind: string }[] }).terrain;
-    if (terrain) {
-      for (const t of terrain) {
-        if (t.kind === "wall") blocked.add(key(t.x, t.y));
-        else if (t.kind === "difficult" || t.kind === "hazard") difficult.add(key(t.x, t.y));
-      }
+    // Static encounter terrain (walls block; difficult/hazard cost double).
+    for (const t of c.terrain) {
+      if (t.kind === "wall") blocked.add(key(t.x, t.y));
+      else if (t.kind === "difficult" || t.kind === "hazard") difficult.add(key(t.x, t.y));
     }
   }
   return { blocked, difficult };

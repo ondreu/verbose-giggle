@@ -44,6 +44,10 @@ export const CombatState = z.object({
     cell_ft: z.number().int().positive(),
   }),
   tokens: z.record(z.string(), Position).default({}),
+  /** Static terrain for this encounter (walls, difficult, hazards, cover). */
+  terrain: z
+    .array(z.object({ x: z.number().int(), y: z.number().int(), kind: z.string() }))
+    .default([]),
   /** Action economy budget for the actor whose turn it is. */
   budget: z
     .object({

@@ -4,6 +4,7 @@ import type { FastifyInstance } from "fastify";
 import { LlmClient, type Llm } from "../llm/client.js";
 import { MockLlmClient } from "../llm/mock.js";
 import { resolveAiTurns, runTurn } from "../session/loop.js";
+import { startEncounter } from "../session/encounter.js";
 import type { EventBus } from "../session/events.js";
 import type { SessionManager } from "../session/manager.js";
 import type { Config } from "../config.js";
@@ -55,7 +56,23 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
     session: ctx.manager.session,
     actors: ctx.manager.campaign.actors,
     locations: ctx.manager.campaign.locations,
+    encounters: ctx.manager.campaign.encounters,
   }));
+
+  /** Instantiate an authored encounter into live combat, then auto-resolve AI. */
+  app.post<{ Params: { id: string } }>("/api/encounter/:id", async (req, reply) => {
+    const gs = ctx.manager.buildGameState();
+    const before = ctx.manager.session.log.length;
+    const res = await startEncounter(ctx.manager, gs, req.params.id);
+    if (!res.ok) return reply.code(400).send({ error: res.error });
+    for (const entry of ctx.manager.session.log.slice(before)) {
+      ctx.bus.emit({ type: "log", entry });
+    }
+    await ctx.manager.checkpoint(gs);
+    ctx.bus.emit({ type: "state", state: ctx.manager.session });
+    await resolveAiTurns({ manager: ctx.manager, llm, bus: ctx.bus, gs });
+    return res;
+  });
 
   /** Serve a campaign asset (map images, etc.), path-confined to the campaign. */
   app.get<{ Params: { "*": string } }>("/api/asset/*", async (req, reply) => {

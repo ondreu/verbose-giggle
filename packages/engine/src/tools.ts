@@ -233,6 +233,12 @@ export const TOOLS: ToolDef[] = [
       grid: z
         .object({ w: z.number().int(), h: z.number().int(), cell_ft: z.number().int() })
         .optional(),
+      positions: z
+        .record(z.string(), z.object({ x: z.number().int(), y: z.number().int() }))
+        .optional(),
+      terrain: z
+        .array(z.object({ x: z.number().int(), y: z.number().int(), kind: z.string() }))
+        .optional(),
     }),
     parameters: {
       type: "object",

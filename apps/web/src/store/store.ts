@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { Actor, Campaign, Location, LogEntry, SessionState } from "@adm/schemas";
+import type { Actor, Campaign, Encounter, Location, LogEntry, SessionState } from "@adm/schemas";
 
 interface NarrationLine {
   id: number;
@@ -22,6 +22,7 @@ interface GameStore {
   session: SessionState | null;
   actors: Record<string, Actor>;
   locations: Record<string, Location>;
+  encounters: Record<string, Encounter>;
   narration: NarrationLine[];
   ttsEnabled: boolean;
   reachable: Cell[];
@@ -30,6 +31,7 @@ interface GameStore {
   connect: () => void;
   sendAction: (input: string) => Promise<void>;
   sendCommand: (tool: string, args: unknown) => Promise<void>;
+  startEncounter: (id: string) => Promise<void>;
   fetchReachable: (actor: string) => Promise<void>;
   toggleTts: () => void;
 }
@@ -46,6 +48,7 @@ export const useGame = create<GameStore>((set, get) => ({
   session: null,
   actors: {},
   locations: {},
+  encounters: {},
   narration: [],
   ttsEnabled: false,
   reachable: [],
@@ -62,6 +65,7 @@ export const useGame = create<GameStore>((set, get) => ({
       session: data.session,
       actors: data.actors,
       locations: data.locations ?? {},
+      encounters: data.encounters ?? {},
       ttsEnabled: data.campaign?.tts?.enabled ?? false,
       narration: (data.session?.chat ?? [])
         .filter((m: { role: string }) => m.role === "user" || m.role === "assistant")
@@ -137,6 +141,15 @@ export const useGame = create<GameStore>((set, get) => ({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ tool, args }),
       });
+    } finally {
+      set({ busy: false });
+    }
+  },
+
+  startEncounter: async (id: string) => {
+    set({ busy: true });
+    try {
+      await fetch(`/api/encounter/${encodeURIComponent(id)}`, { method: "POST" });
     } finally {
       set({ busy: false });
     }

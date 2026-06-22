@@ -35,8 +35,42 @@ export function MapPanel() {
       </header>
       <div className="relative min-h-0 flex-1">
         {mode === "tactical" ? <TacticalGrid embedded /> : <OverworldMap />}
+        {mode === "overworld" && !inCombat && <EncounterLauncher />}
       </div>
     </section>
+  );
+}
+
+/** Lists authored encounters at the current location and starts them (§6.3). */
+function EncounterLauncher() {
+  const encounters = useGame((s) => s.encounters);
+  const current = useGame((s) => s.session?.current_location);
+  const busy = useGame((s) => s.busy);
+  const startEncounter = useGame((s) => s.startEncounter);
+
+  const here = Object.values(encounters).filter((e) => !e.location || e.location === current);
+  if (here.length === 0) return null;
+
+  return (
+    <div className="pointer-events-auto absolute bottom-3 left-3 z-[1000] max-w-[16rem] rounded-sm border border-blood/40 bg-bg-crust/85 p-2 backdrop-blur">
+      <div className="mb-1 flex items-center gap-1.5 font-display text-xs uppercase tracking-wider text-blood">
+        <Icon name="skull" size={12} /> Střety zde
+      </div>
+      <ul className="space-y-1">
+        {here.map((e) => (
+          <li key={e.id} className="flex items-center gap-2">
+            <span className="flex-1 truncate font-body text-sm text-text">{e.name}</span>
+            <button
+              className="btn-gold px-2 py-0.5 text-[11px]"
+              disabled={busy}
+              onClick={() => void startEncounter(e.id)}
+            >
+              Začít
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 

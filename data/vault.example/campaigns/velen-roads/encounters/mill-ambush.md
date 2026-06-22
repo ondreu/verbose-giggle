@@ -15,6 +15,7 @@ spawns:
 party_start:
   - { x: 2, y: 7 }
   - { x: 1, y: 8 }
+  - { x: 3, y: 8 }
 ---
 # Ambush
 
