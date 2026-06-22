@@ -194,7 +194,8 @@ on old code and items **#15, #17, #18** are likely already resolved by updating.
   default board is roomier (16×12 in `start_combat`), and `TacticalGrid` gained
   **zoom** (50–250 %, via a crisp SVG `viewBox` so it stays sharp) and a **hand
   tool for drag-panning** the board, plus native scroll. `cell_ft` stays honest
-  for distance math. (Multi-cell Large/Huge footprints left as a follow-up.)
+  for distance math. **Multi-cell creatures** render with an n×n footprint from
+  `actor.size` (Large 2×2, Huge 3×3, Gargantuan 4×4) on the square board.
 - **#5 — Bigger, better showcase vault.** More locations/NPCs/encounters/lore so
   the demo sells the experience. Build guide in `docs/SHOWCASE.md`; the showcase
   vault content can be authored and dropped into `data/vault.example` (or a new

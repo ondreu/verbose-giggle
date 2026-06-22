@@ -6,6 +6,16 @@ import { Icon } from "../components/Icon";
 const ZOOM_MIN = 0.5;
 const ZOOM_MAX = 2.5;
 
+// Creature size → square footprint in cells (#39 multi-cell tokens).
+const SIZE_FOOTPRINT: Record<string, number> = {
+  tiny: 1, small: 1, medium: 1, large: 2, huge: 3, gargantuan: 4,
+};
+function footprint(actor?: unknown): number {
+  const size = (actor as { size?: unknown } | undefined)?.size;
+  const s = typeof size === "string" ? size.toLowerCase() : "";
+  return SIZE_FOOTPRINT[s] ?? 1;
+}
+
 const AOE_SHAPES = [
   { shape: "sphere", label: "Koule", icon: "flame", needsDir: false },
   { shape: "cube", label: "Krychle", icon: "skull", needsDir: false },
@@ -399,8 +409,11 @@ export function TacticalGrid({ embedded = false }: { embedded?: boolean }) {
           {Object.entries(combat.tokens).map(([id, pos]) => {
             const a = actors[id];
             const active = id === activeId;
-            const cx = pos.x * CELL + CELL / 2;
-            const cy = pos.y * CELL + CELL / 2;
+            // Large+ creatures occupy an n×n block anchored at their cell (#39).
+            const fp = footprint(a);
+            const cx = pos.x * CELL + (fp * CELL) / 2;
+            const cy = pos.y * CELL + (fp * CELL) / 2;
+            const tr = (fp * CELL) / 2;
             const dead = (a?.hp.current ?? 1) <= 0;
             return (
               <g
@@ -410,15 +423,15 @@ export function TacticalGrid({ embedded = false }: { embedded?: boolean }) {
                 onClick={targetRequest ? () => pickToken(id) : undefined}
               >
                 {targetRequest && (
-                  <circle cx={cx} cy={cy} r={CELL / 2} fill="var(--gold)" opacity={0.15} />
+                  <circle cx={cx} cy={cy} r={tr} fill="var(--gold)" opacity={0.15} />
                 )}
                 {active && (
-                  <circle cx={cx} cy={cy} r={CELL / 2 - 2} fill="none" stroke="var(--arcane)" strokeWidth={2} />
+                  <circle cx={cx} cy={cy} r={tr - 2} fill="none" stroke="var(--arcane)" strokeWidth={2} />
                 )}
                 <circle
                   cx={cx}
                   cy={cy}
-                  r={CELL / 2 - 6}
+                  r={tr - 6}
                   fill={FACTION_FILL[a?.faction ?? "neutral"]}
                   stroke="var(--bg-crust)"
                   strokeWidth={2}
@@ -428,7 +441,7 @@ export function TacticalGrid({ embedded = false }: { embedded?: boolean }) {
                   y={cy + 4}
                   textAnchor="middle"
                   fontFamily="Cinzel, serif"
-                  fontSize={13}
+                  fontSize={fp > 1 ? 16 : 13}
                   fill="var(--bg-crust)"
                 >
                   {(a?.name ?? id).slice(0, 2).toUpperCase()}
