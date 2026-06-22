@@ -73,16 +73,16 @@ on old code and items **#15, #17, #18** are likely already resolved by updating.
   refuses further input (409), the death flag persists via the session overlay,
   and the web app shows a game-over screen with a load-last-save / main-menu
   prompt (`apps/web/src/components/GameOverModal.tsx`).
-- **#29 — AI validates ability use against the character sheet; HP not updated.**
-  Repro: player said *"použiji lay on hands a vyléčím se"*; the engine ran an
-  ability-check tool (MDR DC 10 → success) and the prose narrated a heal, but
-  the character did not have Lay on Hands in `actor.class_features` and the HP
-  on the sheet stayed unchanged. Two bugs: (a) the tool-dispatch layer must
-  verify the requested ability/spell exists on the actor before calling it —
-  refuse gracefully if not (`packages/engine/src/tools.ts`, prompt guard in
-  `apps/server/src/llm/prompt.ts`); (b) a successful heal tool must write the
-  new HP into session state and the narration must reflect the sheet value, not
-  an invented one. Pair with #8 (spell list) and #12 (determinism).
+- **[x] #29 — AI validates ability use against the character sheet; HP not
+  updated.** Done. (a) `castSpell` now refuses a spell that isn't on a player
+  character's `spells_known` list — no slot spent, refusal logged, monsters
+  bypass (statblock casting) (`packages/engine/src/spells.ts`); the DM prompt
+  gained a "SCHOPNOSTI PODLE LISTU POSTAVY" section instructing the model to
+  decline abilities/spells/features the actor doesn't have and never substitute
+  a fake tool (`apps/server/src/llm/prompt.ts`). (b) confirmed the `heal` tool
+  writes HP into session state via the overlay, and the prompt now forbids
+  narrating any HP change without first calling heal/cast_spell. Pairs with #8
+  (spell list) and #12 (determinism), which remain open.
 
 ## P1 — Important correctness & UX
 

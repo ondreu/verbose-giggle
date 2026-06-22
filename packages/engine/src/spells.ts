@@ -49,6 +49,16 @@ export function castSpell(
   const spell = state.srd.spell(args.spell);
   if (!spell) return { slot_consumed: null, affected: [], concentration: false, detail: "", error: `Unknown spell: ${args.spell}` };
 
+  // Sheet validation (#29): a player character may only cast spells on their
+  // own known/prepared list. Refuse gracefully (no slot spent) and log the
+  // refusal so it's auditable — the DM must not narrate a spell that never ran.
+  // Monsters use innate/statblock casting, so they bypass this check.
+  if (caster.type === "character" && !(caster.spells_known ?? []).includes(args.spell)) {
+    const detail = `${caster.name} neumí kouzlo „${spell.name}" — není v jeho seznamu kouzel.`;
+    log(state, { kind: "spell", actor: args.caster, detail, tool: "cast_spell" });
+    return { slot_consumed: null, affected: [], concentration: false, detail, error: detail };
+  }
+
   // Consume a slot (cantrips are level 0, free).
   let slotConsumed: number | null = null;
   if (spell.level > 0) {
