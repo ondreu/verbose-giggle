@@ -1,0 +1,30 @@
+{
+  "name": "@adm/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "start": "node dist/index.js",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@adm/engine": "workspace:*",
+    "@adm/schemas": "workspace:*",
+    "@adm/srd": "workspace:*",
+    "@fastify/static": "^7.0.4",
+    "fastify": "^4.28.1",
+    "gray-matter": "^4.0.3",
+    "openai": "^4.56.0",
+    "yaml": "^2.5.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.0",
+    "typescript": "^5.5.4",
+    "vitest": "^2.0.5"
+  }
+}

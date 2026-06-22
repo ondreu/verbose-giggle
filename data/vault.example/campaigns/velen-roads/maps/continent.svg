@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000" width="1000" height="1000">
+  <defs>
+    <radialGradient id="sea" cx="50%" cy="45%" r="75%">
+      <stop offset="0%" stop-color="#243642"/>
+      <stop offset="100%" stop-color="#101a20"/>
+    </radialGradient>
+    <linearGradient id="land" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#5a5036"/>
+      <stop offset="55%" stop-color="#473e29"/>
+      <stop offset="100%" stop-color="#352d1d"/>
+    </linearGradient>
+    <filter id="rough"><feTurbulence type="fractalNoise" baseFrequency="0.012" numOctaves="3" seed="7" result="n"/>
+      <feDisplacementMap in="SourceGraphic" in2="n" scale="22"/></filter>
+    <filter id="grain"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="3"/>
+      <feColorMatrix type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.05 0"/></filter>
+  </defs>
+
+  <rect width="1000" height="1000" fill="url(#sea)"/>
+
+  <!-- Main landmass -->
+  <g filter="url(#rough)">
+    <path d="M250,150 C420,120 640,140 760,220 C860,290 880,470 800,620
+             C740,740 620,860 470,840 C330,820 210,740 180,600
+             C150,470 120,300 250,150 Z"
+          fill="url(#land)" stroke="#1c2a31" stroke-width="6"/>
+  </g>
+
+  <!-- Coast shading -->
+  <path d="M250,150 C420,120 640,140 760,220 C860,290 880,470 800,620
+           C740,740 620,860 470,840 C330,820 210,740 180,600
+           C150,470 120,300 250,150 Z"
+        fill="none" stroke="#c9a227" stroke-width="1.5" opacity="0.25"/>
+
+  <!-- Forest (around Starý Mlýn / north-east) -->
+  <g fill="#3a5a3f" opacity="0.7">
+    <circle cx="560" cy="380" r="16"/><circle cx="585" cy="400" r="14"/>
+    <circle cx="540" cy="405" r="13"/><circle cx="600" cy="372" r="12"/>
+    <circle cx="572" cy="360" r="11"/>
+  </g>
+
+  <!-- Hills (south) -->
+  <g fill="none" stroke="#6a5c3a" stroke-width="3" opacity="0.6">
+    <path d="M380,640 q20,-26 40,0 q20,-26 40,0"/>
+    <path d="M460,665 q20,-26 40,0 q20,-26 40,0"/>
+  </g>
+
+  <!-- River through the crossroads -->
+  <path d="M300,520 C380,540 440,560 470,610 C500,660 540,690 640,700"
+        fill="none" stroke="#3b6b86" stroke-width="5" opacity="0.7"/>
+
+  <!-- Roads (point-crawl hint) -->
+  <path d="M420,550 L560,400" fill="none" stroke="#b89a4e" stroke-width="2"
+        stroke-dasharray="6 8" opacity="0.5"/>
+
+  <!-- Compass rose -->
+  <g transform="translate(860,860)" opacity="0.7">
+    <circle r="34" fill="none" stroke="#c9a227" stroke-width="1.5"/>
+    <path d="M0,-30 L7,0 L0,30 L-7,0 Z" fill="#c9a227"/>
+    <path d="M-30,0 L0,-7 L30,0 L0,7 Z" fill="#8a7220"/>
+    <text x="0" y="-38" text-anchor="middle" font-family="Cinzel,serif" font-size="14" fill="#c9a227">S</text>
+  </g>
+
+  <text x="500" y="100" text-anchor="middle" font-family="Cinzel,serif" font-size="34"
+        fill="#c9a227" opacity="0.85" letter-spacing="6">VELEN</text>
+
+  <rect width="1000" height="1000" filter="url(#grain)"/>
+</svg>

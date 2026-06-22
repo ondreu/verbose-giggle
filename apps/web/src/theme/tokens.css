@@ -1,0 +1,151 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Dark-fantasy palette (Appendix A): warm charcoal/stone neutrals with an
+   aged-gold / ember / blood / parchment accent system. Mauve ("arcane") is
+   reserved strictly for magic + active-actor semantics. */
+:root {
+  --bg-base: #1a1714;
+  --bg-mantle: #13100e;
+  --bg-crust: #0c0a09;
+  --surface0: #2a2521;
+  --surface1: #3a342e;
+  --surface2: #4a423a;
+  --text: #e8e0d3;
+  --subtext1: #c4b9a8;
+  --subtext0: #9b8f7e;
+
+  --gold: #c9a227;
+  --ember: #d97a34;
+  --blood: #9b2226;
+  --steel: #5a7a99;
+  --verdigris: #4a8f7b;
+  --parchment: #e7dcc2;
+  --ink: #2a2118;
+  --arcane: #b58cf0;
+  --bone: #d8cdb4;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    margin: 0;
+    background-color: var(--bg-crust);
+    /* Subtle candlelit vignette + faint stone grain — not a flat dark fill. */
+    background-image:
+      radial-gradient(120% 90% at 50% -10%, rgba(201, 162, 39, 0.06), transparent 55%),
+      radial-gradient(80% 60% at 100% 110%, rgba(217, 122, 52, 0.04), transparent 60%);
+    color: var(--text);
+    font-family: "EB Garamond", Georgia, serif;
+    font-size: 17px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+  h1,
+  h2,
+  h3 {
+    font-family: "Cinzel", serif;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: var(--text);
+  }
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: var(--bg-mantle);
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--surface1);
+    border: 2px solid var(--bg-mantle);
+    border-radius: 2px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--surface2);
+  }
+}
+
+@layer components {
+  /* Aged-metal panel: stone surface, thin warm edge, candlelit lift. */
+  .panel {
+    background: linear-gradient(180deg, var(--surface0), var(--bg-mantle));
+    border: 1px solid #000;
+    box-shadow:
+      inset 0 1px 0 rgba(232, 224, 211, 0.05),
+      inset 0 0 0 1px rgba(0, 0, 0, 0.4),
+      0 8px 24px -12px rgba(0, 0, 0, 0.85);
+    border-radius: 3px;
+  }
+  .panel-title {
+    font-family: "Cinzel", serif;
+    font-size: 0.74rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--gold);
+    border-bottom: 1px solid rgba(201, 162, 39, 0.2);
+  }
+
+  /* Character sheet reads as parchment: warm paper, ink text, deckled edge. */
+  .parchment {
+    background-color: var(--parchment);
+    background-image:
+      radial-gradient(100% 120% at 0% 0%, rgba(0, 0, 0, 0.05), transparent 40%),
+      radial-gradient(100% 120% at 100% 100%, rgba(120, 90, 40, 0.12), transparent 45%);
+    color: var(--ink);
+    border-radius: 2px;
+    box-shadow:
+      inset 0 0 30px rgba(120, 90, 40, 0.18),
+      0 6px 18px -10px rgba(0, 0, 0, 0.7);
+  }
+  .parchment h1,
+  .parchment h2,
+  .parchment h3 {
+    color: var(--ink);
+  }
+
+  .btn-gold {
+    font-family: "Cinzel", serif;
+    letter-spacing: 0.08em;
+    color: var(--bg-crust);
+    background: linear-gradient(180deg, #d9b43a, var(--gold));
+    border: 1px solid #7a5f12;
+    border-radius: 3px;
+    box-shadow: inset 0 1px 0 rgba(255, 240, 200, 0.4);
+    transition: filter 120ms ease;
+  }
+  .btn-gold:hover {
+    filter: brightness(1.08);
+  }
+  .btn-gold:disabled {
+    filter: grayscale(0.6) brightness(0.7);
+    cursor: not-allowed;
+  }
+
+  /* Active-actor ring — the one place arcane mauve is allowed to glow. */
+  .ring-active {
+    box-shadow:
+      0 0 0 1px var(--arcane),
+      0 0 14px -2px var(--arcane);
+  }
+}
+
+/* Motion only when it communicates; respect reduced-motion. */
+@keyframes tumble {
+  0% { transform: rotate(-12deg) scale(0.9); opacity: 0; }
+  60% { transform: rotate(6deg) scale(1.05); }
+  100% { transform: rotate(0) scale(1); opacity: 1; }
+}
+.log-enter {
+  animation: tumble 260ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .log-enter {
+    animation: none;
+  }
+}
