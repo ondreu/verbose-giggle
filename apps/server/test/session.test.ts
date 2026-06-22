@@ -79,6 +79,22 @@ describe("LLM turn loop (mocked model)", () => {
     expect(events).toContain("narration");
   });
 
+  it("the offline mock narrator drives a real engine attack with no API key", async () => {
+    const { MockLlmClient } = await import("../src/llm/mock.js");
+    const mgr = await SessionManager.open(CAMPAIGN);
+    const llm = new MockLlmClient(() => ({
+      activePlayer: "thorin",
+      partyIds: ["thorin", "elara"],
+      hostileIds: ["goblin-1"],
+      inCombat: false,
+    }));
+    const bus = { emit: () => undefined, subscribe: () => () => undefined } as unknown as EventBus;
+
+    const { narration } = await runTurn({ manager: mgr, llm, bus, input: "Zaútočím na goblina!" });
+    expect(narration).toContain("[mock DM]");
+    expect(mgr.session.log.some((l) => l.kind === "attack")).toBe(true);
+  });
+
   it("exposes all engine tools to the model", () => {
     const names = toolSpecs().map((t) => t.function.name);
     expect(names).toContain("attack");

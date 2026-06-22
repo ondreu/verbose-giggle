@@ -1,5 +1,5 @@
 import { toolSpecs } from "@adm/engine";
-import type { LlmClient, ChatMsg } from "../llm/client.js";
+import type { Llm, ChatMsg } from "../llm/client.js";
 import { sceneSnapshot, SYSTEM_PROMPT } from "../llm/prompt.js";
 import type { EventBus } from "./events.js";
 import type { SessionManager } from "./manager.js";
@@ -15,7 +15,7 @@ const HISTORY_WINDOW = 20;
  */
 export async function runTurn(opts: {
   manager: SessionManager;
-  llm: LlmClient;
+  llm: Llm;
   bus: EventBus;
   input: string;
 }): Promise<{ narration: string }> {

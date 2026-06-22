@@ -39,16 +39,16 @@ services:
       - "3000"
 
   piper:
-    # OPEN ITEM (spec §11, §18.1): rhasspy/wyoming-piper speaks the *Wyoming*
-    # protocol, NOT the plain HTTP `POST /tts {text} -> audio/wav` shape that
-    # the server expects via PIPER_URL. To use this image you must add a thin
-    # HTTP->Wyoming adapter sidecar, OR swap in an HTTP-native Piper image and
-    # point PIPER_URL at it. Finalize the concrete image + cs_CZ voice before
-    # relying on TTS. Left here per the spec compose sketch.
-    image: rhasspy/wyoming-piper:latest
+    # Thin HTTP adapter (services/piper-http) implementing the plain-HTTP
+    # contract the server expects: POST /tts {text} -> audio/wav (spec §11).
+    # It wraps the `piper` CLI; mount a cs_CZ voice at ./piper-voices and set
+    # PIPER_VOICE. Without a voice it returns silence, so TTS is always wired.
+    build:
+      context: ../services/piper-http
+      dockerfile: Dockerfile
     restart: unless-stopped
-    # Pass the desired Czech voice; mount voice models for offline/custom voices.
-    command: --voice cs_CZ-jirka-medium
+    environment:
+      - PIPER_VOICE=/voices/cs_CZ-jirka-medium.onnx   # mount the matching .onnx + .onnx.json
     volumes:
       - ./piper-voices:/voices
     # Internal only — never published to the host.

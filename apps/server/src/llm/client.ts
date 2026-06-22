@@ -23,11 +23,16 @@ export interface LlmResponse {
   toolCalls: { id: string; name: string; args: unknown }[];
 }
 
+/** The narrator contract the turn loop depends on (real or mock). */
+export interface Llm {
+  chat(messages: ChatMsg[], tools: ToolSpec[]): Promise<LlmResponse>;
+}
+
 /**
  * Provider-agnostic LLM client over the OpenAI-compatible chat-completions +
  * tool-calling shape (§9.1). Works against Mistral or OpenRouter by base URL.
  */
-export class LlmClient {
+export class LlmClient implements Llm {
   private client: OpenAI;
   private model: string;
 

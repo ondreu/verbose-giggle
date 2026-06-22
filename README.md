@@ -52,13 +52,17 @@ pnpm -r test
 
 ### Run the server
 
-Set at least your LLM key (copy `.env.example` to `.env`), then point the server at the example vault:
+No secrets needed to start: with no `LLM_API_KEY`, the server runs an **offline mock narrator** so the full turn loop and UI work end to end (the engine still produces every real number — only the prose is stubbed).
 
 ```bash
+# Offline (mock narrator):
+VAULT_PATH=./data/vault.example pnpm --filter @adm/server dev
+
+# Full LLM narration (copy .env.example to .env first):
 LLM_API_KEY=sk-... VAULT_PATH=./data/vault.example pnpm --filter @adm/server dev
 ```
 
-The server listens on `PORT` (default `3000`). If a web build exists at `apps/web/dist` (or `WEB_DIST`), it is served at the same origin; otherwise the server runs API-only.
+Set `LLM_PROVIDER=mock` to force the mock even when a key is present. The server listens on `PORT` (default `3000`). If a web build exists at `apps/web/dist` (or `WEB_DIST`), it is served at the same origin; otherwise the server runs API-only.
 
 ### Run the web dev server
 
@@ -74,7 +78,8 @@ Read by `apps/server/src/config.ts`. See [`.env.example`](.env.example) for the 
 
 | Variable | Default | Required | Description |
 |---|---|---|---|
-| `LLM_API_KEY` | _(empty)_ | **Yes** | API key for the LLM provider (Mistral, OpenRouter, …). |
+| `LLM_API_KEY` | _(empty)_ | No | API key for the LLM provider (Mistral, OpenRouter, …). Empty → offline mock narrator. |
+| `LLM_PROVIDER` | _(auto)_ | No | Set to `mock` to force the offline narrator even with a key present. |
 | `LLM_BASE_URL` | `https://api.mistral.ai/v1` | No | OpenAI-compatible chat-completions base URL. Set to OpenRouter's to route there. |
 | `LLM_MODEL` | `mistral-medium-3.5` | No | Model id (overridable per campaign via `campaign.yaml`). |
 | `VAULT_PATH` | `./data/vault` | No | Path to the vault root (contains `campaigns/`). |

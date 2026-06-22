@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
-import { LlmClient } from "../llm/client.js";
+import { LlmClient, type Llm } from "../llm/client.js";
+import { MockLlmClient } from "../llm/mock.js";
 import { runTurn } from "../session/loop.js";
 import type { EventBus } from "../session/events.js";
 import type { SessionManager } from "../session/manager.js";
@@ -12,7 +13,26 @@ export interface GameContext {
 }
 
 export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext): Promise<void> {
-  const llm = new LlmClient(ctx.config);
+  // Fall back to the offline mock narrator when no API key is configured, so
+  // the full loop + UI run without secrets (set LLM_PROVIDER=mock to force it).
+  const useMock = !ctx.config.llm.apiKey || process.env.LLM_PROVIDER === "mock";
+  const llm: Llm = useMock
+    ? new MockLlmClient(() => {
+        const actors = ctx.manager.campaign.actors;
+        const alive = (id: string) => (ctx.manager.session.actors[id]?.hp?.current ?? 1) > 0;
+        return {
+          activePlayer: ctx.manager.session.active_player,
+          partyIds: Object.values(actors)
+            .filter((a) => a.faction === "party" || a.faction === "ally")
+            .map((a) => a.id),
+          hostileIds: Object.values(actors)
+            .filter((a) => a.faction === "hostile" && alive(a.id))
+            .map((a) => a.id),
+          inCombat: ctx.manager.session.combat !== null,
+        };
+      })
+    : new LlmClient(ctx.config);
+  if (useMock) app.log.warn("LLM_API_KEY not set — using offline mock narrator");
 
   /** Full scene + state snapshot for initial client hydration. */
   app.get("/api/state", async () => ({
@@ -26,9 +46,6 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
   app.post<{ Body: { input: string } }>("/api/action", async (req, reply) => {
     const input = (req.body?.input ?? "").trim();
     if (!input) return reply.code(400).send({ error: "empty input" });
-    if (!ctx.config.llm.apiKey) {
-      return reply.code(503).send({ error: "LLM_API_KEY not configured" });
-    }
     try {
       const { narration } = await runTurn({ manager: ctx.manager, llm, bus: ctx.bus, input });
       return { narration };
