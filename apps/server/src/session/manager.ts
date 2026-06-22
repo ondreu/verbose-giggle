@@ -78,8 +78,22 @@ export class SessionManager {
     await saveSession(this.campaign, this.session);
   }
 
-  /** Flush durable changes (final HP, xp, slots) back to actor notes (§7). */
+  /**
+   * Persist state. Combat-transient values (mid-fight HP, positions) stay in the
+   * session overlay; durable changes are flushed to actor notes only OUT of
+   * combat, so a fight in progress never clobbers the authored sheets (§7).
+   */
   async checkpoint(gs: GameState): Promise<void> {
+    if (!this.session.combat) {
+      for (const actor of Object.values(gs.actors)) {
+        await flushActor(this.campaign, actor);
+      }
+    }
+    await this.persist();
+  }
+
+  /** Force-flush durable actor changes to notes (e.g. when combat ends). */
+  async flushDurable(gs: GameState): Promise<void> {
     for (const actor of Object.values(gs.actors)) {
       await flushActor(this.campaign, actor);
     }

@@ -1,0 +1,78 @@
+# AI Dungeon Master — NAS deployment (spec §14.2)
+#
+# Copy this file (and Caddyfile) to your NAS, create a `.env` next to it with
+# at least LLM_API_KEY set (see /.env.example), then `docker compose up -d`.
+#
+# Watchtower auto-pulls the :latest image pushed by CI (spec §14.4); only
+# containers labeled watchtower.enable=true are updated.
+
+services:
+  app:
+    # Pull the CI-built image (spec §14.1/§14.5). The GHCR owner `ondreu`
+    # should be confirmed against the real GitHub account/org.
+    image: ghcr.io/ondreu/ai-dungeon-master:latest
+    # For local builds instead of pulling, comment out `image:` above and
+    # uncomment this block (build context is the repo root):
+    # build:
+    #   context: ..
+    #   dockerfile: docker/Dockerfile
+    restart: unless-stopped
+    environment:
+      - LLM_API_KEY=${LLM_API_KEY}                                  # required
+      - LLM_BASE_URL=${LLM_BASE_URL:-https://api.mistral.ai/v1}     # Mistral or OpenRouter base URL
+      - LLM_MODEL=${LLM_MODEL:-mistral-medium-3.5}
+      - VAULT_PATH=/data/vault
+      - PIPER_URL=http://piper:5000                                 # see piper note below
+      - BASIC_AUTH=${BASIC_AUTH:-}                                  # optional "user:pass" gate
+    volumes:
+      - ./vault:/data/vault                # campaigns (markdown + frontmatter + JSON)
+      - ./maps:/data/maps                  # map images
+      - ./srd:/data/srd                    # SRD JSON (or rely on the copy bundled in the image)
+      # Live session state is written inside each campaign's state/ folder
+      # under ./vault, so it persists with the mounted vault automatically.
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+    depends_on:
+      - piper
+    # Not published to the host; reached via Caddy on the internal network.
+    expose:
+      - "3000"
+
+  piper:
+    # OPEN ITEM (spec §11, §18.1): rhasspy/wyoming-piper speaks the *Wyoming*
+    # protocol, NOT the plain HTTP `POST /tts {text} -> audio/wav` shape that
+    # the server expects via PIPER_URL. To use this image you must add a thin
+    # HTTP->Wyoming adapter sidecar, OR swap in an HTTP-native Piper image and
+    # point PIPER_URL at it. Finalize the concrete image + cs_CZ voice before
+    # relying on TTS. Left here per the spec compose sketch.
+    image: rhasspy/wyoming-piper:latest
+    restart: unless-stopped
+    # Pass the desired Czech voice; mount voice models for offline/custom voices.
+    command: --voice cs_CZ-jirka-medium
+    volumes:
+      - ./piper-voices:/voices
+    # Internal only — never published to the host.
+    expose:
+      - "5000"
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+
+  watchtower:
+    image: containrrr/watchtower
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: --interval 3600 --label-enable    # only update labeled containers
+
+volumes:
+  caddy_data:
+  caddy_config:

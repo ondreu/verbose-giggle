@@ -1,0 +1,14 @@
+# AI Dungeon Master — Caddy reverse proxy (spec §14.3)
+#
+# Replace the placeholder domain with your own (point its DNS A/AAAA record at
+# the NAS, e.g. via deSEC). Caddy obtains and renews TLS certs automatically.
+
+dnd.example.org {
+	reverse_proxy app:3000
+}
+
+# ALTERNATIVE — Tailscale (spec §14.3):
+# Skip Caddy and public exposure entirely. Run the app on your tailnet and
+# reach it over Tailscale (or Tailscale Serve for HTTPS on a *.ts.net name).
+# In that setup, drop the caddy service from docker-compose.yml and publish
+# the app's port on the tailnet instead.
