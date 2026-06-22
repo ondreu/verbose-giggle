@@ -102,7 +102,10 @@ docker compose up -d
 ```
 
 - Mount your real content over `./vault`, `./maps`, `./srd`. Live session state is written inside each campaign's `state/` folder, so it persists with the vault.
-- **TLS:** edit [`docker/Caddyfile`](docker/Caddyfile) — set your domain (auto-HTTPS), or skip Caddy and reach the app over **Tailscale**.
+- **TLS / public access:** three options — pick one:
+  - **Caddy (default):** edit [`docker/Caddyfile`](docker/Caddyfile), set your domain, point its DNS A record at the NAS. Caddy obtains TLS certs automatically. No extra config needed.
+  - **Cloudflare Tunnel:** no open ports required. Create a tunnel in the [Zero Trust dashboard](https://one.dash.cloudflare.com) (Networks → Tunnels → token-based), set `CLOUDFLARE_TUNNEL_TOKEN` in `.env`, and route the public hostname to `http://app:3000`. Start with `docker compose --profile cloudflare up -d`. Remove the `caddy` service from `docker-compose.yml` if you don't need local LAN HTTPS.
+  - **Tailscale:** skip both Caddy and CF Tunnel. Remove the `caddy` service, publish `app:3000` on the tailnet, and reach it over a `*.ts.net` name.
 - **Auto-update:** Watchtower pulls `:latest` when CI pushes a new image (only containers labeled `watchtower.enable=true`).
 - **Local image build:** in `docker-compose.yml`, comment the `image:` line and uncomment the `build:` block (context `..`, dockerfile `docker/Dockerfile`).
 
