@@ -64,12 +64,12 @@ export default function App() {
           {connected ? "spojeno" : "odpojeno"}
         </span>
         <button
-          className="text-subtext0 transition-colors hover:text-gold"
-          title="Domů"
-          aria-label="Domů"
+          className="flex items-center gap-1.5 rounded-sm border border-surface2 px-2.5 py-1 font-log text-xs text-subtext1 transition-colors hover:border-gold/60 hover:text-gold"
+          title="Hlavní nabídka (kampaně, tvorba postavy, zálohy)"
           onClick={() => setView("home")}
         >
-          <Icon name="compass" size={18} />
+          <Icon name="compass" size={14} />
+          Nabídka
         </button>
         <button
           className="text-subtext0 transition-colors hover:text-gold"

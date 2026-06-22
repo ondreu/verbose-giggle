@@ -11,6 +11,12 @@ const fmt = (m: number) => (m >= 0 ? `+${m}` : `${m}`);
 const spellLabel = (id: string) =>
   id.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 
+/** Cumulative XP to REACH each level (index 0 = level 1). SRD. */
+const XP_THRESHOLDS = [
+  0, 300, 900, 2700, 6500, 14000, 23000, 34000, 48000, 64000, 85000, 100000, 120000, 140000,
+  165000, 195000, 225000, 265000, 305000, 355000,
+];
+
 const ABILITY_LABELS: [keyof Abilities, string][] = [
   ["str", "SIL"],
   ["dex", "OBR"],
@@ -49,6 +55,14 @@ export function SheetPanel() {
   const ds = actor.death_saves ?? { success: 0, fail: 0 };
 
   const canLevel = actor.type === "character" && actor.faction === "party" && actor.level < 20;
+  const isPc = actor.type === "character" && actor.faction === "party";
+  const curFloor = XP_THRESHOLDS[actor.level - 1] ?? 0;
+  const nextFloor = XP_THRESHOLDS[actor.level] ?? null;
+  const xpPct =
+    nextFloor != null
+      ? Math.max(0, Math.min(100, ((actor.xp - curFloor) / (nextFloor - curFloor)) * 100))
+      : 100;
+  const readyToLevel = nextFloor != null && actor.xp >= nextFloor;
 
   return (
     <section className="parchment flex flex-col p-4 font-body">
@@ -109,6 +123,28 @@ export function SheetPanel() {
           }}
         />
       </div>
+
+      {/* XP toward next level (party PCs) */}
+      {isPc && (
+        <div className="mt-2">
+          <div className="mb-0.5 flex items-baseline justify-between font-log text-[10px] text-ink/60">
+            <span className="uppercase tracking-wider">Zkušenosti</span>
+            <span>
+              {actor.xp.toLocaleString("cs-CZ")}
+              {nextFloor != null ? ` / ${nextFloor.toLocaleString("cs-CZ")} XP` : " XP (max)"}
+            </span>
+          </div>
+          <div className="h-1.5 w-full overflow-hidden rounded-sm bg-ink/15">
+            <div
+              className="h-full transition-[width] duration-500"
+              style={{ width: `${xpPct}%`, background: readyToLevel ? "var(--gold)" : "var(--steel)" }}
+            />
+          </div>
+          {readyToLevel && (
+            <div className="mt-0.5 font-log text-[10px] text-gold">Dost XP na postup — klikni „úroveň“.</div>
+          )}
+        </div>
+      )}
 
       {/* Abilities */}
       <div className="mt-3 grid grid-cols-6 gap-1.5">
