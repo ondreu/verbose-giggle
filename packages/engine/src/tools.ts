@@ -19,6 +19,9 @@ import { awardXp, levelUp } from "./leveling.js";
 
 const Advantage = z.enum(["advantage", "disadvantage", "none"]).optional();
 
+/** Action-economy categories an in-combat tool can consume (§8.2). */
+export type ActionKind = "action" | "bonus" | "reaction";
+
 /** A tool the LLM may call. `parameters` is a JSON Schema for the provider. */
 export interface ToolDef {
   name: string;
@@ -27,6 +30,12 @@ export interface ToolDef {
   readOnly: boolean;
   schema: z.ZodTypeAny;
   parameters: Record<string, unknown>;
+  /**
+   * Action-economy cost in combat. Resolved per-call so casting can charge an
+   * action or a bonus action depending on the spell. Returns `null` when the
+   * call is free (e.g. a cantrip declared as a reaction-less free effect).
+   */
+  cost?: (args: unknown, state: GameState) => { kind: ActionKind; actorId: string } | null;
   handler: (state: GameState, args: unknown) => unknown;
 }
 
@@ -37,9 +46,52 @@ function def<S extends z.ZodTypeAny>(d: {
   readOnly: boolean;
   schema: S;
   parameters: Record<string, unknown>;
+  cost?: (args: z.infer<S>, state: GameState) => { kind: ActionKind; actorId: string } | null;
   handler: (state: GameState, args: z.infer<S>) => unknown;
 }): ToolDef {
   return d as ToolDef;
+}
+
+/**
+ * Charge the active actor's action-economy budget for a combat action (§8.2).
+ * Outside combat there is no budget and everything is free. On the actor's own
+ * turn an `action`/`bonus` is required and spent; a creature acting off its turn
+ * spends its single `reaction`. Returns an error (and spends nothing) when the
+ * required slot is already used, so the caller can refuse the tool.
+ */
+export function spendEconomy(
+  state: GameState,
+  actorId: string,
+  kind: ActionKind,
+): { ok: boolean; error?: string } {
+  const c = state.session.combat;
+  if (!c || !c.budget) return { ok: true };
+  const name = state.actors[actorId]?.name ?? actorId;
+  const activeId = c.order[c.turn_index]?.actor;
+  const onTurn = actorId === activeId;
+
+  // Off-turn activity is only possible via a reaction (e.g. opportunity attack).
+  if (!onTurn || kind === "reaction") {
+    if (!c.budget.reaction) {
+      return {
+        ok: false,
+        error: onTurn
+          ? `${name} už v tomto kole použil reakci.`
+          : `${name} není na tahu a nemá volnou reakci.`,
+      };
+    }
+    c.budget.reaction = false;
+    return { ok: true };
+  }
+
+  if (kind === "bonus") {
+    if (!c.budget.bonus) return { ok: false, error: `${name} už v tomto tahu použil bonusovou akci.` };
+    c.budget.bonus = false;
+    return { ok: true };
+  }
+  if (!c.budget.action) return { ok: false, error: `${name} už v tomto tahu provedl akci.` };
+  c.budget.action = false;
+  return { ok: true };
 }
 
 export const TOOLS: ToolDef[] = [
@@ -123,6 +175,7 @@ export const TOOLS: ToolDef[] = [
       },
       required: ["attacker", "target"],
     },
+    cost: (args) => ({ kind: "action", actorId: args.attacker }),
     handler: (state, args) => {
       const res = attack(state, args);
       // Auto-apply damage on hit so the LLM never narrates an unapplied number.
@@ -175,6 +228,16 @@ export const TOOLS: ToolDef[] = [
         advantage: { type: "string", enum: ["advantage", "disadvantage", "none"] },
       },
       required: ["caster", "spell"],
+    },
+    cost: (args, state) => {
+      // Casting time decides the slot: "1 bonus action" / "1 reaction" / action.
+      const ct = (state.srd.spell(args.spell)?.casting_time ?? "1 action").toLowerCase();
+      const kind: ActionKind = ct.includes("bonus")
+        ? "bonus"
+        : ct.includes("reaction")
+          ? "reaction"
+          : "action";
+      return { kind, actorId: args.caster };
     },
     handler: (state, args) => castSpell(state, args),
   }),
@@ -580,6 +643,23 @@ export function dispatch(state: GameState, name: string, rawArgs: unknown): Disp
   const parsed = tool.schema.safeParse(rawArgs ?? {});
   if (!parsed.success) {
     return { name, ok: false, error: `Invalid args: ${parsed.error.message}` };
+  }
+  // Enforce the action-economy budget before mutating state (§8.2): a refused
+  // action spends nothing, and the refusal is logged so it's visible/auditable.
+  if (tool.cost) {
+    const cost = tool.cost(parsed.data, state);
+    if (cost) {
+      const spent = spendEconomy(state, cost.actorId, cost.kind);
+      if (!spent.ok) {
+        log(state, {
+          kind: "economy",
+          actor: cost.actorId,
+          detail: spent.error ?? "Akce není v tomto tahu k dispozici.",
+          tool: name,
+        });
+        return { name, ok: false, error: spent.error };
+      }
+    }
   }
   try {
     const result = tool.handler(state, parsed.data);

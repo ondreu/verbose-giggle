@@ -16,6 +16,24 @@ const FACTION_HP: Record<string, string> = {
   neutral: "var(--bone)",
 };
 
+/** One action-economy slot: bright when available, dim+struck when spent. */
+function Slot({ label, available }: { label: string; available: boolean }) {
+  return (
+    <span
+      className={`flex items-center gap-1 rounded-sm border px-1.5 py-0.5 font-log text-[10px] uppercase tracking-wide ${
+        available
+          ? "border-gold/50 bg-gold/10 text-gold"
+          : "border-surface2 text-subtext0/60 line-through"
+      }`}
+    >
+      <span
+        className={`h-1.5 w-1.5 rounded-full ${available ? "bg-gold" : "bg-surface2"}`}
+      />
+      {label}
+    </span>
+  );
+}
+
 export function TurnTracker() {
   const session = useGame((s) => s.session);
   const actors = useGame((s) => s.actors);
@@ -42,6 +60,23 @@ export function TurnTracker() {
           Další tah
         </button>
       </header>
+
+      {/* Action economy for the actor on turn — what they still have left (#10). */}
+      {combat.budget && (
+        <div className="flex flex-wrap items-center gap-1.5 border-b border-black/40 bg-bg-mantle/50 px-3 py-1.5">
+          <span className="mr-0.5 font-display text-[10px] uppercase tracking-wider text-subtext0">
+            {actors[combat.order[combat.turn_index]?.actor ?? ""]?.name ?? "Na tahu"}:
+          </span>
+          <Slot label="Akce" available={combat.budget.action} />
+          <Slot label="Bonus" available={combat.budget.bonus} />
+          <Slot label="Reakce" available={combat.budget.reaction} />
+          <span className="flex items-center gap-1 font-log text-[10px] text-subtext1">
+            <Icon name="footprints" size={11} className="text-subtext0" />
+            {combat.budget.movement} ft
+          </span>
+        </div>
+      )}
+
       <ol className="px-2 py-2">
         {combat.order.map((o, i) => {
           const a = actors[o.actor];

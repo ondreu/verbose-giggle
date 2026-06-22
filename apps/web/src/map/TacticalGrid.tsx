@@ -22,6 +22,7 @@ export function TacticalGrid({ embedded = false }: { embedded?: boolean }) {
   const session = useGame((s) => s.session);
   const actors = useGame((s) => s.actors);
   const locations = useGame((s) => s.locations);
+  const encounters = useGame((s) => s.encounters);
   const sendCommand = useGame((s) => s.sendCommand);
   const reachable = useGame((s) => s.reachable);
   const fetchReachable = useGame((s) => s.fetchReachable);
@@ -58,6 +59,11 @@ export function TacticalGrid({ embedded = false }: { embedded?: boolean }) {
 
   const { w, h } = combat.grid;
   const activeId = combat.order[combat.turn_index]?.actor;
+  // Authored battle-map backdrop for this encounter, if any (§10). Served
+  // path-confined via /api/asset; a missing file simply renders nothing.
+  const battleMap = combat.encounter
+    ? encounters[combat.encounter]?.battle_map_image
+    : undefined;
 
   const handleCell = (x: number, y: number) => {
     if (aoeShape) {
@@ -142,6 +148,19 @@ export function TacticalGrid({ embedded = false }: { embedded?: boolean }) {
           className="mx-auto block"
           style={{ background: "var(--bg-crust)" }}
         >
+          {/* Authored battle-map backdrop (under the grid + tokens) */}
+          {battleMap && (
+            <image
+              href={`/api/asset/${battleMap}`}
+              x={0}
+              y={0}
+              width={w * CELL}
+              height={h * CELL}
+              preserveAspectRatio="xMidYMid slice"
+              opacity={0.9}
+            />
+          )}
+
           {/* Grid lines */}
           {Array.from({ length: w + 1 }).map((_, x) => (
             <line
