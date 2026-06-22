@@ -1,3 +1,5 @@
+import { promises as fs } from "node:fs";
+import path from "node:path";
 import type { FastifyInstance } from "fastify";
 import { LlmClient, type Llm } from "../llm/client.js";
 import { MockLlmClient } from "../llm/mock.js";
@@ -54,6 +56,35 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
     actors: ctx.manager.campaign.actors,
     locations: ctx.manager.campaign.locations,
   }));
+
+  /** Serve a campaign asset (map images, etc.), path-confined to the campaign. */
+  app.get<{ Params: { "*": string } }>("/api/asset/*", async (req, reply) => {
+    const rel = req.params["*"] ?? "";
+    const base = path.resolve(ctx.manager.campaign.dir);
+    const target = path.resolve(base, rel);
+    // Confine to the campaign dir and to image assets only (never notes/state).
+    if (!target.startsWith(base + path.sep)) {
+      return reply.code(403).send({ error: "forbidden" });
+    }
+    const types: Record<string, string> = {
+      ".webp": "image/webp",
+      ".png": "image/png",
+      ".jpg": "image/jpeg",
+      ".jpeg": "image/jpeg",
+      ".svg": "image/svg+xml",
+      ".gif": "image/gif",
+    };
+    const ext = path.extname(target).toLowerCase();
+    if (!(ext in types)) return reply.code(404).send({ error: "not an image" });
+    try {
+      const data = await fs.readFile(target);
+      reply.header("Content-Type", types[ext]!);
+      reply.header("Cache-Control", "public, max-age=3600");
+      return reply.send(data);
+    } catch {
+      return reply.code(404).send({ error: "not found" });
+    }
+  });
 
   /** Player free-text action → the LLM/engine turn loop. */
   app.post<{ Body: { input: string } }>("/api/action", async (req, reply) => {

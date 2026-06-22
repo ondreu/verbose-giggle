@@ -1,6 +1,6 @@
 name: The Velen Roads
 ruleset: dnd5e-srd
-world_map: maps/continent.webp
+world_map: maps/continent.svg
 starting_location: rozcesti
 party: [thorin, elara]
 companions: [shadowpaw]

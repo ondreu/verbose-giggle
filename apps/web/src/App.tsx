@@ -5,7 +5,7 @@ import { DiceLog } from "./panels/DiceLog";
 import { SheetPanel } from "./panels/SheetPanel";
 import { TurnTracker } from "./panels/TurnTracker";
 import { InventoryPanel } from "./panels/InventoryPanel";
-import { TacticalGrid } from "./map/TacticalGrid";
+import { MapPanel } from "./map/MapPanel";
 import { Icon } from "./components/Icon";
 
 export default function App() {
@@ -46,7 +46,7 @@ export default function App() {
           <ChatPanel />
         </div>
         <div className="min-h-0">
-          <TacticalGrid />
+          <MapPanel />
         </div>
         <aside className="flex min-h-0 flex-col gap-3 overflow-y-auto">
           <SheetPanel />

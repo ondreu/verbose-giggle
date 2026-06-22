@@ -10,7 +10,7 @@ const FACTION_FILL: Record<string, string> = {
   neutral: "var(--bone)",
 };
 
-export function TacticalGrid() {
+export function TacticalGrid({ embedded = false }: { embedded?: boolean }) {
   const session = useGame((s) => s.session);
   const actors = useGame((s) => s.actors);
   const locations = useGame((s) => s.locations);
@@ -20,27 +20,22 @@ export function TacticalGrid() {
   if (!combat) {
     const loc = session ? locations[session.current_location] : null;
     return (
-      <section className="panel flex h-full flex-col items-center justify-center p-8 text-center">
+      <div className="flex h-full flex-col items-center justify-center p-8 text-center">
         <Icon name="compass" size={40} className="mb-3 text-gold/70" />
         <h3 className="font-display text-lg">{loc?.name ?? session?.current_location ?? "Neznámo"}</h3>
         <p className="mt-2 max-w-md font-body italic text-subtext1">
-          Divadlo mysli. Mapa se rozsvítí, jakmile začne boj nebo se rozvine
-          přehledová mapa kraje.
+          Divadlo mysli. Mimo boj se bojiště nezobrazuje — přepni na Kraj pro
+          přehledovou mapu, nebo začni souboj.
         </p>
-      </section>
+      </div>
     );
   }
 
   const { w, h } = combat.grid;
   const activeId = combat.order[combat.turn_index]?.actor;
 
-  return (
-    <section className="panel flex h-full flex-col">
-      <header className="panel-title flex items-center gap-2 px-3 py-2">
-        <Icon name="skull" size={14} />
-        Bojiště · {combat.grid.cell_ft} ft / pole
-      </header>
-      <div className="flex-1 overflow-auto p-4">
+  const body = (
+    <div className="h-full overflow-auto p-4">
         <svg
           width={w * CELL}
           height={h * CELL}
@@ -121,7 +116,17 @@ export function TacticalGrid() {
             );
           })}
         </svg>
-      </div>
+    </div>
+  );
+
+  if (embedded) return body;
+  return (
+    <section className="panel flex h-full flex-col">
+      <header className="panel-title flex items-center gap-2 px-3 py-2">
+        <Icon name="skull" size={14} />
+        Bojiště · {combat.grid.cell_ft} ft / pole
+      </header>
+      {body}
     </section>
   );
 }
