@@ -134,6 +134,58 @@ on old code and items **#15, #17, #18** are likely already resolved by updating.
   - Pairs with the start-up menu (#2) and the showcase vault (#5 — author a few
     quests so it demos).
 
+- **#20 — Consume the rest of the SRD dataset.** Today the loader
+  (`apps/server/src/srd/load.ts`) only reads `*monster*`, `*spell*`,
+  `*equipment*`; everything else in 5e-bits/5e-database is ignored. Extend it to
+  load and expose the data that future authoring/leveling features need
+  (`src/2014/en`):
+  - **Races / Subraces** (`5e-SRD-Races.json`, `5e-SRD-Subraces.json`) — ability
+    bonuses, speed, traits; feeds character creation (#14).
+  - **Classes / Subclasses / Features / Traits** (`5e-SRD-Classes.json`,
+    `5e-SRD-Subclasses.json`, `5e-SRD-Features.json`, `5e-SRD-Traits.json`) —
+    class progression, proficiencies, features by level; feeds character
+    creation (#14) and the level-up GUI (#13).
+  - **Feats** (`5e-SRD-Feats.json`) — selectable at creation/level-up (#13/#14).
+  - **Magic items** (`5e-SRD-Magic-Items.json`) — new category + a `mapMagicItem`
+    mapper and an `srd_ref`-style hook for item notes / loot.
+  - **Proficiencies / Languages** (`5e-SRD-Proficiencies.json`,
+    `5e-SRD-Languages.json`) — round out character creation.
+  - **Work:** add typed accessors in `@adm/srd` + mappers in the loader
+    (mirroring `mapMonster`/`mapSpell`/`mapEquipment`), tolerant of missing
+    files so the 3-file minimal setup still works. Keep matching specific
+    (avoid the `*spell*`/`*equipment*` lookalike traps, e.g. Spellcasting,
+    Equipment-Categories). Gate behind the features that use them so loading
+    cost is only paid when needed. Unlocks **#13** and **#14**.
+
+- **#21 — Mine the descriptive/reference SRD data (tooltips, localization, rules
+  lookup).** The remaining files hold no new mechanics — those stay hardcoded in
+  the engine — but their *descriptions and names* are worth extracting for the
+  UI, Czech localization, and grounding the DM:
+  - **Damage types & resistance** (`5e-SRD-Damage-Types.json`) — the resistance
+    mechanic lives in `packages/engine/src/combat.ts`; mine the list +
+    descriptions to (a) verify the engine's `DamageType` enum is complete and
+    (b) drive player-facing tooltips/Czech labels (e.g. *bludgeoning → drtivé*).
+  - **Conditions** (`5e-SRD-Conditions.json`) — engine owns the effects; surface
+    the official descriptions as hover tooltips on the condition chips (sheet),
+    so players see what *Prone/Restrained/…* does.
+  - **Weapon properties** (`5e-SRD-Weapon-Properties.json`) — descriptions for
+    tooltips (finesse, versatile, reach…) on equipment.
+  - **Magic schools, alignments, ability scores** (`5e-SRD-Magic-Schools.json`,
+    `5e-SRD-Alignments.json`, `5e-SRD-Ability-Scores.json`) — label/description
+    sources for tooltips and the Czech label maps (`packages/schemas/src/labels.ts`).
+  - **Rules / rule sections** (`5e-SRD-Rules.json`, `5e-SRD-Rule-Sections.json`)
+    — an in-app, searchable rules reference panel, and optional grounding text
+    the DM can cite (read-only; never a source of authoritative numbers).
+  - **Skills / levels** (`5e-SRD-Skills.json`, `5e-SRD-Levels.json`) — use to
+    cross-check the hardcoded skill→ability map and XP/proficiency tables, and
+    as a localization source; not as runtime mechanics.
+  - **Work:** these feed labels/tooltips/reference, so prefer a build-time
+    extraction into the Czech label maps + a small descriptions accessor over
+    runtime loading. Supports #4 (kill English text) and #7/#1 (readable UI).
+  - **Out of scope (2024 ruleset):** `5e-SRD-Poisons.json`,
+    `5e-SRD-Weapon-Mastery-Properties.json`, `Species/Subspecies` — only if the
+    app ever targets the 2024 SRD; today it's 5.1/2014.
+
 ---
 
 ## Deliverables the user can provide
