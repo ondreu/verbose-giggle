@@ -108,6 +108,34 @@ on old code and items **#15, #17, #18** are likely already resolved by updating.
 
 ---
 
+## New features
+
+- **#19 — Automatic quest tracking.** Track quest state without the player
+  managing it by hand, and without the LLM inventing progress.
+  - **Data:** add a `quest` entity — authored as `quests/*.md` notes
+    (frontmatter = id, title, giver, status `active|completed|failed`,
+    `objectives: [{ id, text, done }]`; body = flavour) and add a schema in
+    `packages/schemas` (alongside Location/Encounter/etc.). Live progress lives
+    in session state so it persists per playthrough.
+  - **Mutation through the engine (determinism):** the LLM never edits quest
+    state as free text. Add engine tools — e.g. `quest_start`, `quest_advance`
+    (tick an objective), `quest_complete`/`quest_fail` — validated with `zod`
+    and appended to the visible log like every other mutation
+    (`packages/engine/src/tools.ts`, `apps/server/src/session/*`). The DM loop
+    calls them when narration implies a state change, so the log shows e.g.
+    *"Quest 'Goblins of the Mill' → objective 'Find the boss' complete."*
+  - **Auto-detection:** prompt the DM to recognise quest triggers (accept,
+    progress, resolve) from player actions and authored hooks (a location's
+    `encounter_table`, lore notes) and call the tools — surfaced for audit in
+    the dice/event log, never silently.
+  - **UI:** a quest log panel/modal (active vs completed, objective checklist),
+    plus a subtle "new/updated quest" cue in chat. New panel under
+    `apps/web/src/panels/`, wired to session state via the store.
+  - Pairs with the start-up menu (#2) and the showcase vault (#5 — author a few
+    quests so it demos).
+
+---
+
 ## Deliverables the user can provide
 
 - **Showcase vault** — see `docs/SHOWCASE.md` for exactly what to author, the
