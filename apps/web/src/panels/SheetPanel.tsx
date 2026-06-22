@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { csCondition } from "@adm/schemas";
+import { csCondition, csAbility, csAbilityAbbr, type AbilityKey } from "@adm/schemas";
 import { useGame } from "../store/store";
 import { Icon } from "../components/Icon";
 import { LevelUpModal } from "../components/LevelUpModal";
@@ -23,15 +23,7 @@ const XP_THRESHOLDS = [
   165000, 195000, 225000, 265000, 305000, 355000,
 ];
 
-const ABILITY_LABELS: [keyof Abilities, string][] = [
-  ["str", "SIL"],
-  ["dex", "OBR"],
-  ["con", "ODL"],
-  ["int", "INT"],
-  ["wis", "MDR"],
-  ["cha", "CHA"],
-];
-type Abilities = { str: number; dex: number; con: number; int: number; wis: number; cha: number };
+const ABILITY_ORDER: AbilityKey[] = ["str", "dex", "con", "int", "wis", "cha"];
 
 export function SheetPanel() {
   const session = useGame((s) => s.session);
@@ -165,9 +157,13 @@ export function SheetPanel() {
 
       {/* Abilities */}
       <div className="mt-3 grid grid-cols-6 gap-1.5">
-        {ABILITY_LABELS.map(([key, label]) => (
-          <div key={key} className="rounded-sm border border-ink/20 bg-ink/5 px-1 py-1 text-center">
-            <div className="text-[10px] uppercase tracking-wider text-ink/60">{label}</div>
+        {ABILITY_ORDER.map((key) => (
+          <div
+            key={key}
+            className="rounded-sm border border-ink/20 bg-ink/5 px-1 py-1 text-center"
+            title={csAbility(key)}
+          >
+            <div className="text-[10px] uppercase tracking-wider text-ink/60">{csAbilityAbbr(key)}</div>
             <div className="font-display text-base leading-none">{fmt(mod(actor.abilities[key]))}</div>
             <div className="font-log text-[10px] text-ink/55">{actor.abilities[key]}</div>
           </div>

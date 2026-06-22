@@ -150,7 +150,7 @@ function resolveAttackProfile(state: GameState, attacker: Actor, weaponId?: stri
     toHitMod,
     damageExpr: `${baseDamage}${abilMod !== 0 ? sign : ""}`,
     damageType: eq?.damage_type ?? "bludgeoning",
-    name: eq?.name ?? "Unarmed Strike",
+    name: eq?.name ?? "úder beze zbraně",
   };
 }
 

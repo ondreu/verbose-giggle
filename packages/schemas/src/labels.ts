@@ -39,12 +39,23 @@ export const DAMAGE_CS: Record<DamageType, string> = {
   thunder: "hromové",
 };
 
+/** Full Czech ability names (no two-letter shorthand, #4). */
 export const ABILITY_CS: Record<AbilityKey, string> = {
-  str: "SIL",
-  dex: "OBR",
-  con: "ODL",
+  str: "Síla",
+  dex: "Obratnost",
+  con: "Odolnost",
+  int: "Inteligence",
+  wis: "Moudrost",
+  cha: "Charisma",
+};
+
+/** Standard international 3-letter ability abbreviations for compact UI/log. */
+export const ABILITY_ABBR: Record<AbilityKey, string> = {
+  str: "STR",
+  dex: "DEX",
+  con: "CON",
   int: "INT",
-  wis: "MDR",
+  wis: "WIS",
   cha: "CHA",
 };
 
@@ -87,6 +98,10 @@ export function csCondition(name: string): string {
 }
 export function csAbility(k: string): string {
   return ABILITY_CS[k as AbilityKey] ?? k.toUpperCase();
+}
+/** Compact 3-letter ability label (STR/DEX/…) for grids and the dice log. */
+export function csAbilityAbbr(k: string): string {
+  return ABILITY_ABBR[k as AbilityKey] ?? k.toUpperCase();
 }
 export function csAoe(shape: string): string {
   return AOE_SHAPE_CS[shape] ?? shape;

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { csAbility, csSkill } from "@adm/schemas";
+import { csAbility, csAbilityAbbr, csSkill } from "@adm/schemas";
 import { useGame } from "../store/store";
 import { Icon } from "./Icon";
 
@@ -171,8 +171,8 @@ export function CharacterCreate({ onClose }: { onClose: () => void }) {
                 <Label>Vlastnosti (standardní pole {opts.standardArray.join(", ")})</Label>
                 <div className="grid grid-cols-6 gap-1.5">
                   {opts.abilityOrder.map((k) => (
-                    <div key={k} className="rounded-sm border border-surface1 bg-bg-mantle/50 px-1 py-1.5 text-center">
-                      <div className="text-[10px] uppercase tracking-wider text-subtext0">{csAbility(k)}</div>
+                    <div key={k} className="rounded-sm border border-surface1 bg-bg-mantle/50 px-1 py-1.5 text-center" title={csAbility(k)}>
+                      <div className="text-[10px] uppercase tracking-wider text-subtext0">{csAbilityAbbr(k)}</div>
                       <input
                         type="number"
                         min={3}

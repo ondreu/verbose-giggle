@@ -102,12 +102,15 @@ on old code and items **#15, #17, #18** are likely already resolved by updating.
   Audit action/bonus-action/move/reaction limits and how the loop gates them in
   `packages/engine/src/turns.ts` and the turn loop; add a test if a limit is
   missing.
-- **#4 — Remove leftover English UI text and abbreviations.** e.g. `perception`
-  → *vnímání*, `SIL` → *Síla*, `OBR` → *Obratnost*. Use full Czech words (or
-  standard English abbreviations like STR/DEX/CON). Sweep skill/ability/
-  condition/action labels; route everything through the Czech label maps
-  (`packages/schemas/src/labels.ts`) and check SRD-derived names surfaced to
-  the player. No two-letter Czech shorthand anywhere in the UI.
+- **[x] #4 — Remove leftover English UI text and abbreviations.** Done. The
+  two-letter Czech shorthand (SIL/OBR/ODL/MDR) is gone: `ABILITY_CS` now holds
+  full Czech names (Síla, Obratnost…) and a new `ABILITY_ABBR`/`csAbilityAbbr`
+  gives the standard international STR/DEX/CON for compact grids and the dice
+  log. All call sites route through `labels.ts` — SheetPanel/CharacterCreate
+  ability grids (abbrev + full-name tooltip), LevelUpModal, and the engine
+  dice-log checks/saves (which also now localise the condition list). The
+  hardcoded "Unarmed Strike" fallback reads "úder beze zbraně". (SRD-sourced
+  weapon/spell names stay English pending the localization pass in #21.)
 - **#2 — Start-up / home menu.** A first-run screen with: open Settings, import
   a campaign, import maps, and **create a new campaign** (no map required yet).
   New top-level view in the web app; campaign create/import endpoints on the

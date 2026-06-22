@@ -72,7 +72,7 @@ export function LevelUpModal({ actor, onClose }: { actor: Actor; onClose: () => 
         <div className="flex items-center gap-2 rounded-sm border border-surface1 bg-bg-mantle/40 px-3 py-2">
           <Icon name="heart" size={15} className="text-blood" />
           <span className="font-body text-text">
-            +{hpGain} HP <span className="font-log text-xs text-subtext0">(průměr {actor.hit_dice?.type ?? "d8"} + ODL)</span>
+            +{hpGain} HP <span className="font-log text-xs text-subtext0">(průměr {actor.hit_dice?.type ?? "d8"} + {csAbility("con")})</span>
           </span>
         </div>
 
