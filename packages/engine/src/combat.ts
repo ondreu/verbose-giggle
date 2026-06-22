@@ -166,10 +166,22 @@ export interface AttackResult {
 /** Resolve a weapon attack: to-hit vs AC, crit on nat 20, doubled dice on crit. */
 export function attack(
   state: GameState,
-  args: { attacker: string; target: string; weapon?: string; advantage?: Advantage },
+  args: { attacker: string; target: string; weapon?: string; advantage?: Advantage; allow_friendly?: boolean },
 ): AttackResult {
   const attacker = getActor(state, args.attacker);
   const target = getActor(state, args.target);
+
+  // Friendly-fire guard (#12): refuse an attack on a fellow party/ally member
+  // unless the player has explicitly confirmed it. Prevents the DM from quietly
+  // turning a mis-mapped action into damage on a companion.
+  const onSameSide = (a: string, b: string) =>
+    (a === "party" || a === "ally") && (b === "party" || b === "ally");
+  if (!args.allow_friendly && attacker.id !== target.id && onSameSide(attacker.faction, target.faction)) {
+    const detail = `${attacker.name} míří na spojence ${target.name} — útok na člena družiny vyžaduje výslovné potvrzení.`;
+    log(state, { kind: "attack", actor: args.attacker, target: args.target, detail, tool: "attack" });
+    return { to_hit: 0, hit: false, crit: false, detail };
+  }
+
   const profile = resolveAttackProfile(state, attacker, args.weapon);
 
   // Cover / line-of-sight from encounter terrain (§8.1).

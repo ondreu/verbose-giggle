@@ -164,6 +164,7 @@ export const TOOLS: ToolDef[] = [
       target: z.string(),
       weapon: z.string().optional(),
       advantage: Advantage,
+      allow_friendly: z.boolean().optional(),
     }),
     parameters: {
       type: "object",
@@ -172,6 +173,10 @@ export const TOOLS: ToolDef[] = [
         target: { type: "string" },
         weapon: { type: "string", description: "Weapon item id; omit for monster default action" },
         advantage: { type: "string", enum: ["advantage", "disadvantage", "none"] },
+        allow_friendly: {
+          type: "boolean",
+          description: "Set true ONLY when the player has explicitly confirmed attacking a party/ally member.",
+        },
       },
       required: ["attacker", "target"],
     },

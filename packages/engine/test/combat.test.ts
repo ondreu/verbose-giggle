@@ -181,6 +181,36 @@ describe("death consequence (#23)", () => {
   });
 });
 
+describe("friendly fire guard (#12)", () => {
+  it("refuses an attack on a party/ally member without confirmation — no damage", () => {
+    const hero = makeActor({ id: "h", name: "Hrdina", faction: "party" });
+    const ally = makeActor({ id: "a", name: "Druh", faction: "ally", hp: { max: 20, current: 20, temp: 0 } });
+    const state = makeState([hero, ally], "ff");
+    const r = attack(state, { attacker: "h", target: "a" });
+    expect(r.hit).toBe(false);
+    expect(r.damage).toBeUndefined();
+    expect(ally.hp.current).toBe(20); // untouched
+    expect(state.session.log.some((l) => /vyžaduje výslovné potvrzení/.test(l.detail))).toBe(true);
+  });
+
+  it("allows the attack when explicitly confirmed (allow_friendly)", () => {
+    const hero = makeActor({ id: "h", name: "Hrdina", faction: "party" });
+    const ally = makeActor({ id: "a", name: "Druh", faction: "ally", hp: { max: 20, current: 20, temp: 0 } });
+    const state = makeState([hero, ally], "ff-ok");
+    const r = attack(state, { attacker: "h", target: "a", allow_friendly: true });
+    // The attack now resolves normally (hit or miss), i.e. it is not blocked.
+    expect(/vyžaduje výslovné potvrzení/.test(r.detail)).toBe(false);
+  });
+
+  it("does not block attacks on a hostile target", () => {
+    const hero = makeActor({ id: "h", name: "Hrdina", faction: "party" });
+    const foe = makeActor({ id: "g", name: "Goblin", faction: "hostile", hp: { max: 7, current: 7, temp: 0 } });
+    const state = makeState([hero, foe], "enemy");
+    const r = attack(state, { attacker: "h", target: "g" });
+    expect(/vyžaduje výslovné potvrzení/.test(r.detail)).toBe(false);
+  });
+});
+
 describe("attack", () => {
   it("nat 1 always misses, logs to the dice log", () => {
     // Find a seed where the first d20 is a 1 is overkill; instead assert structure.

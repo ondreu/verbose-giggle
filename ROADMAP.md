@@ -29,17 +29,16 @@ on old code and items **#15, #17, #18** are likely already resolved by updating.
   slots (`apps/web/src/panels/SheetPanel.tsx`); clicking sends a cast action
   through the DM loop (and the engine validates the spell against the sheet per
   #29). The universal Actions panel already listed them too.
-- **#12 — Narration diverges from the mechanic that ran (determinism leak).**
-  Repro: player typed *"vyšlu firebolt na Thorina"*; the engine actually ran
-  `Unarmed Strike` (log: "Elara útočí na Thorin (Unarmed Strike) … minutí"),
-  yet the prose narrated a **Fire Bolt** fizzling. Two bugs: (a) Fire Bolt
-  wasn't an available/known spell so the tool selection fell back to unarmed
-  (tied to #8); (b) the LLM narrated a spell that did **not** happen — narration
-  must describe the engine's actual result, never invent the action. Also
-  friendly-fire on a party member was attempted without confirmation. Fix the
-  intent→tool mapping and constrain narration to the executed tool. See
-  `apps/server/src/session/loop.ts`, `packages/engine/src/tools.ts`,
-  `apps/server/src/llm/prompt.ts`.
+- **[x] #12 — Narration diverges from the mechanic that ran (determinism leak).**
+  Done. (a) The fall-back-to-unarmed root cause is closed by #29 (the engine now
+  refuses a spell not on the sheet) and #8 (spells are visible/castable), so the
+  intent→tool mapping no longer silently degrades to unarmed. (b) The DM system
+  prompt gained hard rules: narrate exactly the tool that executed (never swap
+  an unarmed strike for a spell), no silent substitution, a tool error/miss must
+  read as failure in prose. Friendly-fire is now blocked deterministically — the
+  engine `attack` refuses a strike on a party/ally member unless `allow_friendly`
+  is set after explicit player confirmation (`packages/engine/src/combat.ts`,
+  `tools.ts`, prompt in `apps/server/src/llm/prompt.ts`). Covered by engine tests.
 - **#16 — Combat shows only your own HP.** The turn tracker lists initiative but
   no HP for other combatants; the sheet shows only the active actor. Add HP
   (number + bar, faction-coloured) per combatant in
