@@ -22,7 +22,26 @@ export interface GeneratedImage {
   label: string;
 }
 
+export type View = "home" | "play";
+
+export interface CampaignInfo {
+  folder: string;
+  name: string;
+  party: number;
+  active: boolean;
+}
+
+export interface SnapshotMeta {
+  id: string;
+  label: string;
+  createdAt: string;
+  location?: string;
+  day?: number;
+  auto?: boolean;
+}
+
 interface GameStore {
+  view: View;
   connected: boolean;
   busy: boolean;
   thinking: string | null;
@@ -40,7 +59,10 @@ interface GameStore {
   lastImage: GeneratedImage | null;
   imageLoading: boolean;
   imageError: string | null;
+  campaigns: CampaignInfo[];
+  snapshots: SnapshotMeta[];
 
+  setView: (v: View) => void;
   hydrate: () => Promise<void>;
   connect: () => void;
   sendAction: (input: string) => Promise<void>;
@@ -59,11 +81,25 @@ interface GameStore {
   toggleTts: () => void;
   generateImage: (subject: ImageSubject, id?: string, label?: string) => Promise<void>;
   closeImage: () => void;
+
+  // Start menu: campaigns + rollback (§2, §7).
+  listCampaigns: () => Promise<void>;
+  createCampaign: (input: {
+    name: string;
+    startingLocationName?: string;
+    select?: boolean;
+  }) => Promise<{ ok: boolean; error?: string; folder?: string }>;
+  selectCampaign: (folder: string) => Promise<void>;
+  listSnapshots: () => Promise<void>;
+  createSnapshot: (label?: string) => Promise<void>;
+  restoreSnapshot: (id: string) => Promise<void>;
+  deleteSnapshot: (id: string) => Promise<void>;
 }
 
 let lineSeq = 0;
 
 export const useGame = create<GameStore>((set, get) => ({
+  view: "home",
   connected: false,
   busy: false,
   thinking: null,
@@ -81,6 +117,10 @@ export const useGame = create<GameStore>((set, get) => ({
   lastImage: null,
   imageLoading: false,
   imageError: null,
+  campaigns: [],
+  snapshots: [],
+
+  setView: (v) => set({ view: v }),
 
   hydrate: async () => {
     const res = await fetch("/api/state");
@@ -134,6 +174,13 @@ export const useGame = create<GameStore>((set, get) => ({
     source.addEventListener("actor_turn", (e) => {
       const { name, controller } = JSON.parse((e as MessageEvent).data);
       set({ aiActing: controller === "ai" ? name : null });
+    });
+    // The campaign was hot-swapped or rolled back server-side: re-pull everything.
+    source.addEventListener("reload", () => {
+      set({ narration: [] });
+      void get().hydrate();
+      void get().listCampaigns();
+      void get().listSnapshots();
     });
     source.addEventListener("error", () => set({ connected: false }));
   },
@@ -261,6 +308,101 @@ export const useGame = create<GameStore>((set, get) => ({
   },
 
   closeImage: () => set({ lastImage: null, imageError: null }),
+
+  // --- Start menu: campaigns + rollback ------------------------------------
+  listCampaigns: async () => {
+    try {
+      const res = await fetch("/api/campaigns");
+      if (!res.ok) return;
+      const data = await res.json();
+      set({ campaigns: Array.isArray(data.campaigns) ? data.campaigns : [] });
+    } catch {
+      /* best-effort */
+    }
+  },
+
+  createCampaign: async (input) => {
+    try {
+      const res = await fetch("/api/campaigns", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) return { ok: false, error: data.error ?? `Chyba ${res.status}` };
+      await get().listCampaigns();
+      return { ok: true, folder: data.folder };
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    }
+  },
+
+  selectCampaign: async (folder) => {
+    set({ busy: true, error: null });
+    try {
+      const res = await fetch("/api/campaigns/select", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ folder }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        set({ error: data.error ?? `Chyba ${res.status}` });
+      }
+      // The server emits a `reload` event which re-hydrates everything.
+    } finally {
+      set({ busy: false });
+    }
+  },
+
+  listSnapshots: async () => {
+    try {
+      const res = await fetch("/api/snapshots");
+      if (!res.ok) return;
+      const data = await res.json();
+      set({ snapshots: Array.isArray(data.snapshots) ? data.snapshots : [] });
+    } catch {
+      /* best-effort */
+    }
+  },
+
+  createSnapshot: async (label) => {
+    set({ busy: true });
+    try {
+      await fetch("/api/snapshots", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ label }),
+      });
+      await get().listSnapshots();
+    } finally {
+      set({ busy: false });
+    }
+  },
+
+  restoreSnapshot: async (id) => {
+    set({ busy: true, error: null });
+    try {
+      const res = await fetch(`/api/snapshots/${encodeURIComponent(id)}/restore`, { method: "POST" });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        set({ error: data.error ?? `Chyba ${res.status}` });
+      }
+      // `reload` event re-hydrates; refresh the snapshot list too.
+      await get().listSnapshots();
+    } finally {
+      set({ busy: false });
+    }
+  },
+
+  deleteSnapshot: async (id) => {
+    try {
+      await fetch(`/api/snapshots/${encodeURIComponent(id)}`, { method: "DELETE" });
+      await get().listSnapshots();
+    } catch {
+      /* best-effort */
+    }
+  },
 }));
 
 async function speak(text: string): Promise<void> {

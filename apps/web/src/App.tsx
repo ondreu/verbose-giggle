@@ -9,6 +9,7 @@ import { MapPanel } from "./map/MapPanel";
 import { Icon } from "./components/Icon";
 import { ImageModal } from "./components/ImageModal";
 import { SettingsModal } from "./components/SettingsModal";
+import { StartMenu } from "./components/StartMenu";
 
 export default function App() {
   const hydrate = useGame((s) => s.hydrate);
@@ -16,6 +17,8 @@ export default function App() {
   const connected = useGame((s) => s.connected);
   const campaign = useGame((s) => s.campaign);
   const time = useGame((s) => s.session?.time);
+  const view = useGame((s) => s.view);
+  const setView = useGame((s) => s.setView);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   useEffect(() => {
@@ -23,12 +26,29 @@ export default function App() {
     connect();
   }, [hydrate, connect]);
 
+  if (view === "home") {
+    return (
+      <>
+        <ImageModal />
+        {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
+        <StartMenu onSettings={() => setSettingsOpen(true)} />
+      </>
+    );
+  }
+
   return (
     <div className="flex h-full flex-col">
       <ImageModal />
       {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
       <header className="flex items-center gap-3 border-b border-black bg-bg-mantle px-4 py-2">
-        <Icon name="d20" size={22} className="text-gold" />
+        <button
+          className="text-subtext0 transition-colors hover:text-gold"
+          title="Domů / hlavní nabídka"
+          aria-label="Domů"
+          onClick={() => setView("home")}
+        >
+          <Icon name="d20" size={22} className="text-gold" />
+        </button>
         <h1 className="font-display text-lg tracking-wide">{campaign?.name ?? "Pán jeskyně"}</h1>
         {time && (
           <span className="ml-2 flex items-center gap-1 font-log text-xs text-subtext0">
@@ -43,6 +63,14 @@ export default function App() {
           <span className={`h-2 w-2 rounded-full ${connected ? "bg-verdigris" : "bg-blood"}`} />
           {connected ? "spojeno" : "odpojeno"}
         </span>
+        <button
+          className="text-subtext0 transition-colors hover:text-gold"
+          title="Domů"
+          aria-label="Domů"
+          onClick={() => setView("home")}
+        >
+          <Icon name="compass" size={18} />
+        </button>
         <button
           className="text-subtext0 transition-colors hover:text-gold"
           title="Nastavení"
