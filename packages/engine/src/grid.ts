@@ -1,4 +1,4 @@
-import type { Position } from "@adm/schemas";
+import { csAoe, type Position } from "@adm/schemas";
 import { movementBlocked } from "./conditions.js";
 import { getActor, log, type GameState } from "./state.js";
 
@@ -148,7 +148,7 @@ export function move(state: GameState, args: { actor: string; to: Position }): M
   log(state, {
     kind: "move",
     actor: args.actor,
-    detail: `${actor.name} moves to (${args.to.x},${args.to.y}) — cost ${cost}ft, ${remaining}ft left`,
+    detail: `${actor.name} se přesouvá na (${args.to.x},${args.to.y}) — ${cost} ft, zbývá ${remaining} ft`,
     tool: "move",
     result: { cost, remaining },
   });
@@ -340,7 +340,7 @@ export function aoe(
   }
   log(state, {
     kind: "aoe",
-    detail: `${args.shape} (${args.size}ft) at (${args.origin.x},${args.origin.y}) covers ${cells.length} cells, hits ${tokens.length} token(s)`,
+    detail: `${csAoe(args.shape)} (${args.size} ft) na (${args.origin.x},${args.origin.y}) zasahuje ${cells.length} polí a ${tokens.length} cílů`,
     tool: "aoe",
     result: { cells: cells.length, tokens },
   });

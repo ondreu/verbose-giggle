@@ -31,7 +31,7 @@ export function shortRest(
       log(state, {
         kind: "rest",
         actor: id,
-        detail: `${actor.name} short rest: spent ${available} hit dice → +${recovered} hp (${actor.hp.current}/${actor.hp.max})`,
+        detail: `${actor.name} krátký odpočinek: ${available} kostek životů → +${recovered} HP (${actor.hp.current}/${actor.hp.max})`,
         tool: "short_rest",
       });
     }
@@ -58,7 +58,7 @@ export function longRest(state: GameState, args: { actors: string[] }): { result
     log(state, {
       kind: "rest",
       actor: id,
-      detail: `${actor.name} long rest: full HP, slots restored`,
+      detail: `${actor.name} dlouhý odpočinek: plné HP, sloty obnoveny`,
       tool: "long_rest",
     });
     results.push({ actor: id, hp_after: actor.hp.current });

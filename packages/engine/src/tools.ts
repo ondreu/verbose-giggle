@@ -404,7 +404,7 @@ export const TOOLS: ToolDef[] = [
     handler: (state, args) => {
       const actor = getActor(state, args.actor);
       Object.assign(actor, args.patch);
-      log(state, { kind: "sheet", actor: args.actor, detail: `${actor.name} sheet updated`, tool: "update_sheet" });
+      log(state, { kind: "sheet", actor: args.actor, detail: `${actor.name} — list aktualizován`, tool: "update_sheet" });
       return { ok: true };
     },
   }),
@@ -423,7 +423,7 @@ export const TOOLS: ToolDef[] = [
       const existing = actor.inventory.find((i) => i.id === args.item);
       if (existing) existing.qty += args.qty;
       else actor.inventory.push({ id: args.item, qty: args.qty });
-      log(state, { kind: "item", actor: args.actor, detail: `${actor.name} receives ${args.qty}× ${args.item}`, tool: "give_item" });
+      log(state, { kind: "item", actor: args.actor, detail: `${actor.name} získává ${args.qty}× ${args.item}`, tool: "give_item" });
       return { inventory: actor.inventory };
     },
   }),
@@ -444,7 +444,7 @@ export const TOOLS: ToolDef[] = [
         existing.qty -= args.qty;
         if (existing.qty <= 0) actor.inventory = actor.inventory.filter((i) => i.id !== args.item);
       }
-      log(state, { kind: "item", actor: args.actor, detail: `${actor.name} loses ${args.qty}× ${args.item}`, tool: "remove_item" });
+      log(state, { kind: "item", actor: args.actor, detail: `${actor.name} ztrácí ${args.qty}× ${args.item}`, tool: "remove_item" });
       return { inventory: actor.inventory };
     },
   }),

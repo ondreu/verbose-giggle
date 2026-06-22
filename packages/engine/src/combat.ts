@@ -3,6 +3,7 @@ import { roll, rollD20 } from "./dice.js";
 import { savingThrow } from "./checks.js";
 import { attackMods, combineAdv, type Advantage } from "./conditions.js";
 import { coverBetween, distanceFt } from "./grid.js";
+import { csCondition, csDamage } from "@adm/schemas";
 import { abilityMod, actorAc, getActor, log, type GameState } from "./state.js";
 
 function damageMultiplier(actor: Actor, type?: string): { mult: number; tag: string } {
@@ -12,9 +13,9 @@ function damageMultiplier(actor: Actor, type?: string): { mult: number; tag: str
     immunities?: string[];
     vulnerabilities?: string[];
   };
-  if (a.immunities?.includes(type)) return { mult: 0, tag: " (immune)" };
-  if (a.resistances?.includes(type)) return { mult: 0.5, tag: " (resisted)" };
-  if (a.vulnerabilities?.includes(type)) return { mult: 2, tag: " (vulnerable)" };
+  if (a.immunities?.includes(type)) return { mult: 0, tag: " (imunita)" };
+  if (a.resistances?.includes(type)) return { mult: 0.5, tag: " (odolnost)" };
+  if (a.vulnerabilities?.includes(type)) return { mult: 2, tag: " (zranitelnost)" };
   return { mult: 1, tag: "" };
 }
 
@@ -53,7 +54,7 @@ export function applyDamage(
   log(state, {
     kind: "damage",
     target: args.target,
-    detail: `${target.name} takes ${amount}${args.type ? ` ${args.type}` : ""}${tag} → ${hpBefore} → ${target.hp.current} hp${dropped ? " (dropped!)" : ""}`,
+    detail: `${target.name} utrpí ${amount}${args.type ? ` ${csDamage(args.type)}` : ""} zranění${tag} → ${hpBefore} → ${target.hp.current} HP${dropped ? " (padá!)" : ""}`,
     tool: "apply_damage",
     result: { hp_before: hpBefore, hp_after: target.hp.current, resisted: mult === 0.5, dropped },
   });
@@ -110,7 +111,7 @@ export function heal(state: GameState, args: { target: string; amount: number })
   log(state, {
     kind: "heal",
     target: args.target,
-    detail: `${target.name} heals ${args.amount} → ${hpBefore} → ${target.hp.current} hp`,
+    detail: `${target.name} se léčí o ${args.amount} → ${hpBefore} → ${target.hp.current} HP`,
     tool: "heal",
     result: { hp_before: hpBefore, hp_after: target.hp.current },
   });
@@ -220,11 +221,11 @@ export function attack(
       total += diceOnly;
     }
     damage = Math.max(0, total);
-    damageDetail = `; ${profile.damageExpr}${crit ? " (crit ×2 dice)" : ""} = ${damage} ${profile.damageType}`;
+    damageDetail = `; ${profile.damageExpr}${crit ? " (KRIT ×2 kostky)" : ""} = ${damage} ${csDamage(profile.damageType)} zranění`;
   }
 
-  const detail = `${attacker.name} attacks ${target.name} with ${profile.name}: ${d20.detail} vs AC ${ac}${coverNote} → ${
-    crit ? "CRIT" : hit ? "hit" : "miss"
+  const detail = `${attacker.name} útočí na ${target.name} (${profile.name}): ${d20.detail} vs AC ${ac}${coverNote} → ${
+    crit ? "KRIT" : hit ? "zásah" : "minutí"
   }${damageDetail}`;
   log(state, {
     kind: "attack",
@@ -334,7 +335,7 @@ export function applyCondition(
     log(state, {
       kind: "condition",
       target: args.target,
-      detail: `${target.name} gains condition: ${args.condition}`,
+      detail: `${target.name} získává stav: ${csCondition(args.condition)}`,
       tool: "apply_condition",
     });
   }
@@ -350,7 +351,7 @@ export function removeCondition(
   log(state, {
     kind: "condition",
     target: args.target,
-    detail: `${target.name} loses condition: ${args.condition}`,
+    detail: `${target.name} ztrácí stav: ${csCondition(args.condition)}`,
     tool: "remove_condition",
   });
   return { conditions: target.conditions };

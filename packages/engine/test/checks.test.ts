@@ -9,7 +9,7 @@ describe("ability checks & saves", () => {
     const r = abilityCheck(state, { actor: "a", ability: "str", skill: "athletics", dc: 10 });
     // STR mod +3, prof +2 → modifier 5.
     expect(r.modifier).toBe(5);
-    expect(r.detail).toContain("(prof)");
+    expect(r.detail).toContain("(zdatnost)");
   });
 
   it("proficient save adds proficiency, success compares to DC", () => {

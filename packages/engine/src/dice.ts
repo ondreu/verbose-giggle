@@ -111,7 +111,7 @@ export function rollD20(
   const total = natural + modifier;
   const modStr = modifier === 0 ? "" : modifier > 0 ? ` +${modifier}` : ` ${modifier}`;
   const advStr =
-    advantage === "none" ? "" : ` (${advantage === "advantage" ? "adv" : "dis"} [${rolls.join(",")}])`;
+    advantage === "none" ? "" : ` (${advantage === "advantage" ? "výhoda" : "nevýhoda"} [${rolls.join(",")}])`;
   return {
     natural,
     rolls,

@@ -1,4 +1,4 @@
-import type { AbilityKey } from "@adm/schemas";
+import { csAbility, type AbilityKey } from "@adm/schemas";
 import { rollD20 } from "./dice.js";
 import { checkMods, combineAdv, saveMods, type Advantage } from "./conditions.js";
 import { abilityMod, getActor, log, SKILL_ABILITY, type GameState } from "./state.js";
@@ -27,8 +27,8 @@ export function abilityCheck(
   const adv = combineAdv([args.advantage ?? "none", checkMods(actor).advantage]);
   const r = rollD20(state.rng, modifier, adv);
   const success = r.total >= args.dc;
-  const label = args.skill ? `${args.skill} check` : `${args.ability.toUpperCase()} check`;
-  const detail = `${label}: ${r.detail}${proficient ? " (prof)" : ""} vs DC ${args.dc} → ${success ? "success" : "fail"}`;
+  const label = args.skill ? `zkouška ${args.skill}` : `zkouška ${csAbility(args.ability)}`;
+  const detail = `${label}: ${r.detail}${proficient ? " (zdatnost)" : ""} vs DC ${args.dc} → ${success ? "úspěch" : "neúspěch"}`;
   log(state, {
     kind: "check",
     actor: args.actor,
@@ -47,7 +47,7 @@ export function savingThrow(
   const actor = getActor(state, args.actor);
   const sm = saveMods(actor, args.ability);
   if (sm.autoFail) {
-    const detail = `${args.ability.toUpperCase()} save: automatický neúspěch (${actor.conditions.map((c) => c.name).join(", ")}) vs DC ${args.dc}`;
+    const detail = `záchranný hod ${csAbility(args.ability)}: automatický neúspěch (${actor.conditions.map((c) => c.name).join(", ")}) vs DC ${args.dc}`;
     log(state, {
       kind: "save",
       actor: args.actor,
@@ -63,7 +63,7 @@ export function savingThrow(
   const adv = combineAdv([args.advantage ?? "none", sm.advantage]);
   const r = rollD20(state.rng, modifier, adv);
   const success = r.total >= args.dc;
-  const detail = `${args.ability.toUpperCase()} save: ${r.detail}${proficient ? " (prof)" : ""} vs DC ${args.dc} → ${success ? "success" : "fail"}`;
+  const detail = `záchranný hod ${csAbility(args.ability)}: ${r.detail}${proficient ? " (zdatnost)" : ""} vs DC ${args.dc} → ${success ? "úspěch" : "neúspěch"}`;
   log(state, {
     kind: "save",
     actor: args.actor,

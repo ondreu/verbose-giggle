@@ -38,7 +38,7 @@ export function startCombat(
     log(state, {
       kind: "initiative",
       actor: id,
-      detail: `${actor.name} initiative: ${r.detail}`,
+      detail: `${actor.name} iniciativa: ${r.detail}`,
       tool: "start_combat",
     });
     return { actor: id, initiative: r.total, dex: actor.abilities.dex };
@@ -66,7 +66,7 @@ export function startCombat(
   state.session.active_player = order[0]!.actor;
   log(state, {
     kind: "combat",
-    detail: `Combat begins. Order: ${order.map((o) => `${o.actor}(${o.initiative})`).join(", ")}`,
+    detail: `Boj začíná. Pořadí: ${order.map((o) => `${o.actor}(${o.initiative})`).join(", ")}`,
     tool: "start_combat",
   });
   return { order, round: 1 };
@@ -101,13 +101,13 @@ export function nextTurn(state: GameState): NextTurnResult {
   log(state, {
     kind: "turn",
     actor: active,
-    detail: `Round ${c.round} — ${actor.name}'s turn`,
+    detail: `Kolo ${c.round} — na tahu ${actor.name}`,
     tool: "next_turn",
   });
   return { active_actor: active, round: c.round };
 }
 
 export function endCombat(state: GameState): void {
-  log(state, { kind: "combat", detail: "Combat ends.", tool: "end_combat" });
+  log(state, { kind: "combat", detail: "Boj končí.", tool: "end_combat" });
   state.session.combat = null;
 }

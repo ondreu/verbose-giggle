@@ -119,7 +119,7 @@ export function castSpell(
     caster.concentration = { spell: spell.name, dc_to_maintain: 10 };
   }
 
-  result.detail = `${caster.name} casts ${spell.name}${slotConsumed ? ` (L${slotConsumed} slot)` : " (cantrip)"} → ${targets.length} target(s)`;
+  result.detail = `${caster.name} sesílá ${spell.name}${slotConsumed ? ` (slot ${slotConsumed}. úrovně)` : " (cantrip)"} → ${targets.length} cílů`;
   log(state, {
     kind: "spell",
     actor: args.caster,

@@ -1,3 +1,4 @@
+import { csCondition } from "@adm/schemas";
 import { useGame } from "../store/store";
 import { Icon } from "../components/Icon";
 
@@ -144,7 +145,7 @@ export function SheetPanel() {
               key={c.name}
               className="rounded-sm border border-blood/50 bg-blood/10 px-1.5 py-0.5 font-log text-[11px] text-blood"
             >
-              {c.name}
+              {csCondition(c.name)}
             </span>
           ))}
         </div>
