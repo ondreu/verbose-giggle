@@ -694,11 +694,24 @@ export const TOOLS: ToolDef[] = [
   }),
   def({
     name: "set_active_player",
-    description: "Set the hotseat active-player pointer.",
+    description:
+      "Set the hotseat active-player pointer (out-of-combat only). " +
+      "During combat the active actor is always the one whose turn it is in initiative — " +
+      "use next_turn to advance it, never this tool.",
     readOnly: false,
     schema: z.object({ actor: z.string() }),
     parameters: { type: "object", properties: { actor: { type: "string" } }, required: ["actor"] },
     handler: (state, args) => {
+      // In combat, active_player must follow the initiative order; block the override
+      // so it cannot silently desync from combat.order[turn_index].
+      if (state.session.combat) {
+        const onTurn = state.session.combat.order[state.session.combat.turn_index]?.actor;
+        if (onTurn && args.actor !== onTurn) {
+          throw new Error(
+            `V boji nelze set_active_player přepsat pořadí iniciativy — na tahu je ${onTurn}, nikoli ${args.actor}. Použij next_turn.`,
+          );
+        }
+      }
       state.session.active_player = args.actor;
       return { active_player: args.actor };
     },

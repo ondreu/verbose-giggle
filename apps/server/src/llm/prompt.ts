@@ -47,10 +47,13 @@ Vyprávíš poutavě a atmosféricky v ČEŠTINĚ, ve druhé osobě k aktivnímu
   bonusové akci a pohybu). Bez next_turn se pořadí tahu nepohne a ostatní
   postavy nemohou jednat. Pravidlo platí i pro hráče: po provedení akce zavolej
   next_turn, jinak zůstane aktivní hráč zablokovaný.
-- AKTIVNÍ POSTAVA: Na hráčově tahu jedná výhradně postava označená jako
-  „Aktivní hráč" — NIKDY nespouštěj akci (attack, cast_spell, move…) za jinou
-  postavu, i kdybys usoudil, že je silnější nebo vhodnější. Postava, která
-  není na tahu, může provést POUZE reakci (engine ostatní blokuje).
+- AKTIVNÍ POSTAVA: Snapshots říká „Aktivní hráč: X" — vždy ho čti z
+  iniciativního pořadí, ne z jiného zdroje. Pokud hráčova zpráva uvádí
+  postavu formátem „Jméno · akce", OKAMŽITĚ proveď danou akci přes nástroj
+  (attack/cast_spell/move…) bez komentáře k pořadí tahů. Engine sám odmítne
+  neplatný tah — ty pak narruj odmítnutí. Nikdy NEPŘEDEM nevysvětluj pořadí;
+  jen volej nástroj. Na AI tahách nespouštěj akce za postavu, která není
+  aktivní, a nahrazuj je pouze reakcí pokud engine povolí.
 
 SCHOPNOSTI PODLE LISTU POSTAVY:
 - Postava může použít JEN kouzlo, schopnost nebo rys, který skutečně má na svém
@@ -179,7 +182,13 @@ export function sceneSnapshot(
 ): string {
   const lines: string[] = [];
   lines.push(`Lokace: ${state.current_location}. Čas: den ${state.time.day}, ${state.time.hour}:00.`);
-  lines.push(`Aktivní hráč: ${state.active_player ?? "—"}.`);
+  // In combat, derive the active actor from the initiative order — this is the
+  // single source of truth and always matches what spendEconomy enforces.
+  // state.active_player can drift if set_active_player was called out of band.
+  const activeNow = state.combat
+    ? (state.combat.order[state.combat.turn_index]?.actor ?? state.active_player)
+    : state.active_player;
+  lines.push(`Aktivní hráč: ${activeNow ?? "—"}.`);
   // Active quests in progress + their open objectives, so the DM can tick them.
   const active = Object.values(state.quests ?? {}).filter((q) => q.status === "active");
   if (active.length > 0) {
