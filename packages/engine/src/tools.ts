@@ -16,7 +16,7 @@ import { aoe, coverBetween, move, reachableCells } from "./grid.js";
 import { endCombat, nextTurn, startCombat } from "./turns.js";
 import { longRest, shortRest } from "./rest.js";
 import { advanceTime } from "./time.js";
-import { applyAbilityIncrease, awardXp, learnSpells, levelUp } from "./leveling.js";
+import { applyAbilityIncrease, awardXp, chooseSubclass, grantFeats, learnSpells, levelUp } from "./leveling.js";
 
 const Advantage = z.enum(["advantage", "disadvantage", "none"]).optional();
 
@@ -496,6 +496,30 @@ export const TOOLS: ToolDef[] = [
     handler: (state, args) => learnSpells(state, args),
   }),
   def({
+    name: "choose_subclass",
+    description: "Choose an actor's subclass (e.g. at level 3); validated against the SRD class.",
+    readOnly: false,
+    schema: z.object({ actor: z.string(), subclass: z.string() }),
+    parameters: {
+      type: "object",
+      properties: { actor: { type: "string" }, subclass: { type: "string", description: "SRD subclass id" } },
+      required: ["actor", "subclass"],
+    },
+    handler: (state, args) => chooseSubclass(state, args),
+  }),
+  def({
+    name: "grant_feat",
+    description: "Grant one or more feats to an actor (creation or an ASI-level choice).",
+    readOnly: false,
+    schema: z.object({ actor: z.string(), feats: z.array(z.string()) }),
+    parameters: {
+      type: "object",
+      properties: { actor: { type: "string" }, feats: { type: "array", items: { type: "string" } } },
+      required: ["actor", "feats"],
+    },
+    handler: (state, args) => grantFeats(state, args),
+  }),
+  def({
     name: "update_sheet",
     description: "Write durable changes to an actor (xp, inventory, etc.). Patch is shallow-merged.",
     readOnly: false,
@@ -647,13 +671,44 @@ export const TOOLS: ToolDef[] = [
   }),
   def({
     name: "lookup",
-    description: "Read-only: fetch SRD or vault entity data to ground narration (never invent stats).",
+    description:
+      "Read-only: fetch SRD or vault entity data to ground narration (never invent stats). Covers monsters, spells, equipment, magic items, races, classes, subclasses, feats, traits, and party actors.",
     readOnly: true,
-    schema: z.object({ kind: z.enum(["monster", "spell", "equipment", "actor"]), id: z.string() }),
+    schema: z.object({
+      kind: z.enum([
+        "monster",
+        "spell",
+        "equipment",
+        "magic-item",
+        "race",
+        "subrace",
+        "class",
+        "subclass",
+        "feat",
+        "trait",
+        "actor",
+      ]),
+      id: z.string(),
+    }),
     parameters: {
       type: "object",
       properties: {
-        kind: { type: "string", enum: ["monster", "spell", "equipment", "actor"] },
+        kind: {
+          type: "string",
+          enum: [
+            "monster",
+            "spell",
+            "equipment",
+            "magic-item",
+            "race",
+            "subrace",
+            "class",
+            "subclass",
+            "feat",
+            "trait",
+            "actor",
+          ],
+        },
         id: { type: "string" },
       },
       required: ["kind", "id"],
@@ -666,6 +721,20 @@ export const TOOLS: ToolDef[] = [
           return state.srd.spell(args.id) ?? { error: "not found" };
         case "equipment":
           return state.srd.equipment(args.id) ?? { error: "not found" };
+        case "magic-item":
+          return state.srd.magicItem(args.id) ?? { error: "not found" };
+        case "race":
+          return state.srd.race(args.id) ?? { error: "not found" };
+        case "subrace":
+          return state.srd.subrace(args.id) ?? { error: "not found" };
+        case "class":
+          return state.srd.class(args.id) ?? { error: "not found" };
+        case "subclass":
+          return state.srd.subclass(args.id) ?? { error: "not found" };
+        case "feat":
+          return state.srd.feat(args.id) ?? { error: "not found" };
+        case "trait":
+          return state.srd.trait(args.id) ?? { error: "not found" };
         case "actor":
           return state.actors[args.id] ?? { error: "not found" };
       }

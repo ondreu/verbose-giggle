@@ -2,6 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   applyAbilityIncrease,
   awardXp,
+  chooseSubclass,
+  featuresAtLevel,
+  grantFeats,
   learnSpells,
   levelUp,
   proficiencyForLevel,
@@ -80,6 +83,56 @@ describe("learn spells", () => {
     const r = learnSpells(state, { actor: "a", spells: ["fire-bolt", "shield", "shield"] });
     expect(a.spells_known).toEqual(["fire-bolt", "shield"]);
     expect(r.added).toEqual(["shield"]);
+  });
+});
+
+describe("SRD-driven features, subclass and feats (#20)", () => {
+  const srd = {
+    features: {
+      "wizard-l3": { id: "wizard-l3", name: "Cantrip Formulas", level: 3, class: "wizard" },
+      "evocation-l3": { id: "evocation-l3", name: "Sculpt Spells", level: 3, class: "wizard", subclass: "evocation" },
+      "abjuration-l3": { id: "abjuration-l3", name: "Arcane Ward", level: 3, class: "wizard", subclass: "abjuration" },
+    },
+    subclasses: {
+      evocation: { id: "evocation", name: "Evocation", class: "wizard" },
+      "life-domain": { id: "life-domain", name: "Life Domain", class: "cleric" },
+    },
+    feats: { alert: { id: "alert", name: "Alert", prerequisites: [] } },
+  };
+
+  it("grants class features for the new level on level-up", () => {
+    const w = makeActor({ id: "w", name: "Wizard", class: "wizard", level: 2, hit_dice: { type: "d6", total: 2, remaining: 2 } });
+    const state = makeState([w], "seed", srd as never);
+    levelUp(state, { actor: "w" }); // → level 3
+    expect(w.features).toContain("wizard-l3");
+    // No subclass yet, so subclass-gated features are withheld.
+    expect(w.features).not.toContain("evocation-l3");
+  });
+
+  it("chooseSubclass validates the class and backfills its features", () => {
+    const w = makeActor({ id: "w", name: "Wizard", class: "wizard", level: 3 });
+    const state = makeState([w], "seed", srd as never);
+    const bad = chooseSubclass(state, { actor: "w", subclass: "life-domain" });
+    expect(bad).toHaveProperty("error"); // cleric subclass on a wizard
+    const ok = chooseSubclass(state, { actor: "w", subclass: "evocation" });
+    expect(ok).toEqual({ subclass: "evocation" });
+    expect(w.subclass).toBe("evocation");
+    expect(w.features).toContain("evocation-l3"); // backfilled
+    expect(w.features).not.toContain("abjuration-l3");
+  });
+
+  it("grantFeats adds feats by id and de-duplicates", () => {
+    const w = makeActor({ id: "w", name: "Wizard", class: "wizard" });
+    const state = makeState([w], "seed", srd as never);
+    const r = grantFeats(state, { actor: "w", feats: ["alert", "alert"] });
+    expect(w.feats).toEqual(["alert"]);
+    expect(r.added).toEqual(["Alert"]); // resolved to the SRD name in the log
+  });
+
+  it("featuresAtLevel returns nothing without an SRD dataset", () => {
+    const w = makeActor({ id: "w", name: "Wizard", class: "wizard" });
+    const state = makeState([w]);
+    expect(featuresAtLevel(state, "wizard", undefined, 3)).toEqual([]);
   });
 });
 

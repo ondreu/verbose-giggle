@@ -13,7 +13,7 @@ import { SessionManager } from "../session/manager.js";
 import { createCampaign } from "../vault/scaffold.js";
 import { listFiles, zipDir } from "../vault/zip.js";
 import { forgeCampaign, type ForgeInput } from "../vault/forge.js";
-import { createCharacter, creationOptions, removeFromParty, type CharacterDraft } from "../vault/creation.js";
+import { createCharacter, creationOptions, levelUpOptions, removeFromParty, type CharacterDraft } from "../vault/creation.js";
 import {
   checkpointTurn,
   createSnapshot,
@@ -412,8 +412,25 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
     }
   });
 
+  // --- SRD item resolution (#20): equipment + magic items, for inventory/loot.
+  app.get<{ Querystring: { ids?: string } }>("/api/srd/items", async (req) => {
+    const srd = ctx.manager.srd();
+    const ids = (req.query?.ids ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+    const out: Record<string, { name: string; category?: string; rarity?: string; magic: boolean; description?: string }> = {};
+    for (const id of ids) {
+      const eq = srd.equipment(id);
+      if (eq) {
+        out[id] = { name: eq.name, category: eq.category, magic: false };
+        continue;
+      }
+      const mi = srd.magicItem(id);
+      if (mi) out[id] = { name: mi.name, category: mi.category, rarity: mi.rarity, magic: true, description: mi.description };
+    }
+    return out;
+  });
+
   // --- Character creation (#14) --------------------------------------------
-  app.get("/api/creation/options", async () => creationOptions());
+  app.get("/api/creation/options", async () => creationOptions(ctx.manager.srd()));
 
   app.post<{ Body: CharacterDraft }>("/api/characters", async (req, reply) => {
     try {
@@ -421,7 +438,7 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
       // replacement: remember the ending so we can retire the dead PC and
       // resume play with the newcomer.
       const ending = ctx.manager.session.ending;
-      const { id } = await createCharacter(ctx.manager.campaign, req.body as CharacterDraft);
+      const { id } = await createCharacter(ctx.manager.campaign, req.body as CharacterDraft, ctx.manager.srd());
       if (ending?.actor) await removeFromParty(ctx.manager.campaign.dir, ending.actor);
       // Reload so the new actor + party membership are live.
       await reopenManager();
@@ -442,8 +459,18 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
     }
   });
 
+  // --- Level-up (#13): options the next level grants (SRD-derived) ---------
+  app.get<{ Querystring: { actor?: string } }>("/api/level-up/options", async (req, reply) => {
+    const id = req.query?.actor;
+    const actor = id ? ctx.manager.campaign.actors[id] : undefined;
+    if (!actor) return reply.code(400).send({ error: "unknown actor" });
+    return levelUpOptions(ctx.manager.srd(), actor);
+  });
+
   // --- Level-up (#13): wire the GUI choices through the engine --------------
-  app.post<{ Body: { actor: string; asi?: Record<string, number>; spells?: string[] } }>(
+  app.post<{
+    Body: { actor: string; asi?: Record<string, number>; spells?: string[]; subclass?: string; feats?: string[] };
+  }>(
     "/api/level-up",
     async (req, reply) => {
       const actor = req.body?.actor;
@@ -453,9 +480,16 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
 
       const lv = await ctx.manager.applyTool(gs, "level_up", { actor });
       if (!lv.ok) return reply.code(400).send({ error: lv.error });
+      if (req.body?.subclass) {
+        const r = await ctx.manager.applyTool(gs, "choose_subclass", { actor, subclass: req.body.subclass });
+        if (!r.ok) return reply.code(400).send({ error: r.error });
+      }
       if (req.body?.asi && Object.keys(req.body.asi).length) {
         const r = await ctx.manager.applyTool(gs, "ability_increase", { actor, increments: req.body.asi });
         if (!r.ok) return reply.code(400).send({ error: r.error });
+      }
+      if (Array.isArray(req.body?.feats) && req.body.feats.length) {
+        await ctx.manager.applyTool(gs, "grant_feat", { actor, feats: req.body.feats });
       }
       if (Array.isArray(req.body?.spells) && req.body.spells.length) {
         await ctx.manager.applyTool(gs, "learn_spell", { actor, spells: req.body.spells });

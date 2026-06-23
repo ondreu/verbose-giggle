@@ -32,9 +32,19 @@ export const SrdMonster = z.object({
         reach_ft: z.number().int().optional(),
         damage: z.string().optional(), // e.g. "1d6+2"
         damage_type: z.string().optional(),
+        /** Save-based actions (breath weapons, etc.): the DC to resist. */
+        dc_ability: z.enum(["str", "dex", "con", "int", "wis", "cha"]).optional(),
+        dc_value: z.number().int().optional(),
+        dc_success: z.string().optional(), // "half" | "none" | …
+        desc: z.string().optional(),
       }),
     )
     .default([]),
+  /** Passive/innate traits (e.g. Pack Tactics, Keen Smell) for grounding. */
+  special_abilities: z.array(z.object({ name: z.string(), description: z.string().optional() })).default([]),
+  /** Legendary actions, for narration of high-CR foes. */
+  legendary_actions: z.array(z.object({ name: z.string(), description: z.string().optional() })).default([]),
+  reactions: z.array(z.object({ name: z.string(), description: z.string().optional() })).default([]),
 });
 export type SrdMonster = z.infer<typeof SrdMonster>;
 
@@ -53,7 +63,17 @@ export const SrdSpell = z.object({
     .optional(),
   damage: z.string().optional(),
   damage_type: z.string().optional(),
+  /** Damage dice keyed by slot level the spell is cast at (leveled spells). */
+  damage_by_slot: z.record(z.string(), z.string()).optional(),
+  /** Damage dice keyed by caster level (cantrip scaling). */
+  damage_by_level: z.record(z.string(), z.string()).optional(),
+  /** Healing dice keyed by slot level (e.g. Cure Wounds); spell mod added by the engine. */
+  heal_by_slot: z.record(z.string(), z.string()).optional(),
+  /** Area of effect, for grounding/narration. */
+  aoe: z.object({ shape: z.string(), size: z.number().int() }).optional(),
   description: z.string().optional(),
+  /** Class ids whose spell list this spell appears on (for pickers, #20). */
+  classes: z.array(z.string()).default([]),
 });
 export type SrdSpell = z.infer<typeof SrdSpell>;
 
@@ -67,6 +87,113 @@ export const SrdEquipment = z.object({
   damage_type: z.string().optional(),
   properties: z.array(z.string()).default([]),
   ac: z.number().int().optional(),
+  /** Armor only: category (light/medium/heavy/shield) + dex contribution to AC. */
+  armor_category: z.string().optional(),
+  ac_dex_bonus: z.boolean().optional(),
+  ac_max_bonus: z.number().int().optional(),
   range_ft: z.number().int().optional(),
 });
 export type SrdEquipment = z.infer<typeof SrdEquipment>;
+
+const Ability = z.enum(["str", "dex", "con", "int", "wis", "cha"]);
+
+/** A race (#20) — ability bonuses, speed, starting languages, trait ids. */
+export const SrdRace = z.object({
+  id: z.string(),
+  name: z.string(),
+  speed: z.number().int().default(30),
+  size: z.string().optional(),
+  ability_bonuses: z.record(Ability, z.number().int()).default({}),
+  languages: z.array(z.string()).default([]),
+  traits: z.array(z.string()).default([]),
+  subraces: z.array(z.string()).default([]),
+});
+export type SrdRace = z.infer<typeof SrdRace>;
+
+export const SrdSubrace = z.object({
+  id: z.string(),
+  name: z.string(),
+  race: z.string().optional(), // parent race id
+  ability_bonuses: z.record(Ability, z.number().int()).default({}),
+  traits: z.array(z.string()).default([]),
+  description: z.string().optional(),
+});
+export type SrdSubrace = z.infer<typeof SrdSubrace>;
+
+export const SrdClass = z.object({
+  id: z.string(),
+  name: z.string(),
+  hit_die: z.number().int().default(8),
+  saving_throws: z.array(Ability).default([]),
+  proficiencies: z.array(z.string()).default([]),
+  spellcasting_ability: Ability.optional(),
+  subclasses: z.array(z.string()).default([]),
+  /** Guaranteed starting equipment (the fixed grants, not the choices). */
+  starting_equipment: z.array(z.object({ id: z.string(), qty: z.number().int() })).default([]),
+});
+export type SrdClass = z.infer<typeof SrdClass>;
+
+export const SrdSubclass = z.object({
+  id: z.string(),
+  name: z.string(),
+  class: z.string().optional(), // parent class id
+  flavor: z.string().optional(),
+  description: z.string().optional(),
+});
+export type SrdSubclass = z.infer<typeof SrdSubclass>;
+
+/** A class/subclass feature granted at a level (#20 → leveling #13). */
+export const SrdFeature = z.object({
+  id: z.string(),
+  name: z.string(),
+  level: z.number().int().optional(),
+  class: z.string().optional(),
+  subclass: z.string().optional(),
+  description: z.string().optional(),
+});
+export type SrdFeature = z.infer<typeof SrdFeature>;
+
+/** A racial trait (#20). */
+export const SrdTrait = z.object({
+  id: z.string(),
+  name: z.string(),
+  races: z.array(z.string()).default([]),
+  subraces: z.array(z.string()).default([]),
+  description: z.string().optional(),
+});
+export type SrdTrait = z.infer<typeof SrdTrait>;
+
+export const SrdFeat = z.object({
+  id: z.string(),
+  name: z.string(),
+  prerequisites: z.array(z.string()).default([]),
+  description: z.string().optional(),
+});
+export type SrdFeat = z.infer<typeof SrdFeat>;
+
+export const SrdMagicItem = z.object({
+  id: z.string(),
+  name: z.string(),
+  category: z.string().optional(),
+  rarity: z.string().optional(),
+  description: z.string().optional(),
+});
+export type SrdMagicItem = z.infer<typeof SrdMagicItem>;
+
+export const SrdProficiency = z.object({
+  id: z.string(),
+  name: z.string(),
+  type: z.string().optional(),
+  classes: z.array(z.string()).default([]),
+  races: z.array(z.string()).default([]),
+});
+export type SrdProficiency = z.infer<typeof SrdProficiency>;
+
+export const SrdLanguage = z.object({
+  id: z.string(),
+  name: z.string(),
+  type: z.string().optional(),
+  typical_speakers: z.array(z.string()).default([]),
+  script: z.string().optional(),
+});
+export type SrdLanguage = z.infer<typeof SrdLanguage>;

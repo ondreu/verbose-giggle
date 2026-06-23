@@ -25,6 +25,9 @@ export const MONSTERS: Record<string, SrdMonster> = {
     actions: [
       { name: "Scimitar", attack_bonus: 4, reach_ft: 5, damage: "1d6+2", damage_type: "slashing" },
     ],
+    special_abilities: [],
+    legendary_actions: [],
+    reactions: [],
   },
   "goblin-boss": {
     id: "goblin-boss",
@@ -44,6 +47,9 @@ export const MONSTERS: Record<string, SrdMonster> = {
     actions: [
       { name: "Scimitar", attack_bonus: 4, reach_ft: 5, damage: "1d6+2", damage_type: "slashing" },
     ],
+    special_abilities: [],
+    legendary_actions: [],
+    reactions: [],
   },
 };
 
@@ -60,6 +66,7 @@ export const SPELLS: Record<string, SrdSpell> = {
     damage: "1d10",
     damage_type: "fire",
     description: "A mote of fire streaks toward a target.",
+    classes: ["sorcerer", "wizard"],
   },
   "cure-wounds": {
     id: "cure-wounds",
@@ -73,6 +80,7 @@ export const SPELLS: Record<string, SrdSpell> = {
     damage: "1d8",
     damage_type: "radiant",
     description: "A creature you touch regains hit points.",
+    classes: ["bard", "cleric", "druid", "paladin", "ranger"],
   },
 };
 

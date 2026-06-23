@@ -42,6 +42,41 @@ describe("cast_spell sheet validation (#29)", () => {
     expect(ally.hp.current).toBeGreaterThan(5); // healed, HP written to state
   });
 
+  it("scales SRD damage by slot and halves on a save (#20)", () => {
+    // A mounted SRD-style leveled save spell with slot scaling.
+    const srd = {
+      spells: {
+        scorch: {
+          id: "scorch",
+          name: "Scorch",
+          level: 1,
+          attack: "none" as const,
+          concentration: false,
+          ritual: false,
+          classes: ["wizard"],
+          damage_type: "fire",
+          save: { ability: "dex" as const, effect: "half" },
+          damage_by_slot: { "1": "1d6", "3": "100d1" }, // huge dice at slot 3 to make the save effect unmistakable
+        },
+      },
+    };
+    const wizard = makeActor({
+      id: "w",
+      name: "Elara",
+      class: "wizard",
+      abilities: { str: 8, dex: 10, con: 12, int: 18, wis: 10, cha: 10 },
+      spells_known: ["scorch"],
+      spell_slots: { "1": { max: 2, used: 0 }, "3": { max: 1, used: 0 } },
+    });
+    const foe = makeActor({ id: "f", name: "Cíl", faction: "hostile", abilities: { str: 1, dex: 1, con: 10, int: 1, wis: 1, cha: 1 }, hp: { max: 500, current: 500, temp: 0 } });
+    const state = makeState([wizard, foe], "scale-seed", srd as never);
+
+    const r = castSpell(state, { caster: "w", spell: "scorch", slot_level: 3, targets: ["f"] });
+    const dmg = r.saves?.[0]?.damage ?? 0;
+    // Slot-3 dice = 100; a failed DEX save (foe dex 1) takes full; a success halves.
+    expect(r.saves?.[0]?.success ? dmg === 50 : dmg === 100).toBe(true);
+  });
+
   it("does not gate monster (statblock) casters on spells_known", () => {
     const monster = makeActor({
       id: "m",

@@ -31,8 +31,13 @@ describe("SRD dataset loader (5e-bits/5e-database shape)", () => {
           charisma: 10,
           challenge_rating: 0.5,
           damage_resistances: [],
+          special_abilities: [{ name: "Aggressive", desc: ["The orc can move toward a hostile as a bonus action."] }],
+          legendary_actions: [],
+          reactions: [],
           actions: [
             { name: "Greataxe", attack_bonus: 5, damage: [{ damage_dice: "1d12+3", damage_type: { index: "slashing" } }] },
+            { name: "Breath", dc: { dc_type: { index: "dexterity" }, dc_value: 11, success_type: "half" }, damage: [{ damage_dice: "2d6", damage_type: { index: "fire" } }] },
+            { name: "Multiattack" },
           ],
         },
       ]),
@@ -40,7 +45,9 @@ describe("SRD dataset loader (5e-bits/5e-database shape)", () => {
     await fs.writeFile(
       path.join(dir, "5e-SRD-Spells.json"),
       JSON.stringify([
-        { index: "fireball", name: "Fireball", level: 3, school: { index: "evocation" }, concentration: false, range: "150 feet", damage: { damage_type: { index: "fire" } }, dc: { dc_type: { index: "dexterity" } } },
+        { index: "fireball", name: "Fireball", level: 3, school: { index: "evocation" }, concentration: false, range: "150 feet", attack_type: null, area_of_effect: { type: "sphere", size: 20 }, damage: { damage_type: { index: "fire" }, damage_at_slot_level: { "3": "8d6", "4": "9d6" } }, dc: { dc_type: { index: "dexterity" }, dc_success: "half" } },
+        { index: "fire-bolt", name: "Fire Bolt", level: 0, attack_type: "ranged", damage: { damage_type: { index: "fire" }, damage_at_character_level: { "1": "1d10", "5": "2d10" } } },
+        { index: "cure-wounds", name: "Cure Wounds", level: 1, heal_at_slot_level: { "1": "1d8", "2": "2d8" } },
       ]),
     );
     await fs.writeFile(
@@ -54,14 +61,157 @@ describe("SRD dataset loader (5e-bits/5e-database shape)", () => {
     expect(out.monsters.orc?.ac).toBe(13);
     expect(out.monsters.orc?.abilities.str).toBe(16);
     expect(out.monsters.orc?.actions[0]?.damage).toBe("1d12+3");
+    // Save-based action kept with its DC; bare "Multiattack" dropped.
+    const breath = out.monsters.orc?.actions.find((a) => a.name === "Breath");
+    expect(breath?.dc_ability).toBe("dex");
+    expect(breath?.dc_value).toBe(11);
+    expect(out.monsters.orc?.actions.some((a) => a.name === "Multiattack")).toBe(false);
+    expect(out.monsters.orc?.special_abilities[0]?.name).toBe("Aggressive");
     expect(out.spells.fireball?.level).toBe(3);
     expect(out.spells.fireball?.save?.ability).toBe("dex");
+    expect(out.spells.fireball?.save?.effect).toBe("half"); // from dc_success
     expect(out.spells.fireball?.range_ft).toBe(150);
+    expect(out.spells.fireball?.classes ?? []).toEqual([]); // none tagged here
+    // Damage scaling + AoE + attack type now mapped (#20 spell mechanics).
+    expect(out.spells.fireball?.damage_by_slot?.["3"]).toBe("8d6");
+    expect(out.spells.fireball?.damage).toBe("8d6"); // base = lowest slot
+    expect(out.spells.fireball?.aoe).toEqual({ shape: "sphere", size: 20 });
+    expect(out.spells["fire-bolt"]?.attack).toBe("ranged");
+    expect(out.spells["fire-bolt"]?.damage_by_level?.["5"]).toBe("2d10");
+    expect(out.spells["cure-wounds"]?.heal_by_slot?.["2"]).toBe("2d8");
     expect(out.equipment.greataxe?.damage).toBe("1d12");
   });
 
   it("returns empty maps for a missing directory", async () => {
     const out = await loadSrdDataset("/no/such/dir");
     expect(Object.keys(out.monsters)).toHaveLength(0);
+    expect(Object.keys(out.races)).toHaveLength(0);
+    expect(Object.keys(out.classes)).toHaveLength(0);
+  });
+
+  it("loads races, classes, subclasses, feats, magic items, profs and languages (#20)", async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), "srd-"));
+    tmpDirs.push(dir);
+    await fs.writeFile(
+      path.join(dir, "5e-SRD-Races.json"),
+      JSON.stringify([
+        {
+          index: "dwarf",
+          name: "Dwarf",
+          speed: 25,
+          size: "Medium",
+          ability_bonuses: [{ ability_score: { index: "con" }, bonus: 2 }],
+          languages: [{ index: "common" }, { index: "dwarvish" }],
+          traits: [{ index: "darkvision" }],
+          subraces: [{ index: "hill-dwarf" }],
+        },
+      ]),
+    );
+    await fs.writeFile(
+      path.join(dir, "5e-SRD-Subraces.json"),
+      JSON.stringify([
+        {
+          index: "hill-dwarf",
+          name: "Hill Dwarf",
+          race: { index: "dwarf" },
+          ability_bonuses: [{ ability_score: { index: "wis" }, bonus: 1 }],
+          racial_traits: [{ index: "dwarven-toughness" }],
+        },
+      ]),
+    );
+    await fs.writeFile(
+      path.join(dir, "5e-SRD-Classes.json"),
+      JSON.stringify([
+        {
+          index: "wizard",
+          name: "Wizard",
+          hit_die: 6,
+          saving_throws: [{ index: "int" }, { index: "wis" }],
+          proficiencies: [{ index: "daggers" }],
+          spellcasting: { spellcasting_ability: { index: "int" } },
+          subclasses: [{ index: "evocation" }],
+        },
+      ]),
+    );
+    await fs.writeFile(
+      path.join(dir, "5e-SRD-Subclasses.json"),
+      JSON.stringify([
+        { index: "evocation", name: "Evocation", class: { index: "wizard" }, subclass_flavor: "Arcane Tradition", desc: ["Sculpt spells."] },
+      ]),
+    );
+    await fs.writeFile(
+      path.join(dir, "5e-SRD-Features.json"),
+      JSON.stringify([
+        { index: "sculpt-spells", name: "Sculpt Spells", level: 2, class: { index: "wizard" }, subclass: { index: "evocation" }, desc: ["..."] },
+      ]),
+    );
+    await fs.writeFile(
+      path.join(dir, "5e-SRD-Traits.json"),
+      JSON.stringify([
+        { index: "darkvision", name: "Darkvision", races: [{ index: "dwarf" }], desc: ["See in the dark."] },
+      ]),
+    );
+    await fs.writeFile(
+      path.join(dir, "5e-SRD-Feats.json"),
+      JSON.stringify([
+        { index: "grappler", name: "Grappler", prerequisites: [{ ability_score: { index: "str" }, minimum_score: 13 }], desc: ["..."] },
+      ]),
+    );
+    await fs.writeFile(
+      path.join(dir, "5e-SRD-Magic-Items.json"),
+      JSON.stringify([
+        { index: "adamantine-armor", name: "Adamantine Armor", equipment_category: { index: "armor" }, rarity: { name: "Uncommon" }, desc: ["..."] },
+      ]),
+    );
+    await fs.writeFile(
+      path.join(dir, "5e-SRD-Proficiencies.json"),
+      JSON.stringify([
+        { index: "skill-arcana", name: "Skill: Arcana", type: "Skills", classes: [{ index: "wizard" }], races: [] },
+      ]),
+    );
+    await fs.writeFile(
+      path.join(dir, "5e-SRD-Languages.json"),
+      JSON.stringify([
+        { index: "dwarvish", name: "Dwarvish", type: "Standard", typical_speakers: ["Dwarves"], script: "Dwarvish" },
+      ]),
+    );
+
+    const out = await loadSrdDataset(dir);
+    expect(out.races.dwarf?.speed).toBe(25);
+    expect(out.races.dwarf?.ability_bonuses.con).toBe(2);
+    expect(out.races.dwarf?.subraces).toContain("hill-dwarf");
+    expect(out.subraces["hill-dwarf"]?.race).toBe("dwarf");
+    expect(out.subraces["hill-dwarf"]?.ability_bonuses.wis).toBe(1);
+    expect(out.classes.wizard?.hit_die).toBe(6);
+    expect(out.classes.wizard?.saving_throws).toEqual(["int", "wis"]);
+    expect(out.classes.wizard?.spellcasting_ability).toBe("int");
+    expect(out.subclasses.evocation?.class).toBe("wizard");
+    expect(out.features["sculpt-spells"]?.level).toBe(2);
+    expect(out.traits.darkvision?.races).toContain("dwarf");
+    expect(out.feats.grappler?.prerequisites).toContain("str 13");
+    expect(out.magicItems["adamantine-armor"]?.rarity).toBe("Uncommon");
+    expect(out.proficiencies["skill-arcana"]?.type).toBe("Skills");
+    expect(out.languages.dwarvish?.script).toBe("Dwarvish");
+  });
+
+  it("matches filenames specifically, ignoring lookalikes (#20)", async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), "srd-"));
+    tmpDirs.push(dir);
+    // Real Feats vs the Features lookalike, real Spells vs Spellcasting,
+    // real Equipment vs Equipment-Categories, real Races vs Subraces.
+    await fs.writeFile(path.join(dir, "5e-SRD-Feats.json"), JSON.stringify([{ index: "alert", name: "Alert" }]));
+    await fs.writeFile(path.join(dir, "5e-SRD-Features.json"), JSON.stringify([{ index: "rage", name: "Rage", class: { index: "barbarian" } }]));
+    await fs.writeFile(path.join(dir, "5e-SRD-Spellcasting.json"), JSON.stringify([{ index: "spellcasting-wizard", name: "Spellcasting" }]));
+    await fs.writeFile(path.join(dir, "5e-SRD-Equipment-Categories.json"), JSON.stringify([{ index: "armor", name: "Armor" }]));
+
+    const out = await loadSrdDataset(dir);
+    // Feats and Features land in their own buckets, not mixed.
+    expect(out.feats.alert).toBeTruthy();
+    expect(out.feats.rage).toBeUndefined();
+    expect(out.features.rage).toBeTruthy();
+    expect(out.features.alert).toBeUndefined();
+    // Spellcasting must not be treated as a spell; Equipment-Categories not equipment.
+    expect(out.spells["spellcasting-wizard"]).toBeUndefined();
+    expect(out.equipment.armor).toBeUndefined();
   });
 });

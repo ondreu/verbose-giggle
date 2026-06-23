@@ -174,7 +174,7 @@ interface GameStore {
   createCharacter: (draft: unknown) => Promise<{ ok: boolean; error?: string; id?: string }>;
   levelUp: (
     actor: string,
-    choices?: { asi?: Record<string, number>; spells?: string[] },
+    choices?: { asi?: Record<string, number>; spells?: string[]; subclass?: string; feats?: string[] },
   ) => Promise<{ ok: boolean; error?: string }>;
 }
 

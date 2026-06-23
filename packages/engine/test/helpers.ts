@@ -1,5 +1,5 @@
 import type { Actor, SessionState } from "@adm/schemas";
-import { createSrdIndex } from "@adm/srd";
+import { createSrdIndex, type SrdOverrides } from "@adm/srd";
 import { makeRng, type GameState } from "../src/index.js";
 
 export function makeActor(over: Partial<Actor> & { id: string; name: string }): Actor {
@@ -17,6 +17,9 @@ export function makeActor(over: Partial<Actor> & { id: string; name: string }): 
     speed: 30,
     spell_slots: {},
     spells_known: [],
+    languages: [],
+    features: [],
+    feats: [],
     conditions: [],
     concentration: null,
     inventory: [],
@@ -29,7 +32,11 @@ export function makeActor(over: Partial<Actor> & { id: string; name: string }): 
   } as Actor;
 }
 
-export function makeState(actors: Actor[], seed: string | number = "test-seed"): GameState {
+export function makeState(
+  actors: Actor[],
+  seed: string | number = "test-seed",
+  srdOverrides?: SrdOverrides,
+): GameState {
   const actorMap = Object.fromEntries(actors.map((a) => [a.id, a]));
   const session: SessionState = {
     campaign: "test",
@@ -46,7 +53,7 @@ export function makeState(actors: Actor[], seed: string | number = "test-seed"):
   return {
     actors: actorMap,
     session,
-    srd: createSrdIndex(),
+    srd: createSrdIndex(srdOverrides),
     rng: makeRng(seed),
     variant: { flanking: false, diagonals: "5-5-5", gridShape: "square" },
   };

@@ -104,16 +104,26 @@ on old code and items **#15, #17, #18** are likely already resolved by updating.
   first-run home view: open Settings, switch/create/forge a campaign, manage
   campaigns (#35), roll back (snapshots), and enter play. Campaign create/forge
   endpoints write into the vault (`apps/server/src/routes/game.ts`).
-- **[x] #14 — Character creation GUI (BG3-style guided flow).** Done (earlier
-  work). `CharacterCreate` guides race → class → ability scores (standard array)
-  → skills → cantrips/spells and writes a valid actor note + party enrolment
-  (`apps/server/src/vault/creation.ts`, `creation.test.ts`). (Subrace/subclass/
-  feats and full SRD wiring deepen with #20.)
-- **[x] #13 — Level-up GUI and engine-driven leveling.** Done (earlier work).
-  Leveling is engine-driven (`packages/engine/src/leveling.ts` + `leveling.test.ts`):
-  `award_xp` auto-levels across thresholds; the `LevelUpModal` guides ASI/HP/
-  spells wired through `/api/level-up`. (Feat picks and SRD-sourced features
-  expand with #20.)
+- **[x] #14 — Character creation GUI (BG3-style guided flow).** Done, then
+  deepened with #20. `CharacterCreate` guides race (+subrace) → class → ability
+  scores → skills → spells and writes a valid actor note + party enrolment
+  (`apps/server/src/vault/creation.ts`, `creation.test.ts`). When an SRD dataset
+  is mounted, `creationOptions(srd)` enriches with real **subraces** (ability
+  bonuses + traits), per-class **spell lists** (cantrips + level-1 picker,
+  capped), **subclasses** and **feats**; `createCharacter` applies subrace
+  bonuses, records racial traits/level-1 features + languages, and validates
+  spells against the class list. Sheets store SRD ids (race/class), localized in
+  the UI via `csLineage`/`csClass`. Falls back to the hardcoded base without a
+  dataset.
+- **[x] #13 — Level-up GUI and engine-driven leveling.** Done, then deepened with
+  #20. Leveling is engine-driven (`packages/engine/src/leveling.ts` +
+  `leveling.test.ts`): `award_xp` auto-levels across thresholds; `level_up` now
+  also grants the class/subclass **features** for the new level
+  (`featuresAtLevel`), and new `choose_subclass` / `grant_feat` tools handle
+  subclass selection (validated, backfills features) and feats. The `LevelUpModal`
+  fetches `/api/level-up/options` (SRD spell list + subclasses + feats) and
+  guides HP/ASI-or-feat/subclass/spells through `/api/level-up`. `spellMod` uses
+  the SRD class's spellcasting ability when mounted.
 - **[x] #15 — Image generation is undiscoverable.** Done (earlier work). The
   "vizualizovat" (chat) and "portrét" (sheet) actions use a clear `camera` icon
   and sit as visible toolbar buttons. `ChatPanel.tsx`, `SheetPanel.tsx`,
@@ -274,11 +284,25 @@ on old code and items **#15, #17, #18** are likely already resolved by updating.
   - Pairs with the start-up menu (#2) and the showcase vault (#5 — author a few
     quests so it demos).
 
-- **#20 — Consume the rest of the SRD dataset.** Today the loader
-  (`apps/server/src/srd/load.ts`) only reads `*monster*`, `*spell*`,
-  `*equipment*`; everything else in 5e-bits/5e-database is ignored. Extend it to
-  load and expose the data that future authoring/leveling features need
-  (`src/2014/en`):
+- **[x] #20 — Consume the rest of the SRD dataset.** Done. The loader
+  (`apps/server/src/srd/load.ts`) now maps Races/Subraces, Classes/Subclasses/
+  Features/Traits, Feats, Magic-Items, and Proficiencies/Languages on top of the
+  original monster/spell/equipment categories, with matching tightened to the
+  exact `5e-SRD-<Category>.json` names (case-insensitive, `5e-SRD-` prefix
+  optional) so the lookalike traps no longer leak — `Spells`≠`Spellcasting`,
+  `Equipment`≠`Equipment-Categories`, `Feats`≠`Features`, `Races`≠`Subraces`.
+  New zod types + typed get/`list` accessors live in `@adm/srd`
+  (`packages/srd/src/types.ts`, `index.ts`); `SrdOverrides`/`emptyOverrides()`
+  carry the extra maps and the `SessionManager` threads them into
+  `createSrdIndex`. Tolerant by design: missing files are fine, so the 3-file
+  minimal setup still works (covered by `apps/server/test/srd.test.ts`). The
+  data is now **consumed**, not just loaded: creation (#14) and leveling (#13)
+  use races/subraces/classes/subclasses/spell-lists/feats; spells map full
+  mechanics (damage scaling by slot/level, attack type, save effect, healing);
+  class starting equipment is granted and AC is derived from armor; monster
+  statblocks carry special/legendary/reaction + save-based actions; magic items
+  resolve as loot; and the `lookup` tool exposes every category to the DM.
+  Originally:
   - **Races / Subraces** (`5e-SRD-Races.json`, `5e-SRD-Subraces.json`) — ability
     bonuses, speed, traits; feeds character creation (#14).
   - **Classes / Subclasses / Features / Traits** (`5e-SRD-Classes.json`,
