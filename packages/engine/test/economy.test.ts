@@ -46,7 +46,7 @@ describe("action economy enforcement", () => {
     expect(dispatch(state, "attack", { attacker: nowActive, target: nowTarget }).ok).toBe(true);
   });
 
-  it("treats an off-turn attack as a reaction, spent once", () => {
+  it("opportunity attack (reaction:true) off-turn is allowed once", () => {
     const a = makeActor({ id: "a", name: "A" });
     const b = makeActor({ id: "b", name: "B", faction: "hostile" });
     const state = makeState([a, b], "econ-3");
@@ -54,11 +54,16 @@ describe("action economy enforcement", () => {
     const active = combatOf(state).order[0]!.actor;
     const reactor = active === "a" ? "b" : "a";
 
-    // The non-active creature reacts (opportunity attack) — allowed once.
-    expect(dispatch(state, "attack", { attacker: reactor, target: active }).ok).toBe(true);
+    // Off-turn attack without reaction flag is refused (wrong actor on turn).
+    const noFlag = dispatch(state, "attack", { attacker: reactor, target: active });
+    expect(noFlag.ok).toBe(false);
+    expect(noFlag.error).toContain("není na tahu");
+
+    // With reaction:true it is treated as an opportunity attack — allowed once.
+    expect(dispatch(state, "attack", { attacker: reactor, target: active, reaction: true }).ok).toBe(true);
     expect(combatOf(state).budget?.reaction).toBe(false);
-    // A second off-turn attack is refused — no reaction left.
-    const again = dispatch(state, "attack", { attacker: reactor, target: active });
+    // A second opportunity attack is refused — reaction already spent.
+    const again = dispatch(state, "attack", { attacker: reactor, target: active, reaction: true });
     expect(again.ok).toBe(false);
     expect(again.error).toContain("reakci");
   });

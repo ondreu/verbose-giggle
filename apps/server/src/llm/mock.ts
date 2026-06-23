@@ -37,6 +37,14 @@ export class MockLlmClient implements Llm {
       content: null,
       toolCalls: [{ id: `mock-${Date.now()}`, name, args }],
     });
+    // Player combat action: attack + advance turn so AI actors can resolve.
+    const mkCombatAction = (name: string, args: unknown): LlmResponse => ({
+      content: null,
+      toolCalls: [
+        { id: `mock-${Date.now()}`, name, args },
+        { id: `mock-turn-${Date.now() + 1}`, name: "next_turn", args: {} },
+      ],
+    });
 
     // Campaign opening scene (#31): a short atmospheric intro + a prompt to act.
     if (text.includes("[začátek")) {
@@ -61,6 +69,7 @@ export class MockLlmClient implements Llm {
     }
 
     // AI-controlled actor's turn (§8.3): attack the nearest enemy, else idle.
+    // resolveAiTurns already calls next_turn after this, so don't add it here.
     if (text.includes("[ai-tah]") && activePlayer) {
       const target = enemyOf(activePlayer);
       if (target) return mk("attack", { attacker: activePlayer, target });
@@ -72,7 +81,8 @@ export class MockLlmClient implements Llm {
       if (participants.length > 0) return mk("start_combat", { participants });
     }
     if (/(út[oč]|attack|sek|udeř|bod[an]|máv|zaút)/.test(text) && activePlayer && hostileIds[0]) {
-      return mk("attack", { attacker: activePlayer, target: hostileIds[0] });
+      // Player attacks: include next_turn so combat order advances after this turn.
+      return mkCombatAction("attack", { attacker: activePlayer, target: hostileIds[0] });
     }
     if (/(hod|roll|kostk)/.test(text)) {
       const m = text.match(/\d*d\d+([+-]\d+)?/);

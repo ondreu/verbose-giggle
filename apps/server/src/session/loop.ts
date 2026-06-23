@@ -238,9 +238,14 @@ async function runAiTurn(opts: {
   bus.emit({ type: "actor_turn", actor: actorId, name: actor.name, controller: "ai" });
   const { enemies, allies } = factionLists(manager, gs, actorId);
 
+  // Include recent chat history so the LLM has combat context when narrating.
+  const recent = manager.session.chat.slice(-HISTORY_WINDOW).map(
+    (m): ChatMsg => ({ role: m.role, content: m.content, name: m.name, tool_call_id: m.tool_call_id }),
+  );
   const messages: ChatMsg[] = [
     { role: "system", content: SYSTEM_PROMPT },
     { role: "system", content: sceneSnapshot(manager.session, gs.actors) },
+    ...recent,
     { role: "user", content: aiTurnInstruction(actor, enemies, allies) },
   ];
 
@@ -248,7 +253,7 @@ async function runAiTurn(opts: {
   if (narration) {
     manager.session.chat.push({ role: "assistant", content: narration });
     bus.emit({ type: "narration", text: narration });
-    await manager.log(`\n**${actor.name} (AI):** ${narration}`);
+    await manager.log(`\n**DM (${actor.name}):** ${narration}`);
   }
 }
 

@@ -211,6 +211,40 @@ describe("friendly fire guard (#12)", () => {
   });
 });
 
+describe("attack range / reach check", () => {
+  function combatWithTokens(state: ReturnType<typeof makeState>, positions: Record<string, { x: number; y: number }>) {
+    state.session.combat = {
+      round: 1,
+      order: Object.keys(positions).map((id, i) => ({ actor: id, initiative: 20 - i })),
+      turn_index: 0,
+      grid: { w: 16, h: 12, cell_ft: 5 },
+      tokens: { ...positions },
+      terrain: [],
+      budget: { action: true, bonus: true, reaction: true, movement: 30 },
+    };
+    state.session.active_player = Object.keys(positions)[0] ?? null;
+  }
+
+  it("blocks a melee attack when target is more than 5 ft away", () => {
+    const hero = makeActor({ id: "h", name: "Hero" });
+    const foe = makeActor({ id: "g", name: "Goblin", faction: "hostile", ac: 15, hp: { max: 7, current: 7, temp: 0 } });
+    const state = makeState([hero, foe], "range-melee");
+    combatWithTokens(state, { h: { x: 0, y: 0 }, g: { x: 3, y: 0 } }); // 15 ft apart
+    const r = attack(state, { attacker: "h", target: "g" });
+    expect(r.hit).toBe(false);
+    expect(r.detail).toContain("příliš daleko");
+  });
+
+  it("allows a melee attack when target is adjacent (5 ft)", () => {
+    const hero = makeActor({ id: "h", name: "Hero" });
+    const foe = makeActor({ id: "g", name: "Goblin", faction: "hostile", ac: 5, hp: { max: 7, current: 7, temp: 0 } });
+    const state = makeState([hero, foe], "range-adj");
+    combatWithTokens(state, { h: { x: 0, y: 0 }, g: { x: 1, y: 0 } }); // 5 ft
+    const r = attack(state, { attacker: "h", target: "g" });
+    expect(/příliš daleko/.test(r.detail)).toBe(false);
+  });
+});
+
 describe("attack", () => {
   it("nat 1 always misses, logs to the dice log", () => {
     // Find a seed where the first d20 is a 1 is overkill; instead assert structure.

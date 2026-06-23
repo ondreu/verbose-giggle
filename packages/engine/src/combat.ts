@@ -206,10 +206,37 @@ export function attack(
   // Condition-driven advantage/disadvantage, auto-crit, and can't-act (§8.1).
   const weaponEq = args.weapon ? state.srd.equipment(args.weapon) : undefined;
   const ranged = !!weaponEq?.range_ft || (weaponEq?.properties?.includes("ammunition") ?? false);
-  const adjacent =
+  const distFt =
     combat && from && to
-      ? gridDistanceFt(from, to, combat.grid.cell_ft, combat.grid.shape, state.variant.diagonals) <= 5
-      : true;
+      ? gridDistanceFt(from, to, combat.grid.cell_ft, combat.grid.shape, state.variant.diagonals)
+      : null;
+  const adjacent = distFt !== null ? distFt <= 5 : true;
+
+  // Range / reach guard: block attacks that are physically out of range (§8.1).
+  if (distFt !== null) {
+    if (ranged) {
+      // Ranged weapon: hard block beyond weapon's normal range (long range not in schema).
+      const maxRangeFt = weaponEq?.range_ft;
+      if (maxRangeFt && distFt > maxRangeFt) {
+        const detail = `${attacker.name} je mimo dostřel — vzdálenost ${distFt} ft přesahuje dosah zbraně ${maxRangeFt} ft`;
+        log(state, { kind: "attack", actor: args.attacker, target: args.target, detail, tool: "attack" });
+        return { to_hit: 0, hit: false, crit: false, detail };
+      }
+    } else {
+      // Melee: 5 ft default reach; 10 ft for "reach" weapons; use monster action reach if available.
+      const monsterRef = attacker.srd_ref ? state.srd.monster(attacker.srd_ref) : undefined;
+      const monsterAction = monsterRef
+        ? (monsterRef.actions.find((a) => a.damage) ?? monsterRef.actions[0])
+        : undefined;
+      const reachFt = monsterAction?.reach_ft ?? (weaponEq?.properties?.includes("reach") ? 10 : 5);
+      if (distFt > reachFt) {
+        const detail = `${attacker.name} je příliš daleko od ${target.name} pro útok nablízko — vzdálenost ${distFt} ft, dosah ${reachFt} ft`;
+        log(state, { kind: "attack", actor: args.attacker, target: args.target, detail, tool: "attack" });
+        return { to_hit: 0, hit: false, crit: false, detail };
+      }
+    }
+  }
+
   const cmods = attackMods(attacker, target, { ranged, adjacent });
   if (cmods.blocked) {
     const detail = `${attacker.name} nemůže útočit (neschopen jednat)`;
