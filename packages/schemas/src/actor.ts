@@ -66,6 +66,10 @@ export const ActorSchema = z
     race: z.string().optional(),
     class: z.string().optional(),
     subclass: z.string().optional(),
+    /** Optional background id (SRD Backgrounds, #20). */
+    background: z.string().optional(),
+    /** Free-text character backstory authored at creation (#14). */
+    backstory: z.string().optional(),
     level: z.number().int().positive().default(1),
     xp: z.number().int().nonnegative().default(0),
     abilities: Abilities,

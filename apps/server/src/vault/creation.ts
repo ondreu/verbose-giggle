@@ -77,6 +77,24 @@ const CLASSES: Record<string, ClassDef> = {
 const HIT_DIE_MAX: Record<string, number> = { d6: 6, d8: 8, d10: 10, d12: 12 };
 const STANDARD_ARRAY = [15, 14, 13, 12, 10, 8];
 
+/**
+ * Point-buy (the BG3 / 5e method, #14): base scores run 8–15 before racial
+ * bonuses and cost from a 27-point budget. Stops players dumping everything to
+ * 18 — every point above 13 costs extra. The single source of truth shared with
+ * the GUI via `creationOptions`.
+ */
+const POINT_BUY = {
+  budget: 27,
+  min: 8,
+  max: 15,
+  cost: { 8: 0, 9: 1, 10: 2, 11: 3, 12: 4, 13: 5, 14: 7, 15: 9 } as Record<number, number>,
+};
+
+/** Cost of a base score, or null if it is outside the point-buy range. */
+function pointBuyCost(score: number): number | null {
+  return POINT_BUY.cost[score] ?? null;
+}
+
 const abilityMod = (score: number) => Math.floor((score - 10) / 2);
 
 /**
@@ -189,6 +207,7 @@ export function creationOptions(srd?: SrdIndex) {
     })),
     feats,
     standardArray: STANDARD_ARRAY,
+    pointBuy: POINT_BUY,
     abilityOrder: ["str", "dex", "con", "int", "wis", "cha"] as Ability[],
   };
 }
@@ -240,6 +259,8 @@ export interface CharacterDraft {
   abilities: Record<Ability, number>;
   skills: string[];
   spells?: string[];
+  /** Optional free-text backstory authored in the creation flow (#14). */
+  backstory?: string;
   controller?: "human" | "ai";
 }
 
@@ -274,14 +295,21 @@ export async function createCharacter(
   }
   const subraceBonuses = (subrace?.ability_bonuses ?? {}) as Partial<Record<Ability, number>>;
 
-  // Apply racial + subrace bonuses (capped at 20) to the base scores.
+  // Validate the base scores against point-buy: each 8–15, total ≤ 27 points.
+  // This rejects an all-18 dump regardless of what the client sends.
   const abilities = { str: 8, dex: 8, con: 8, int: 8, wis: 8, cha: 8 } as Record<Ability, number>;
+  let spent = 0;
   for (const key of Object.keys(abilities) as Ability[]) {
-    const base = Number(draft.abilities?.[key] ?? 10);
-    if (!Number.isFinite(base) || base < 3 || base > 18) {
-      throw new Error(`Neplatná hodnota vlastnosti ${key}: ${draft.abilities?.[key]}`);
+    const base = Number(draft.abilities?.[key] ?? POINT_BUY.min);
+    const cost = pointBuyCost(base);
+    if (cost === null) {
+      throw new Error(`Vlastnost ${key} musí být ${POINT_BUY.min}–${POINT_BUY.max} (point-buy): ${draft.abilities?.[key]}`);
     }
+    spent += cost;
     abilities[key] = Math.min(20, base + (race.bonuses[key] ?? 0) + (subraceBonuses[key] ?? 0));
+  }
+  if (spent > POINT_BUY.budget) {
+    throw new Error(`Překročen rozpočet vlastností: ${spent}/${POINT_BUY.budget} bodů.`);
   }
 
   // Validate chosen skills against the class list and its pick count.
@@ -340,6 +368,7 @@ export async function createCharacter(
     faction: "party",
     race: subrace ? subrace.id : draft.race,
     class: draft.class,
+    ...(draft.backstory?.trim() ? { backstory: draft.backstory.trim() } : {}),
     level: 1,
     xp: 0,
     abilities,
@@ -364,9 +393,12 @@ export async function createCharacter(
     ai_profile: null,
   });
 
-  // Write the actor note.
+  // Write the actor note. The backstory becomes the note body so the DM can use
+  // it as narration grounding; a default line is used when none was given.
   const file = path.join(campaign.dir, "characters", `${id}.md`);
-  const body = `# ${name}\n\n${race.name} ${cls.name}, 1. úroveň. Vytvořeno průvodcem tvorby postavy.\n`;
+  const intro = `${race.name} ${cls.name}, 1. úroveň. Vytvořeno průvodcem tvorby postavy.`;
+  const story = draft.backstory?.trim();
+  const body = `# ${name}\n\n${intro}\n${story ? `\n## Příběh\n\n${story}\n` : ""}`;
   await writeNote({ filePath: file, data: actor as unknown as Record<string, unknown>, body });
 
   // Enroll in the campaign party (campaign.yaml).

@@ -95,6 +95,16 @@ export function ActionsPanel() {
             disabled={disabled}
             onClick={() => void aim("Cíl útoku beze zbraně", (c) => `Zaútočím beze zbraně (unarmed strike)${c}.`, false)}
           />
+          <Chip
+            label="Strčení"
+            disabled={disabled}
+            onClick={() => void aim("Cíl strčení", (c) => `Použiju speciální útok Strčení (Shove)${c} — pokus o sražení nebo odtlačení.`, false)}
+          />
+          <Chip
+            label="Chvat"
+            disabled={disabled}
+            onClick={() => void aim("Cíl chvatu", (c) => `Pokusím se o Chvat (Grapple)${c}.`, false)}
+          />
         </Group>
 
         {/* Standard actions */}

@@ -28,6 +28,47 @@ describe("character creation", () => {
     expect(opts.races.find((r) => r.id === "elf")?.bonuses.dex).toBe(2);
     expect(opts.classes.find((c) => c.id === "wizard")?.caster).toBe("full");
     expect(opts.standardArray).toEqual([15, 14, 13, 12, 10, 8]);
+    expect(opts.pointBuy.budget).toBe(27);
+  });
+
+  it("rejects ability scores that break point-buy (no all-18 dump)", async () => {
+    const mgr = await SessionManager.open(await freshCampaign());
+    // Out of the 8–15 range.
+    await expect(
+      createCharacter(mgr.campaign, {
+        name: "Cheat",
+        race: "human",
+        class: "fighter",
+        abilities: { str: 18, dex: 18, con: 18, int: 18, wis: 18, cha: 18 },
+        skills: ["athletics", "perception"],
+      }),
+    ).rejects.toThrow(/point-buy/i);
+    // In range but over the 27-point budget (all 15 = 54).
+    await expect(
+      createCharacter(mgr.campaign, {
+        name: "Overspend",
+        race: "human",
+        class: "fighter",
+        abilities: { str: 15, dex: 15, con: 15, int: 15, wis: 15, cha: 15 },
+        skills: ["athletics", "perception"],
+      }),
+    ).rejects.toThrow(/rozpočet/i);
+  });
+
+  it("stores an authored backstory in the actor note body", async () => {
+    const dir = await freshCampaign();
+    const mgr = await SessionManager.open(dir);
+    const { id } = await createCharacter(mgr.campaign, {
+      name: "Tula",
+      race: "human",
+      class: "fighter",
+      abilities: { str: 15, dex: 14, con: 13, int: 10, wis: 12, cha: 8 },
+      skills: ["athletics", "perception"],
+      backstory: "Vyrůstala v přístavu mezi pašeráky.",
+    });
+    const note = await fs.readFile(path.join(dir, "characters", `${id}.md`), "utf8");
+    expect(note).toContain("Příběh");
+    expect(note).toContain("pašeráky");
   });
 
   it("builds a valid actor, applies racial bonuses, and enrolls in the party", async () => {
@@ -157,7 +198,7 @@ describe("character creation", () => {
         name: "Bron",
         race: "human",
         class: "fighter",
-        abilities: { str: 15, dex: 14, con: 14, int: 10, wis: 12, cha: 8 },
+        abilities: { str: 15, dex: 14, con: 13, int: 10, wis: 12, cha: 8 },
         skills: ["athletics", "perception"],
       },
       mgr.srd(),
