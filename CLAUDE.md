@@ -46,9 +46,10 @@ TypeScript everywhere, Czech player-facing UI.
 
 ## Vault layout (per campaign)
 `<vault>/campaigns/<folder>/` with `campaign.yaml`, `characters/`, `bestiary/`,
-`companions/`, `locations/`, `encounters/`, `items/`, `lore/`, `maps/`, and
-`state/` (session.json, snapshots, session-log.md). Bestiary notes reference SRD
-via `srd_ref:`.
+`companions/`, `locations/`, `encounters/`, `items/`, `quests/`, `lore/`,
+`maps/`, and `state/` (session.json, snapshots, session-log.md). Bestiary notes
+reference SRD via `srd_ref:`. Quest notes (`quests/*.md`, #19) are authored
+templates; live progress lives in `session.quests`.
 
 ## Git
 Develop on branch **`claude/upbeat-gauss-05q0pf`**. Commit per logical change;

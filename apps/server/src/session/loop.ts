@@ -1,6 +1,6 @@
 import { toolSpecs, type GameState } from "@adm/engine";
 import type { Llm, ChatMsg } from "../llm/client.js";
-import { aiTurnInstruction, ARRIVAL_BEAT, CAMPAIGN_START, RECAP_PROMPT, sceneSnapshot, type SceneConnection, SYSTEM_PROMPT } from "../llm/prompt.js";
+import { aiTurnInstruction, ARRIVAL_BEAT, CAMPAIGN_START, RECAP_PROMPT, sceneSnapshot, type SceneConnection, type SceneQuest, SYSTEM_PROMPT } from "../llm/prompt.js";
 import type { EventBus } from "./events.js";
 import type { SessionManager } from "./manager.js";
 
@@ -12,6 +12,11 @@ function sceneConnections(manager: SessionManager): SceneConnection[] {
     days: c.travel?.days,
     hours: (c.travel as { hours?: number } | undefined)?.hours,
   }));
+}
+
+/** Authored quests the world offers, for grounding quest_start ids (#19). */
+function availableQuests(manager: SessionManager): SceneQuest[] {
+  return Object.values(manager.campaign.quests).map((q) => ({ id: q.id, title: q.title }));
 }
 
 const MAX_TOOL_ROUNDS = 8; // turn budget to avoid loops (§9.2)
@@ -106,7 +111,7 @@ export async function runTurn(opts: {
   );
   const messages: ChatMsg[] = [
     { role: "system", content: SYSTEM_PROMPT },
-    { role: "system", content: sceneSnapshot(manager.session, gs.actors, sceneConnections(manager)) },
+    { role: "system", content: sceneSnapshot(manager.session, gs.actors, sceneConnections(manager), availableQuests(manager)) },
     ...recent,
     { role: "user", content: input },
   ];
@@ -141,7 +146,7 @@ export async function runIntro(opts: {
   const gs = manager.buildGameState();
   const messages: ChatMsg[] = [
     { role: "system", content: SYSTEM_PROMPT },
-    { role: "system", content: sceneSnapshot(manager.session, gs.actors, sceneConnections(manager)) },
+    { role: "system", content: sceneSnapshot(manager.session, gs.actors, sceneConnections(manager), availableQuests(manager)) },
     { role: "user", content: CAMPAIGN_START },
   ];
   const intro = await executeToolLoop({ manager, llm, bus, gs, messages });
@@ -168,7 +173,7 @@ export async function runArrival(opts: {
   const gs = manager.buildGameState();
   const messages: ChatMsg[] = [
     { role: "system", content: SYSTEM_PROMPT },
-    { role: "system", content: sceneSnapshot(manager.session, gs.actors, sceneConnections(manager)) },
+    { role: "system", content: sceneSnapshot(manager.session, gs.actors, sceneConnections(manager), availableQuests(manager)) },
     { role: "user", content: ARRIVAL_BEAT },
   ];
   const narration = await executeToolLoop({ manager, llm, bus, gs, messages });

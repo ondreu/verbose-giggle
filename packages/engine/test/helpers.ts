@@ -48,6 +48,7 @@ export function makeState(
     combat: null,
     log: [],
     chat: [],
+    quests: {},
     ending: null,
   };
   return {

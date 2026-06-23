@@ -68,6 +68,17 @@ UKOTVENÍ (grounding):
   místo abys popisy vymýšlel.
 - Mapa světa a poznámky o lokacích jsou kanonické — neodporuj jim.
 
+ÚKOLY (questy):
+- Sledování úkolů běží přes nástroje — NIKDY nezapisuj postup úkolu jako prostý
+  text. Když hráč PŘIJME úkol (od NPC, z vývěsky, z nálezu), zavolej quest_start.
+  Existuje-li autorský úkol ve světě, použij jeho id (název a cíle se doplní);
+  jinak vymysli id, název a cíle.
+- Když hráč splní DÍLČÍ cíl, zavolej quest_advance (id + objective). Když je celý
+  úkol dokončen, quest_complete; když je nenávratně zmařen (mrtvý zadavatel,
+  promarněná šance), quest_fail.
+- Tyto změny se objeví v deníku (logu) jako auditní stopa — neoznamuj postup
+  úkolu, aniž bys nejdřív zavolal příslušný nástroj.
+
 POSTUP A VOLBY POSTAVY:
 - Postup na úroveň, volba podtřídy, učení kouzel i braní vlastností (feats)
   jdou jen přes nástroje (level_up, choose_subclass, learn_spell, grant_feat,
@@ -138,15 +149,37 @@ export interface SceneConnection {
   hours?: number;
 }
 
+/** Authored quests the world offers, for grounding `quest_start` ids (#19). */
+export interface SceneQuest {
+  id: string;
+  title: string;
+}
+
 /** A compact scene snapshot fed alongside the system prompt each turn. */
 export function sceneSnapshot(
   state: SessionState,
   actors: Record<string, Actor>,
   connections?: SceneConnection[],
+  availableQuests?: SceneQuest[],
 ): string {
   const lines: string[] = [];
   lines.push(`Lokace: ${state.current_location}. Čas: den ${state.time.day}, ${state.time.hour}:00.`);
   lines.push(`Aktivní hráč: ${state.active_player ?? "—"}.`);
+  // Active quests in progress + their open objectives, so the DM can tick them.
+  const active = Object.values(state.quests ?? {}).filter((q) => q.status === "active");
+  if (active.length > 0) {
+    lines.push("Aktivní úkoly:");
+    for (const q of active) {
+      const open = q.objectives.filter((o) => !o.done).map((o) => `${o.id}: ${o.text}`).join("; ");
+      lines.push(`- ${q.id} (${q.title})${open ? ` — otevřené cíle: ${open}` : " — bez otevřených cílů"}`);
+    }
+  }
+  // Authored quests not yet started, so quest_start can reference a real id.
+  const startedIds = new Set(Object.keys(state.quests ?? {}));
+  const offerable = (availableQuests ?? []).filter((q) => !startedIds.has(q.id));
+  if (offerable.length > 0) {
+    lines.push(`Dostupné úkoly k zahájení: ${offerable.map((q) => `${q.id} (${q.title})`).join(", ")}.`);
+  }
   if (connections && connections.length > 0) {
     const fmt = (c: SceneConnection) => {
       const dur = c.days ? `${c.days} d` : c.hours ? `${c.hours} h` : "?";

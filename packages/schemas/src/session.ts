@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { ActiveCondition, Position, Slug } from "./primitives.js";
+import { QuestRuntime } from "./quest.js";
 
 /** A single dice/event log entry — the auditable trust surface (§8.4). */
 export const LogEntry = z.object({
@@ -75,6 +76,9 @@ export const SessionState = z.object({
   combat: CombatState.nullable().default(null),
   log: z.array(LogEntry).default([]),
   chat: z.array(ChatMessage).default([]),
+  /** Live quest progress, keyed by quest id (#19). Seeded from authored quest
+   *  notes when started; mutated only through the engine quest tools. */
+  quests: z.record(z.string(), QuestRuntime).default({}),
   /** Set when the campaign reaches a terminal state (e.g. the party is wiped
    *  out, #23). The UI shows a game-over screen and offers a rollback. */
   ending: z

@@ -104,6 +104,24 @@ export class SessionManager {
     return { ...counts, total };
   }
 
+  /** Merge an authored quest note into a `quest_start` arg payload (#19). */
+  private enrichQuestStart(args: unknown): unknown {
+    if (!args || typeof args !== "object") return args;
+    const a = args as { id?: unknown; title?: unknown; giver?: unknown; objectives?: unknown };
+    if (typeof a.id !== "string") return args;
+    const authored = this.campaign.quests[a.id];
+    if (!authored) return args;
+    return {
+      ...a,
+      title: typeof a.title === "string" && a.title ? a.title : authored.title,
+      giver: a.giver ?? authored.giver,
+      objectives:
+        Array.isArray(a.objectives) && a.objectives.length > 0
+          ? a.objectives
+          : authored.objectives.map((o) => ({ id: o.id, text: o.text })),
+    };
+  }
+
   /** Capture mutable actor state back into the session overlay after engine work. */
   private syncOverlay(gs: GameState): void {
     for (const [id, actor] of Object.entries(gs.actors)) {
@@ -119,6 +137,10 @@ export class SessionManager {
 
   /** Run a single tool through the engine, persisting the resulting state. */
   async applyTool(gs: GameState, name: string, args: unknown) {
+    // When the DM starts an authored quest by id, fill in its title/giver/
+    // objectives from the vault note so the model need only reference the id
+    // (#19). Explicit args from the model still win.
+    if (name === "quest_start") args = this.enrichQuestStart(args);
     const result = dispatch(gs, name, args);
     // A solo hero's death ends the campaign; the roster lives in the config,
     // so the engine can't decide this on its own (#23).

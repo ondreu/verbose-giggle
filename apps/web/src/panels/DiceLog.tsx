@@ -15,6 +15,7 @@ const KIND_ICON: Record<string, string> = {
   aoe: "flame",
   travel: "compass",
   combat: "skull",
+  quest: "quest",
 };
 
 const KIND_COLOR: Record<string, string> = {
@@ -24,6 +25,7 @@ const KIND_COLOR: Record<string, string> = {
   spell: "text-arcane",
   aoe: "text-ember",
   save: "text-steel",
+  quest: "text-gold",
 };
 
 export function DiceLog() {

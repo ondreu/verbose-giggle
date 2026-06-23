@@ -43,6 +43,29 @@ describe("SessionManager + example vault", () => {
     expect(gs.srd.equipment("cint-rodu")?.damage).toBe("1d8+1");
   });
 
+  it("loads authored quests and enriches quest_start from the note (#19)", async () => {
+    const mgr = await SessionManager.open(await freshCampaign());
+    const quest = mgr.campaign.quests["goblini-z-mlyna"];
+    expect(quest?.title).toBe("Goblini ze Starého mlýna");
+    expect(quest?.objectives.map((o) => o.id)).toContain("porazit-vudce");
+
+    // Starting by id alone pulls title/giver/objectives from the authored note.
+    const gs = mgr.buildGameState();
+    const res = await mgr.applyTool(gs, "quest_start", { id: "goblini-z-mlyna", title: "" });
+    expect(res.ok).toBe(true);
+    const live = mgr.session.quests["goblini-z-mlyna"];
+    expect(live?.title).toBe("Goblini ze Starého mlýna");
+    expect(live?.giver).toBe("starosta-rozcesti");
+    expect(live?.objectives.length).toBe(3);
+    expect(mgr.session.log.some((l) => l.kind === "quest")).toBe(true);
+
+    // Advance + complete flow runs through the engine and is logged.
+    await mgr.applyTool(gs, "quest_advance", { id: "goblini-z-mlyna", objective: "porazit-vudce" });
+    expect(mgr.session.quests["goblini-z-mlyna"]?.objectives.find((o) => o.id === "porazit-vudce")?.done).toBe(true);
+    await mgr.applyTool(gs, "quest_complete", { id: "goblini-z-mlyna" });
+    expect(mgr.session.quests["goblini-z-mlyna"]?.status).toBe("completed");
+  });
+
   it("dispatches a deterministic engine command and records the dice log", async () => {
     const mgr = await SessionManager.open(await freshCampaign());
     const gs = mgr.buildGameState();

@@ -17,6 +17,7 @@ import { endCombat, nextTurn, startCombat } from "./turns.js";
 import { longRest, shortRest } from "./rest.js";
 import { advanceTime } from "./time.js";
 import { applyAbilityIncrease, awardXp, chooseSubclass, grantFeats, learnSpells, levelUp } from "./leveling.js";
+import { advanceQuest, completeQuest, failQuest, startQuest } from "./quests.js";
 
 const Advantage = z.enum(["advantage", "disadvantage", "none"]).optional();
 
@@ -668,6 +669,68 @@ export const TOOLS: ToolDef[] = [
       state.session.active_player = args.actor;
       return { active_player: args.actor };
     },
+  }),
+  def({
+    name: "quest_start",
+    description:
+      "Begin tracking a quest when the player accepts it. Use an authored quest id when one exists (its title/objectives are filled in); otherwise pass a new id, a title, and the objectives. Logged to the visible quest/dice log.",
+    readOnly: false,
+    schema: z.object({
+      id: z.string(),
+      title: z.string(),
+      giver: z.string().optional(),
+      objectives: z.array(z.object({ id: z.string(), text: z.string() })).optional(),
+    }),
+    parameters: {
+      type: "object",
+      properties: {
+        id: { type: "string", description: "Quest id (authored quest id when one exists)" },
+        title: { type: "string", description: "Player-facing quest title (Czech)" },
+        giver: { type: "string", description: "Who gave the quest (actor/NPC id or name)" },
+        objectives: {
+          type: "array",
+          description: "Steps to complete; each { id, text }",
+          items: {
+            type: "object",
+            properties: { id: { type: "string" }, text: { type: "string" } },
+            required: ["id", "text"],
+          },
+        },
+      },
+      required: ["id", "title"],
+    },
+    handler: (state, args) => startQuest(state, args),
+  }),
+  def({
+    name: "quest_advance",
+    description: "Tick one objective of an active quest as done when narration shows the player achieved it.",
+    readOnly: false,
+    schema: z.object({ id: z.string(), objective: z.string() }),
+    parameters: {
+      type: "object",
+      properties: {
+        id: { type: "string", description: "Quest id" },
+        objective: { type: "string", description: "Objective id to mark done" },
+      },
+      required: ["id", "objective"],
+    },
+    handler: (state, args) => advanceQuest(state, args),
+  }),
+  def({
+    name: "quest_complete",
+    description: "Resolve an active quest as completed (all goals met).",
+    readOnly: false,
+    schema: z.object({ id: z.string() }),
+    parameters: { type: "object", properties: { id: { type: "string" } }, required: ["id"] },
+    handler: (state, args) => completeQuest(state, args),
+  }),
+  def({
+    name: "quest_fail",
+    description: "Resolve an active quest as failed (the chance is lost or the giver is dead).",
+    readOnly: false,
+    schema: z.object({ id: z.string() }),
+    parameters: { type: "object", properties: { id: { type: "string" } }, required: ["id"] },
+    handler: (state, args) => failQuest(state, args),
   }),
   def({
     name: "lookup",
