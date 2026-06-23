@@ -6,7 +6,7 @@ import { LlmClient, type Llm } from "../llm/client.js";
 import { MockLlmClient } from "../llm/mock.js";
 import { ImageClient, buildMapPrompt, buildPrompt, type ImageSubject } from "../llm/image.js";
 import { synthesizeAzure } from "../tts/azure.js";
-import { resolveAiTurns, runIntro, runRecap, runTurn } from "../session/loop.js";
+import { resolveAiTurns, runArrival, runIntro, runRecap, runTurn } from "../session/loop.js";
 import { startEncounter } from "../session/encounter.js";
 import type { EventBus } from "../session/events.js";
 import { SessionManager } from "../session/manager.js";
@@ -636,17 +636,38 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
   app.post<{ Body: { tool: string; args: unknown } }>("/api/command", async (req, reply) => {
     const { tool, args } = req.body ?? { tool: "", args: {} };
     if (!tool) return reply.code(400).send({ error: "missing tool" });
+
+    // Inject authored edge duration into travel args so the clock advances
+    // even when the client only sends { to } (#41a). Only inject when the
+    // client hasn't already supplied a duration.
+    let enrichedArgs = args as Record<string, unknown>;
+    if (tool === "travel") {
+      const dest = (args as { to?: string }).to;
+      const here = ctx.manager.campaign.locations[ctx.manager.session.current_location];
+      const edge = dest ? (here?.connections ?? []).find((c) => c.to === dest) : undefined;
+      const hasDuration = enrichedArgs.days !== undefined || enrichedArgs.hours !== undefined;
+      if (edge?.travel?.days && !hasDuration) {
+        enrichedArgs = { ...enrichedArgs, days: edge.travel.days };
+      }
+    }
+
     const gs = ctx.manager.buildGameState();
     const before = ctx.manager.session.log.length;
-    const result = await ctx.manager.applyTool(gs, tool, args);
+    const result = await ctx.manager.applyTool(gs, tool, enrichedArgs);
     for (const entry of ctx.manager.session.log.slice(before)) {
       ctx.bus.emit({ type: "log", entry });
     }
     await ctx.manager.checkpoint(gs);
     ctx.bus.emit({ type: "state", state: ctx.manager.session });
-    // If the command (start_combat / next_turn) put an AI actor on point,
-    // auto-resolve AI turns until it's a human's turn again (§8.3).
-    await resolveAiTurns({ manager: ctx.manager, llm, bus: ctx.bus, gs });
+
+    // After successful travel, have the DM narrate the arrival scene (#41b).
+    if (tool === "travel" && result.ok) {
+      await runArrival({ manager: ctx.manager, llm, bus: ctx.bus });
+    } else {
+      // For non-travel commands, auto-resolve AI turns as before (§8.3).
+      await resolveAiTurns({ manager: ctx.manager, llm, bus: ctx.bus, gs });
+    }
+
     return result;
   });
 

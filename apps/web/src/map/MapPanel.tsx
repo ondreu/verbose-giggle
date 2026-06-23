@@ -41,7 +41,11 @@ export function MapPanel() {
   );
 }
 
-/** Lists authored encounters at the current location and starts them (§6.3). */
+/**
+ * Diegetic encounter cues at the current location (#41c). Styled as an
+ * in-world rumour/notice rather than a debug list — the DM drives combat, so
+ * the panel is a subtle atmospheric prompt, not a control surface.
+ */
 function EncounterLauncher() {
   const encounters = useGame((s) => s.encounters);
   const current = useGame((s) => s.session?.current_location);
@@ -52,20 +56,21 @@ function EncounterLauncher() {
   if (here.length === 0) return null;
 
   return (
-    <div className="pointer-events-auto absolute bottom-3 left-3 z-[1000] max-w-[16rem] rounded-sm border border-blood/40 bg-bg-crust/85 p-2 backdrop-blur">
-      <div className="mb-1 flex items-center gap-1.5 font-display text-xs uppercase tracking-wider text-blood">
-        <Icon name="skull" size={12} /> Střety zde
-      </div>
-      <ul className="space-y-1">
+    <div className="pointer-events-auto absolute bottom-3 left-3 z-[1000] max-w-[15rem] rounded-sm border border-blood/25 bg-bg-crust/90 px-3 py-2.5 backdrop-blur">
+      <p className="mb-2 font-display text-[10px] uppercase tracking-widest text-subtext0">
+        Hrozby v okolí
+      </p>
+      <ul className="space-y-2">
         {here.map((e) => (
-          <li key={e.id} className="flex items-center gap-2">
-            <span className="flex-1 truncate font-body text-sm text-text">{e.name}</span>
+          <li key={e.id} className="flex items-start gap-2">
+            <Icon name="skull" size={10} className="mt-0.5 shrink-0 text-blood/60" />
+            <span className="flex-1 font-body text-xs leading-snug text-subtext1">{e.name}</span>
             <button
-              className="btn-gold px-2 py-0.5 text-[11px]"
+              className="shrink-0 rounded-sm border border-blood/40 px-1.5 py-0.5 font-log text-[9px] uppercase tracking-wider text-blood/80 transition-colors hover:border-blood/70 hover:text-blood disabled:opacity-40"
               disabled={busy}
               onClick={() => void startEncounter(e.id)}
             >
-              Začít
+              Střet
             </button>
           </li>
         ))}
