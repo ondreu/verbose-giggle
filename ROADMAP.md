@@ -185,12 +185,12 @@ on old code and items **#15, #17, #18** are likely already resolved by updating.
   for their own sake; keep the dark-fantasy intent in `theme/tokens.css`).
 - **#7 — Font legibility.** The display font is pretty but hard to read; bump
   weight/size a touch for body text and lean on Markdown (#1) for structure.
-- **#51 — Deník kostek schovat jako vedlejší panel.** Deník kostek (dice log)
-  je bonusový doplněk, ne primární obsah — ale automatické scrollování na nový
-  záznam neustále přerušuje čtení narativního chatu. Přesunout ho do skryté /
-  sbalitelné sekce (tab vedle chatu, drawer, kolapsibilní panel apod.) tak aby
-  byl dostupný pro ty kdo ho chtějí sledovat, ale standardně nepřekážel.
-  `apps/web/src/panels/ChatPanel.tsx` nebo nový `DiceLogPanel.tsx`.
+- **[x] #51 — Deník kostek schovat jako vedlejší panel.** Done. Rušivý byl
+  *samostatný* panel `Deník kostek` v pravém railu (dole v `aside` v
+  `PlaySurface`), který scrolloval na každý nový záznam — ten byl odstraněn
+  (`DiceLog.tsx` smazán z obou layoutů). Inline animované karty hodů přímo v
+  chatu (#33, `RollLine` v `ChatPanel`) zůstávají zachované — ty fungují skvěle
+  a jsou hlavním způsobem, jak hráč hody vidí v kontextu vyprávění.
 - **#47 — UI layout adjustments per user sketches.** Visual and layout changes
   per wireframes supplied by the user. Awaiting delivery of sketches.
   - **#47a — Layout implementation.** Adjust panel layout, navigation and visual
@@ -232,12 +232,20 @@ on old code and items **#15, #17, #18** are likely already resolved by updating.
   the `/api/intro` endpoint fires it once (no-op if any chat history exists), and
   the web app calls it on entering play with empty narration. The offline mock
   narrator has a matching opening-scene branch. Covered by a server test.
-- **#32 — Streaming / lazy-loading of AI text.** AI narration currently appears
-  all at once after the full response arrives. Stream tokens to the client as
-  they are generated (server-sent events or WebSocket stream) so text appears
-  progressively. This also makes long responses feel faster. Server: switch the
-  Claude call to streaming mode; client: append tokens to the chat line as they
-  arrive. `apps/server/src/llm/`, `apps/web/src/store/store.ts`.
+- **[x] #32 — Streaming / lazy-loading of AI text.** Done. The DM's narration now
+  appears progressively. Server: `LlmClient.chat` gained an optional `onDelta`
+  callback driving an OpenAI `stream:true` path (content tokens stream out; the
+  fragmented tool-call deltas are accumulated by index into whole calls), so the
+  turn loop stays agnostic to which path ran. `executeToolLoop` streams each
+  final-answer token over the existing SSE bus as `narration_delta`; because a
+  round may turn out to be a tool call rather than the final answer, any streamed
+  preamble is retracted with `narration_discard`, and the trailing `narration`
+  event finalizes the line with the authoritative text (and triggers TTS once).
+  `runIntro` opts out of streaming (it returns over HTTP to dodge a first-load
+  SSE race). Client (`store.ts`): a `narration_delta` starts/extends a live DM
+  line, `narration_discard` drops it, `narration` finalizes (or appends a fresh
+  line for non-streamed paths like recap/mock); chat auto-scroll follows the
+  growing text. Covered by a server test.
 - **[x] #33 — Ability-check chips in chat: larger and with dice animation.**
   Done. The inline roll cards (`RollLine` in `apps/web/src/panels/ChatPanel.tsx`)
   are now bigger and bolder — a 2px faction-coloured border with a soft tint, a
@@ -303,10 +311,18 @@ shown, so the player never has to know the rules by heart.
 - **[x] #42b — Carry the missing fields.** Done. `mapSpell` and `SrdSpell`
   extended with `higher_level`, `casting_time`, `duration`, `components`,
   `concentration`, `ritual`, and `range_ft`; exposed via `/api/srd/spell/:id`.
-- **[~] #42c — Same cards for feats, skills, features, conditions, items.** Partial.
-  `FeatCard` added (lazy fetch `/api/srd/feat/:id`, hover tooltip with prereqs +
-  description). Used in SheetPanel feat chips and LevelUpModal. Skills, class
-  features, conditions, and items not yet covered.
+- **[x] #42c — Same cards for feats, skills, features, conditions, items.** Done.
+  `FeatCard` (lazy fetch `/api/srd/feat/:id`) on SheetPanel feat chips and
+  LevelUpModal; `FeatureCard` (lazy fetch `/api/srd/feature/:id`, which falls
+  back to the racial-trait table so one endpoint serves the mixed "Schopnosti"
+  row) on SheetPanel class/racial features and CharacterCreate trait chips;
+  `ItemCard` (batch-primed by InventoryPanel, lazy single fetch via
+  `/api/srd/items`) on inventory rows; `ConditionCard` (static Czech
+  `csConditionDesc`) on the sheet's condition chips; plus static `ABILITY_TIP`/
+  `SKILL_TIP` tooltips on ability/skill rows across SheetPanel, CharacterCreate,
+  LevelUpModal and the rules ReferenceModal. All routed through the shared
+  portal-based `Tip`/`TipPortal` in `InfoCard.tsx`, so they're never clipped or
+  hidden behind the map.
 - **[N/A] #42d — Note:** spell/feature *names* stay English (per the localization
   decision); only the surrounding chrome/labels are Czech.
 

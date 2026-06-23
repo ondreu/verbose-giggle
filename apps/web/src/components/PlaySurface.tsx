@@ -4,7 +4,6 @@ import { MapPanel } from "../map/MapPanel";
 import { SheetPanel } from "../panels/SheetPanel";
 import { TurnTracker } from "../panels/TurnTracker";
 import { InventoryPanel } from "../panels/InventoryPanel";
-import { DiceLog } from "../panels/DiceLog";
 
 // The three-column play surface, resizable via draggable splitters with sizes
 // persisted to localStorage (#11). Widths are stored as fractions of the total
@@ -89,7 +88,6 @@ export function PlaySurface() {
           <SheetPanel />
           <TurnTracker />
           <InventoryPanel />
-          <div className="min-h-[14rem]"><DiceLog /></div>
         </aside>
       </main>
     );
@@ -110,7 +108,6 @@ export function PlaySurface() {
         <SheetPanel />
         <TurnTracker />
         <InventoryPanel />
-        <div className="min-h-[14rem] flex-1"><DiceLog /></div>
       </aside>
     </main>
   );

@@ -179,6 +179,10 @@ interface GameStore {
 }
 
 let lineSeq = 0;
+// The DM line currently being streamed token-by-token (#32), or null when no
+// stream is in flight. Deltas append to it; `narration` finalizes it; a
+// `narration_discard` (tool-call round) removes it.
+let streamingLineId: number | null = null;
 // Guards the one-shot campaign intro against concurrent re-entry (#31).
 let introInFlight = false;
 // Pending resolver for an in-flight target request (#38).
@@ -255,9 +259,41 @@ export const useGame = create<GameStore>((set, get) => ({
   connect: () => {
     const source = new EventSource("/api/events");
     source.addEventListener("ready", () => set({ connected: true }));
+    // A streamed chunk of the DM's answer (#32): start a fresh DM line on the
+    // first chunk, then append to it as more arrive.
+    source.addEventListener("narration_delta", (e) => {
+      const { text } = JSON.parse((e as MessageEvent).data) as { text: string };
+      set((s) => {
+        if (streamingLineId === null) {
+          streamingLineId = lineSeq++;
+          return { narration: [...s.narration, { id: streamingLineId, role: "dm", text }] };
+        }
+        const id = streamingLineId;
+        return {
+          narration: s.narration.map((l) => (l.id === id ? { ...l, text: l.text + text } : l)),
+        };
+      });
+    });
+    // The partial stream was a tool-call round's preamble, not the final answer:
+    // drop the line so only real narration remains (#32).
+    source.addEventListener("narration_discard", () => {
+      if (streamingLineId === null) return;
+      const id = streamingLineId;
+      streamingLineId = null;
+      set((s) => ({ narration: s.narration.filter((l) => l.id !== id) }));
+    });
     source.addEventListener("narration", (e) => {
       const { text } = JSON.parse((e as MessageEvent).data);
-      set((s) => ({ narration: [...s.narration, { id: lineSeq++, role: "dm", text }] }));
+      set((s) => {
+        // Finalize the in-flight streamed line with the authoritative text…
+        if (streamingLineId !== null) {
+          const id = streamingLineId;
+          streamingLineId = null;
+          return { narration: s.narration.map((l) => (l.id === id ? { ...l, text } : l)) };
+        }
+        // …or append a fresh line when nothing was streamed (recap, mock).
+        return { narration: [...s.narration, { id: lineSeq++, role: "dm", text }] };
+      });
       if (get().ttsEnabled) {
         void speak(text, get().ttsProvider, () => set({ speaking: false }));
         set({ speaking: true });
@@ -296,6 +332,7 @@ export const useGame = create<GameStore>((set, get) => ({
     });
     // The campaign was hot-swapped or rolled back server-side: re-pull everything.
     source.addEventListener("reload", () => {
+      streamingLineId = null;
       set({ narration: [] });
       void get().hydrate();
       void get().listCampaigns();

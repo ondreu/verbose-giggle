@@ -32,10 +32,13 @@ export function ChatPanel() {
   const [questsOpen, setQuestsOpen] = useState(false);
   const [refOpen, setRefOpen] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
+  // Follow streaming text: the last line grows without changing array length,
+  // so key the scroll on its text length too (#32).
+  const lastLen = narration[narration.length - 1]?.text.length ?? 0;
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [narration.length, thinking, aiActing]);
+  }, [narration.length, lastLen, thinking, aiActing]);
 
   const submit = () => {
     const text = input.trim();
