@@ -69,7 +69,7 @@ export class SessionManager {
       variant: {
         flanking: this.campaign.config.variant_rules.flanking,
         diagonals: this.campaign.config.variant_rules.diagonals,
-        gridShape: this.campaign.config.variant_rules.grid_shape ?? "square",
+        gridShape: this.campaign.config.variant_rules.grid_shape ?? "hex",
       },
     };
   }

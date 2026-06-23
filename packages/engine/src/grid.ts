@@ -260,6 +260,52 @@ export function reachableCells(
   return { cells, budget };
 }
 
+/**
+ * The best cell the actor can move to THIS turn to get within `reachFt` of
+ * `target` (or, failing that, as close as possible). Returns null when no move
+ * helps — already in reach, no grid, or surrounded. Deterministic geometry so
+ * an AI actor can move→attack in one clean step instead of flailing out of
+ * range. `reachFt` defaults to 5 ft (melee); an adjacent cell is in reach for
+ * any creature with reach ≥ 5.
+ */
+export function approachStep(
+  state: GameState,
+  args: { actor: string; target: string; reachFt?: number },
+): { to: Position; distFtAfter: number; inReach: boolean } | null {
+  const c = state.session.combat;
+  if (!c) return null;
+  const actor = getActor(state, args.actor);
+  const target = getActor(state, args.target);
+  const from = c.tokens[args.actor] ?? actor.position;
+  const tpos = c.tokens[args.target] ?? target.position;
+  if (!from || !tpos) return null;
+  const reachFt = args.reachFt ?? 5;
+  const cellFt = c.grid.cell_ft;
+  const shape = c.grid.shape ?? "square";
+  const rule = state.variant.diagonals;
+  const distTo = (p: Position) => gridDistanceFt(p, tpos, cellFt, shape, rule);
+  const stepCost = (p: Position) => gridDistanceFt(from, p, cellFt, shape, rule);
+
+  const curDist = distTo(from);
+  if (curDist <= reachFt) return null; // already in reach — no move needed
+
+  const { cells } = reachableCells(state, { actor: args.actor });
+  let best: { to: Position; distFtAfter: number } | null = null;
+  for (const cell of cells) {
+    const d = distTo(cell);
+    // Minimise distance to the target; tie-break by the cheapest move there.
+    if (
+      !best ||
+      d < best.distFtAfter ||
+      (d === best.distFtAfter && stepCost(cell) < stepCost(best.to))
+    ) {
+      best = { to: cell, distFtAfter: d };
+    }
+  }
+  if (!best || best.distFtAfter >= curDist) return null; // can't get any closer
+  return { to: best.to, distFtAfter: best.distFtAfter, inReach: best.distFtAfter <= reachFt };
+}
+
 /** Cells the straight line a→b passes through, excluding the endpoints. */
 export function cellsOnLine(a: Position, b: Position): Position[] {
   let x0 = a.x;

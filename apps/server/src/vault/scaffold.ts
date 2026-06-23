@@ -77,7 +77,7 @@ export async function createCampaign(vaultPath: string, input: NewCampaignInput)
     language: "cs",
     tts: { enabled: true },
     llm: {},
-    variant_rules: { flanking: false, diagonals: "5-5-5" },
+    variant_rules: { flanking: false, diagonals: "5-5-5", grid_shape: "hex" },
   };
   await fs.writeFile(path.join(dir, "campaign.yaml"), YAML.stringify(config), "utf8");
 

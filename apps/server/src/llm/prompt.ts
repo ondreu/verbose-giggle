@@ -53,13 +53,19 @@ Vyprávíš poutavě a atmosféricky v ČEŠTINĚ, ve druhé osobě k aktivnímu
   aktivního hráče. Nikdy v jedné zprávě tah neukončuj a zároveň nevyzývej k
   další akci — to mate, kdo je na tahu.
 - AKTIVNÍ POSTAVA: Aktivního čti VŽDY z iniciativního pořadí ve snapshotu
-  („Aktivní hráč: X" / „Na tahu: X"), ne z jiného zdroje. Na tahu smí jednat
-  JEN aktivní postava (plus reakce). NIKDY nevyprávěj ani neřeš akci postavy,
-  která není na tahu — ani tahy nepřátel během tahu hráče (ty se vyřeší samy,
-  až na ně přijde řada). Pokud hráčova zpráva uvádí postavu formátem
-  „Jméno · akce", OKAMŽITĚ proveď danou akci přes nástroj (attack/cast_spell/
-  move…) bez komentáře k pořadí tahů. Engine sám odmítne neplatný tah — ty pak
-  narruj odmítnutí; nepředstírej úspěch a nenahrazuj akci jinou.
+  („Aktivní hráč: X" / „Na tahu: X") a z bloku ŘÍZENÍ TAHU, ne z jiného zdroje.
+  Na tahu smí jednat JEN aktivní postava (plus reakce). NIKDY nevyprávěj ani
+  neřeš akci postavy, která není na tahu — ani tahy nepřátel během tahu hráče
+  (ty se vyřeší samy, až na ně přijde řada). Pokud hráčova zpráva uvádí postavu
+  formátem „Jméno · akce", OKAMŽITĚ proveď danou akci přes nástroj
+  (attack/cast_spell/move…) bez komentáře k pořadí tahů. Engine sám odmítne
+  neplatný tah — ty pak narruj odmítnutí; nepředstírej úspěch a nenahrazuj akci jinou.
+- HOTSEAT (více hráčských postav): Druhá osoba („ty") VŽDY označuje aktuálně
+  aktivní postavu — při hotseatu se mění s pořadím (např. po Thorinovi je „ty"
+  = Elara). Do polí attacker/caster/actor dosazuj id AKTIVNÍ postavy z ŘÍZENÍ
+  TAHU, NIKDY ne stále téhož prvního hrdiny. Vrátí-li engine „… není na tahu —
+  na tahu je Y (id)", byla to chyba volby postavy: zopakuj TENTÝŽ nástroj s id
+  aktivní postavy, nevyprávěj odmítnutí jako „není tvůj tah".
 
 SCHOPNOSTI PODLE LISTU POSTAVY:
 - Postava může použít JEN kouzlo, schopnost nebo rys, který skutečně má na svém
@@ -121,6 +127,8 @@ STYL:
 export interface EnemyRange {
   id: string;
   distFt: number | null;
+  /** Engine-computed cell to move to this turn to reach the enemy (#combat AI). */
+  approach?: { x: number; y: number } | null;
 }
 
 /**
@@ -130,11 +138,19 @@ export interface EnemyRange {
  * screen. Injected as a system message on every combat turn.
  */
 export function turnControlNote(activeId: string, activeName: string, controller: "human" | "ai"): string {
-  return (
+  const base =
     `ŘÍZENÍ TAHU (závazné, ze systému — JEDINÝ zdroj pravdy o pořadí): na tahu je ` +
     `${activeName} (${activeId}), ovládá: ${controller === "human" ? "hráč" : "PJ/AI"}. ` +
     `Jednej pouze za tuto postavu (plus reakce). Akce jiných postav engine odmítne — ` +
-    `nevyprávěj ani neřeš jejich tahy, ty přijdou na řadu samy.`
+    `nevyprávěj ani neřeš jejich tahy, ty přijdou na řadu samy.`;
+  if (controller === "ai") return base;
+  // Hotseat: more than one player character. The human now controls THIS PC,
+  // even if earlier prose addressed a different hero as "you". Bind the id.
+  return (
+    base +
+    ` Hráč teď ovládá ${activeName} — vypravěčské „ty" = ${activeName}, ne dřívější ` +
+    `protagonista. Do polí attacker/caster/actor dosaď id „${activeId}". Hráčův vstup ` +
+    `formátu „Jméno · akce" se týká této aktivní postavy; proveď ji ihned správným nástrojem.`
   );
 }
 
@@ -151,15 +167,19 @@ export function aiTurnInstruction(
   movementFt?: number,
 ): string {
   const enemyList = enemies
-    .map((e) => (e.distFt != null ? `${e.id} (${e.distFt} ft)` : e.id))
+    .map((e) => {
+      const d = e.distFt != null ? `${e.distFt} ft` : "?";
+      const app = e.approach ? ` → přijď na (${e.approach.x},${e.approach.y})` : "";
+      return `${e.id} (${d}${app})`;
+    })
     .join(", ");
   const move = movementFt ?? actor.speed;
   return [
     `[AI-TAH] Je řada na postavě ${actor.name} (${actor.id}, frakce: ${actor.faction}).`,
     actor.ai_profile ? `Profil chování: ${actor.ai_profile}` : "",
     `Jako Pán jeskyně ovládni tuto postavu na jejím tahu pomocí nástrojů.`,
-    enemies.length ? `Vzdálenosti k nepřátelům: ${enemyList}. Tvůj pohyb tento tah: ${move} ft.` : "Žádní zjevní nepřátelé.",
-    `Útok nablízko má dosah 5 ft (zbraně s dosahem 10 ft). Je-li tvůj cíl dál, NEJDŘÍV se k němu přesuň nástrojem move (na sousední buňku), AŽ POTOM attack — v jednom tahu zvládneš pohyb i útok. Neútoč „naslepo" z dálky a pak se teprve nehýbej.`,
+    enemies.length ? `Nepřátelé (vzdálenost → kam se přesunout): ${enemyList}. Tvůj pohyb tento tah: ${move} ft.` : "Žádní zjevní nepřátelé.",
+    `Útok nablízko má dosah 5 ft (zbraně s dosahem 10 ft). Je-li tvůj cíl dál a je u něj uvedena buňka „přijď na (x,y)", NEJDŘÍV zavolej move na TU buňku, AŽ POTOM attack — v jednom tahu zvládneš pohyb i útok. Neútoč opakovaně z dálky.`,
     `Když attack přesto vrátí „mimo dosah / příliš daleko", akce se NEspotřebovala — přesuň se blíž a zaútoč znovu ve stejném tahu, neukončuj tah jen kvůli vzdálenosti.`,
     `Pohyb musí projít nástrojem move — nenarruj ho bez volání nástroje.`,
     `Po akci napiš 1–2 věty česky (např. „Shadowpaw vyklouzne ze stínu…").`,

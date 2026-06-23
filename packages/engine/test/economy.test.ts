@@ -70,6 +70,9 @@ describe("action economy enforcement", () => {
     const noFlag = dispatch(state, "attack", { attacker: reactor, target: active });
     expect(noFlag.ok).toBe(false);
     expect(noFlag.error).toContain("není na tahu");
+    // The refusal names the actor who IS on turn (id), so a hotseat mix-up can
+    // self-correct by re-issuing the tool with the active actor's id (#1).
+    expect(noFlag.error).toContain(active);
 
     // With reaction:true it is treated as an opportunity attack — allowed once.
     expect(dispatch(state, "attack", { attacker: reactor, target: active, reaction: true }).ok).toBe(true);

@@ -1,6 +1,50 @@
 import { describe, expect, it } from "vitest";
-import { aoe, attack, cellsOnLine, coverBetween, distanceFt, hexDistanceFt, hexNeighbors, move, reachableCells, startCombat } from "../src/index.js";
+import { aoe, approachStep, attack, cellsOnLine, coverBetween, distanceFt, hexDistanceFt, hexNeighbors, move, reachableCells, startCombat } from "../src/index.js";
 import { makeActor, makeState } from "./helpers.js";
+
+describe("approachStep (AI move-then-attack)", () => {
+  function combat(state: ReturnType<typeof makeState>, pos: Record<string, { x: number; y: number }>, speed = 30) {
+    state.session.combat = {
+      round: 1,
+      order: Object.keys(pos).map((id, i) => ({ actor: id, initiative: 20 - i })),
+      turn_index: 0,
+      grid: { w: 16, h: 12, cell_ft: 5 },
+      tokens: { ...pos },
+      terrain: [],
+      budget: { action: true, bonus: true, reaction: true, movement: speed },
+    };
+  }
+
+  it("picks an adjacent cell within reach when the target is reachable this turn", () => {
+    const g = makeActor({ id: "g", name: "Goblin", faction: "hostile", speed: 30 });
+    const h = makeActor({ id: "h", name: "Hero" });
+    const state = makeState([g, h], "approach-1");
+    combat(state, { g: { x: 0, y: 0 }, h: { x: 5, y: 0 } }); // 25 ft apart
+    const step = approachStep(state, { actor: "g", target: "h" });
+    expect(step).not.toBeNull();
+    expect(step!.inReach).toBe(true);
+    expect(step!.distFtAfter).toBeLessThanOrEqual(5);
+  });
+
+  it("returns the closest reachable cell (not in reach) when the target is too far to close", () => {
+    const g = makeActor({ id: "g", name: "Goblin", faction: "hostile", speed: 30 });
+    const h = makeActor({ id: "h", name: "Hero" });
+    const state = makeState([g, h], "approach-2");
+    combat(state, { g: { x: 0, y: 0 }, h: { x: 15, y: 0 } }); // 75 ft — beyond a 30 ft move
+    const step = approachStep(state, { actor: "g", target: "h" });
+    expect(step).not.toBeNull();
+    expect(step!.inReach).toBe(false);
+    expect(step!.distFtAfter).toBeLessThan(75); // strictly closer than now
+  });
+
+  it("returns null when already in reach (no move needed)", () => {
+    const g = makeActor({ id: "g", name: "Goblin", faction: "hostile" });
+    const h = makeActor({ id: "h", name: "Hero" });
+    const state = makeState([g, h], "approach-3");
+    combat(state, { g: { x: 0, y: 0 }, h: { x: 1, y: 0 } }); // adjacent
+    expect(approachStep(state, { actor: "g", target: "h" })).toBeNull();
+  });
+});
 
 describe("distance (5-5-5)", () => {
   it("diagonal counts as one cell", () => {
