@@ -434,6 +434,88 @@ sheet so the parchment is the one place you act from (BG3-style action surface).
 
 ---
 
+### #45 — Kopie SRD databází + český překlad
+
+Aktuálně aplikace závisí na externě namountovaném datasetu (5e-bits/5e-database)
+a všechna herní terminologie v UI je anglická. Cíl: zabudovat distribuovatelnou
+kopii dat a přeložit ji do češtiny.
+
+- **#45a — Bundled SRD kopie.** Stáhnout a přibalit subset SRD JSON souborů
+  přímo do repozitáře (pod `packages/srd/data/` nebo `apps/server/data/srd/`),
+  aby aplikace fungovala bez nutnosti externího mountování. Zachovat možnost
+  override přes nastavení Cesta k SRD pro uživatele s vlastní databází.
+- **#45b — Český překlad názvů.** Přeložit jména kouzel, schopností (feats),
+  dovedností (skills), ras, povolání, itemů a dalších SRD entit do češtiny.
+  Překlad ukládat jako vrstvu nad SRD daty (`packages/srd/src/cs/`) — SRD IDs
+  zůstanou anglické (determinismus), přeloženy jsou pouze player-facing labely.
+  Napojit na stávající label mapy v `packages/schemas/src/labels.ts`.
+- **#45c — Build-time extrakce popisů.** Vytěžit popisy podmínek, vlastností
+  zbraní, magických škol a dovedností do statických Czech label map (rozšíření
+  #21), aby tooltips (#42) měly česky text bez runtime dotazů.
+
+---
+
+### #46 — AI skill pro tvorbu kampaní
+
+Specializovaný skill (Claude Code slash-command) pro generování komplexních,
+dlouhých a narativně konzistentních kampaní. Měl by fungovat jako vestavěný
+příkaz v aplikaci i jako samostatně použitelný nástroj mimo ni.
+
+- **#46a — Skill definice a prompt.** Navrhnout `campaign-writer` skill
+  (`/campaign`) s řízeným, vícefázovým průchodem: premisa → svět → NPC sítě →
+  lokace → quest arc → encounter tabulky → session zero. Výstup odpovídá
+  vault schématu aplikace (YAML frontmatter + Markdown tělo).
+- **#46b — Integrace do aplikace.** Skill spustitelný z CampaignManager UI
+  (nové tlačítko „Generovat kampaň AI"). Průběh generování se zobrazí jako
+  streaming v chatu. Výsledek se uloží přímo do aktivního vault adresáře.
+- **#46c — Standalone použití.** Skill funguje jako samostatný Claude Code
+  slash-command mimo tuto aplikaci — výstup do souborů v aktuálním adresáři,
+  konfigurovatelný přes argumenty (`/campaign --setting "dark fantasy" --sessions 6`).
+- **#46d — Narativní konzistence.** Skill sleduje interní stav (vytvořené NPC,
+  lokace, foreshadowing) přes celou délku generování, aby kampaň dávala smysl
+  jako celek, ne jako sled nezávislých textů.
+
+---
+
+### #47 — Úpravy UI dle uživatelských nákresů layoutu
+
+Vizuální a layoutové změny dle schémat dodaných uživatelem. Konkrétní rozsah
+bude upřesněn při dodání nákresů.
+
+- **#47a — Implementace layoutu.** Přizpůsobit rozvržení panelů, navigaci
+  a vizuální hierarchii dle dodaných nákresů. Zachovat responzivitu a stávající
+  funkčnost.
+- **#47b — Konzistence designu.** Ověřit, že změny nevybočují ze stávajícího
+  design systému (Catppuccin barvy, font stack, panel/parchment motivy).
+
+---
+
+### #48 — Vícejazyčná podpora (i18n)
+
+Přidat podporu angličtiny vedle stávající češtiny a vybudovat infrastrukturu
+pro snadné přidání dalších jazyků. Řízeno třemi nezávislými přepínači:
+
+- **#48a — Infrastruktura i18n.** Navrhnout systém lokalizace v
+  `packages/schemas/src/i18n/` — oddělené soubory pro každý jazyk a kategorii,
+  runtime přepínání bez reloadu. Stávající Czech string mapy v `labels.ts`
+  se stanou prvním jazykovým souborem (`cs`); přidat `en` jako druhý.
+- **#48b — Přepínač #1 — Obecné UI (DM, menu, tooltip text).** Ovládá veškerý
+  chrome aplikace: DM naraci (systémový prompt), UI labely (tlačítka, nadpisy,
+  panely), tooltip popisy vlastností/dovedností/akcí. TTS předčítání se řídí
+  tímto přepínačem (DM mluví v jazyce zvoleném pro naraci).
+- **#48c — Přepínač #2 — Herní terminologie (spelly, feats, skills).** Oddělené
+  řízení názvů kouzel, schopností (feats), dovedností (skills), podmínek
+  a ostatních SRD entit — hráč může mít UI česky ale kouzla anglicky nebo
+  naopak.
+- **#48d — Přepínač #3 — Staty (vlastnosti, zkratky).** Oddělené řízení názvů
+  vlastností (Síla / Strength / STR / SIL), jejich zkratek a zobrazení na
+  character sheetu.
+- **#48e — Nastavení.** Tři přepínače viditelné v Settings modalu; volby
+  uloženy do localStorage a do session stavu, aby se neztratily při reloadu.
+  DM systémový prompt se přizpůsobí jazyku přepínače #1.
+
+---
+
 ## Deliverables the user can provide
 
 - **Showcase vault** — see `docs/SHOWCASE.md` for exactly what to author, the
