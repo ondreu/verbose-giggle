@@ -25,8 +25,13 @@ function autoPlaceParticipants(
   }
   const cellFor = (side: "left" | "right", idx: number) => {
     const inward = Math.floor(idx / grid.h);
-    const x = side === "left" ? Math.min(inward, grid.w - 1) : Math.max(grid.w - 1 - inward, 0);
-    return { x, y: idx % grid.h };
+    if (side === "left") {
+      return { x: Math.min(inward, grid.w - 1), y: idx % grid.h };
+    }
+    // Start hostiles ~30 ft (6 cells) from the friendly edge instead of at the
+    // far wall — keeps combat engaging without wasting rounds just closing distance.
+    const hostileStart = Math.min(6, Math.floor(grid.w / 2));
+    return { x: Math.min(hostileStart + inward, grid.w - 1), y: idx % grid.h };
   };
   let leftIdx = 0;
   let rightIdx = 0;

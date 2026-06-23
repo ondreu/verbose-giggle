@@ -113,12 +113,14 @@ export function aiTurnInstruction(
   return [
     `[AI-TAH] Je řada na postavě ${actor.name} (${actor.id}, frakce: ${actor.faction}).`,
     actor.ai_profile ? `Profil chování: ${actor.ai_profile}` : "",
-    `Jako Pán jeskyně ovládni tuto postavu na jejím tahu: zvol JEDNU rozumnou akci`,
-    `pomocí nástrojů (např. attack, move, cast_spell, apply_condition) a poté ji`,
-    `stručně a obrazně popiš v jednom až dvou větách (např. „Shadowpaw vyklouzne ze stínu…").`,
+    `Jako Pán jeskyně ovládni tuto postavu na jejím tahu pomocí nástrojů.`,
+    `Pokud je cíl mimo dosah: nejdřív zavolej move (cílová buňka z pos= ve scéně), pak attack.`,
+    `Pohyb musí projít nástrojem move — nenarruj ho bez volání nástroje.`,
+    `Po akci napiš 1–2 věty česky (např. „Shadowpaw vyklouzne ze stínu…").`,
     enemies.length ? `Nepřátelé: ${enemies.join(", ")}.` : "Žádní zjevní nepřátelé.",
     allies.length ? `Spojenci: ${allies.join(", ")}.` : "",
-    `Respektuj profil chování a aktuální stav (HP, vzdálenosti). Čísla musí pocházet z nástrojů.`,
+    `Respektuj HP, AC a vzdálenosti ze scény. Čísla musí pocházet z nástrojů.`,
+    `NEVOLEJ next_turn — správce tahu ho zavolá automaticky po skončení tohoto tahu.`,
   ]
     .filter(Boolean)
     .join(" ");
@@ -202,6 +204,7 @@ export function sceneSnapshot(
         c.order[c.turn_index]?.actor ?? "—"
       }.`,
     );
+    lines.push(`Grid: ${c.grid.w}×${c.grid.h} buněk, 1 buňka = ${c.grid.cell_ft} ft.`);
     if (c.budget) {
       const yn = (b: boolean) => (b ? "k dispozici" : "vyčerpáno");
       lines.push(
@@ -213,8 +216,10 @@ export function sceneSnapshot(
   lines.push("Postavy ve scéně:");
   for (const a of Object.values(actors)) {
     const conds = a.conditions.map((x) => x.name).join(", ") || "—";
+    const tokenPos = state.combat?.tokens?.[a.id];
+    const pos = tokenPos ? ` pos=(${tokenPos.x},${tokenPos.y})` : "";
     lines.push(
-      `- ${a.id} (${a.name}, ${a.faction}, ${a.controller}): HP ${a.hp.current}/${a.hp.max}, AC ${a.ac}, stavy: ${conds}`,
+      `- ${a.id} (${a.name}, ${a.faction}, ${a.controller}): HP ${a.hp.current}/${a.hp.max}, AC ${a.ac}, stavy: ${conds}${pos}`,
     );
   }
   return lines.join("\n");
