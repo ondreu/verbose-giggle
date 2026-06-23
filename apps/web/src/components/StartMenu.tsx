@@ -137,7 +137,6 @@ function CampaignList({
 }
 
 function ForgeCampaign() {
-  const forge = useGame((s) => s.forgeCampaign);
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [premise, setPremise] = useState("");
@@ -145,21 +144,73 @@ function ForgeCampaign() {
   const [detail, setDetail] = useState<"sparse" | "normal" | "rich">("normal");
   const [working, setWorking] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [progress, setProgress] = useState<{ phase: string; msg: string }[]>([]);
 
   const submit = async () => {
     if (!name.trim() || working) return;
     setWorking(true);
     setError(null);
-    const res = await forge({ name, premise: premise || undefined, length, detail });
-    setWorking(false);
-    if (!res.ok) {
-      setError(res.error ?? "Stavba kampaně selhala");
+    setProgress([]);
+
+    let res: Response;
+    try {
+      res = await fetch("/api/campaigns/forge/stream", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, premise: premise || undefined, length, detail, select: true }),
+      });
+    } catch {
+      setError("Připojení k serveru selhalo");
+      setWorking(false);
       return;
     }
-    // On success the campaign hot-swaps in; the menu re-hydrates.
-    setOpen(false);
-    setName("");
-    setPremise("");
+
+    if (!res.ok || !res.body) {
+      setError("Server vrátil chybu");
+      setWorking(false);
+      return;
+    }
+
+    const reader = res.body.getReader();
+    const dec = new TextDecoder();
+    let buf = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+
+      // Parse SSE events: chunks separated by \n\n
+      const chunks = buf.split("\n\n");
+      buf = chunks.pop() ?? "";
+
+      for (const chunk of chunks) {
+        const evMatch = chunk.match(/^event: (\w+)/m);
+        const datMatch = chunk.match(/^data: (.+)/m);
+        if (!datMatch) continue;
+        let data: Record<string, unknown> = {};
+        try { data = JSON.parse(datMatch[1]!) as Record<string, unknown>; } catch { continue; }
+
+        const evType = evMatch?.[1] ?? "message";
+        if (evType === "progress") {
+          setProgress((prev) => [
+            ...prev,
+            { phase: String(data.phase ?? ""), msg: String(data.msg ?? "") },
+          ]);
+        } else if (evType === "done") {
+          setWorking(false);
+          setOpen(false);
+          setName("");
+          setPremise("");
+          setProgress([]);
+        } else if (evType === "error") {
+          setError(String(data.error ?? "Stavba kampaně selhala"));
+          setWorking(false);
+        }
+      }
+    }
+    // Fallback: if stream closed without a done event
+    if (working) setWorking(false);
   };
 
   return (
@@ -184,12 +235,14 @@ function ForgeCampaign() {
             onChange={(e) => setName(e.target.value)}
             placeholder="Název kampaně"
             autoFocus
+            disabled={working}
           />
           <textarea
             className="settings-input min-h-[4.5rem] resize-y bg-bg-crust text-text"
             value={premise}
             onChange={(e) => setPremise(e.target.value)}
             placeholder="Námět (volitelné) — téma, tón, zápletka, postavy… nech prázdné a AI vymyslí vše."
+            disabled={working}
           />
           <div className="grid grid-cols-2 gap-2">
             <div>
@@ -198,6 +251,7 @@ function ForgeCampaign() {
                 className="settings-input bg-bg-crust text-text"
                 value={length}
                 onChange={(e) => setLength(e.target.value as typeof length)}
+                disabled={working}
               >
                 <option value="short">Krátká (3 lokace)</option>
                 <option value="medium">Střední (5 lokací)</option>
@@ -210,6 +264,7 @@ function ForgeCampaign() {
                 className="settings-input bg-bg-crust text-text"
                 value={detail}
                 onChange={(e) => setDetail(e.target.value as typeof detail)}
+                disabled={working}
               >
                 <option value="sparse">Stručný</option>
                 <option value="normal">Běžný</option>
@@ -217,10 +272,34 @@ function ForgeCampaign() {
               </select>
             </div>
           </div>
+
+          {/* Streaming progress log */}
+          {progress.length > 0 && (
+            <div className="mt-1 max-h-40 overflow-y-auto rounded-sm border border-ink/10 bg-ink/5 p-2">
+              {progress.map((p, i) => (
+                <div
+                  key={i}
+                  className={`flex items-baseline gap-1.5 py-0.5 font-log text-[11px] ${
+                    i === progress.length - 1 ? "text-gold" : "text-ink/50"
+                  }`}
+                >
+                  <span className="shrink-0 text-ink/30">{p.phase}</span>
+                  <span>{p.msg}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
           {error && <p className="font-log text-xs text-blood">{error}</p>}
           <div className="mt-1 flex items-center justify-end gap-2">
-            {working && <span className="font-log text-xs text-subtext0">AI staví svět…</span>}
-            <button className="btn-gold px-4 py-2 text-sm" disabled={!name.trim() || working} onClick={() => void submit()}>
+            {working && (
+              <span className="font-log text-xs text-subtext0 animate-pulse">AI staví svět…</span>
+            )}
+            <button
+              className="btn-gold px-4 py-2 text-sm"
+              disabled={!name.trim() || working}
+              onClick={() => void submit()}
+            >
               {working ? "…" : "Postavit a otevřít"}
             </button>
           </div>
