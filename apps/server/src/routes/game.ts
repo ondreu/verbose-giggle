@@ -412,6 +412,23 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
     }
   });
 
+  // --- SRD item resolution (#20): equipment + magic items, for inventory/loot.
+  app.get<{ Querystring: { ids?: string } }>("/api/srd/items", async (req) => {
+    const srd = ctx.manager.srd();
+    const ids = (req.query?.ids ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+    const out: Record<string, { name: string; category?: string; rarity?: string; magic: boolean; description?: string }> = {};
+    for (const id of ids) {
+      const eq = srd.equipment(id);
+      if (eq) {
+        out[id] = { name: eq.name, category: eq.category, magic: false };
+        continue;
+      }
+      const mi = srd.magicItem(id);
+      if (mi) out[id] = { name: mi.name, category: mi.category, rarity: mi.rarity, magic: true, description: mi.description };
+    }
+    return out;
+  });
+
   // --- Character creation (#14) --------------------------------------------
   app.get("/api/creation/options", async () => creationOptions(ctx.manager.srd()));
 

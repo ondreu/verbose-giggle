@@ -1,11 +1,43 @@
+import { useEffect, useState } from "react";
 import { useGame } from "../store/store";
 import { Icon } from "../components/Icon";
+
+interface ResolvedItem {
+  name: string;
+  category?: string;
+  rarity?: string;
+  magic: boolean;
+  description?: string;
+}
+
+/** Humanize an unresolved id as a last resort (e.g. "potion-of-healing"). */
+function humanize(id: string): string {
+  const s = id.replace(/[-_]/g, " ").trim();
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
 
 export function InventoryPanel() {
   const session = useGame((s) => s.session);
   const actors = useGame((s) => s.actors);
   const sendCommand = useGame((s) => s.sendCommand);
   const actor = session?.active_player ? actors[session.active_player] : null;
+
+  const [resolved, setResolved] = useState<Record<string, ResolvedItem>>({});
+  const ids = (actor?.inventory ?? []).map((i) => i.id).join(",");
+
+  // Resolve item ids to SRD names/rarity/descriptions (equipment + magic items).
+  useEffect(() => {
+    if (!ids) return;
+    void (async () => {
+      try {
+        const res = await fetch(`/api/srd/items?ids=${encodeURIComponent(ids)}`);
+        if (res.ok) setResolved(await res.json());
+      } catch {
+        /* fall back to humanized ids */
+      }
+    })();
+  }, [ids]);
+
   if (!actor) return null;
 
   return (
@@ -21,28 +53,40 @@ export function InventoryPanel() {
         {actor.inventory.length === 0 && (
           <li className="font-body text-sm italic text-subtext0">Prázdný batoh.</li>
         )}
-        {actor.inventory.map((item) => (
-          <li key={item.id} className="flex items-center gap-2 py-1">
-            <span
-              className={`h-2 w-2 rounded-full ${item.equipped ? "bg-gold" : "bg-surface2"}`}
-              title={item.equipped ? "vybaveno" : "v batohu"}
-            />
-            <span className="font-body text-text">{item.id}</span>
-            {item.qty > 1 && <span className="font-log text-xs text-subtext0">×{item.qty}</span>}
-            <button
-              className="ml-auto font-log text-[11px] text-subtext0 hover:text-gold"
-              onClick={() =>
-                void sendCommand("equip_item", {
-                  actor: actor.id,
-                  item: item.id,
-                  equipped: !item.equipped,
-                })
-              }
-            >
-              {item.equipped ? "odložit" : "vybavit"}
-            </button>
-          </li>
-        ))}
+        {actor.inventory.map((item) => {
+          const info = resolved[item.id];
+          const name = info?.name ?? humanize(item.id);
+          const tip = info?.description ?? (info?.rarity ? `${info.rarity}${info.category ? ` · ${info.category}` : ""}` : item.id);
+          return (
+            <li key={item.id} className="flex items-center gap-2 py-1">
+              <span
+                className={`h-2 w-2 rounded-full ${item.equipped ? "bg-gold" : "bg-surface2"}`}
+                title={item.equipped ? "vybaveno" : "v batohu"}
+              />
+              <span className={`font-body ${info?.magic ? "text-arcane" : "text-text"}`} title={tip}>
+                {name}
+              </span>
+              {info?.magic && (
+                <span className="font-log text-[9px] uppercase tracking-wider text-arcane/70" title={info.rarity}>
+                  ✦
+                </span>
+              )}
+              {item.qty > 1 && <span className="font-log text-xs text-subtext0">×{item.qty}</span>}
+              <button
+                className="ml-auto font-log text-[11px] text-subtext0 hover:text-gold"
+                onClick={() =>
+                  void sendCommand("equip_item", {
+                    actor: actor.id,
+                    item: item.id,
+                    equipped: !item.equipped,
+                  })
+                }
+              >
+                {item.equipped ? "odložit" : "vybavit"}
+              </button>
+            </li>
+          );
+        })}
       </ul>
     </section>
   );
