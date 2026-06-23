@@ -119,50 +119,90 @@ function mulberry32(seed: number) {
 const W = 1440;
 const H = 600;
 
+type Roof = "gable" | "cone" | "battlement" | "spire" | "flat";
+
 interface Building {
   x: number;
   y: number;
   w: number;
   h: number;
-  roof: "flat" | "spire" | "battlement";
-  windows: { x: number; y: number; lit: boolean }[];
+  roof: Roof;
+  windows: { x: number; y: number }[]; // sparse, warm-lit only
 }
 
-/** Generate a dense row of fantasy buildings with window grids. */
-function generateCity(seed: number, count: number, minH: number, maxH: number): Building[] {
+/**
+ * Generate a medieval / dark-ages town: mostly low houses with steep gabled
+ * roofs, the occasional round tower with a conical cap, a battlemented keep and
+ * a church steeple. Heights are modest and windows are few — nothing reads like
+ * a modern high-rise. `scale` thins/shortens the far layer.
+ */
+function generateCity(seed: number, scale: number): Building[] {
   const rng = mulberry32(seed);
   const out: Building[] = [];
-  let x = -20;
-  while (x < W + 20 && out.length < count) {
-    const w = 28 + rng() * 64;
-    const h = minH + rng() * (maxH - minH);
-    const y = H - h;
+  let x = -24;
+  while (x < W + 24) {
     const roll = rng();
-    const roof = roll < 0.22 ? "spire" : roll < 0.45 ? "battlement" : "flat";
-    // Window grid — columns/rows scaled to the footprint, some lit warm.
+    let w: number;
+    let h: number;
+    let roof: Roof;
+    if (roll < 0.62) {
+      // Townhouse — short, steep gable.
+      w = 30 + rng() * 36;
+      h = 46 + rng() * 70;
+      roof = "gable";
+    } else if (roll < 0.82) {
+      // Round tower with a witch-hat cone, or a squat battlemented turret.
+      w = 20 + rng() * 16;
+      h = 130 + rng() * 110;
+      roof = rng() < 0.65 ? "cone" : "battlement";
+    } else if (roll < 0.93) {
+      // Keep / great hall — wide, crenellated.
+      w = 72 + rng() * 56;
+      h = 80 + rng() * 70;
+      roof = "battlement";
+    } else {
+      // Church with a tall narrow steeple.
+      w = 40 + rng() * 22;
+      h = 120 + rng() * 70;
+      roof = "spire";
+    }
+    w *= 0.92 + scale * 0.08;
+    h *= scale;
+    const y = H - h;
+
+    // Sparse warm windows: a short vertical slit pattern, never a full grid.
     const windows: Building["windows"][number][] = [];
-    const cols = Math.max(1, Math.floor(w / 16));
-    const rows = Math.max(1, Math.floor(h / 26));
-    const padX = (w - cols * 8) / (cols + 1);
-    for (let c = 0; c < cols; c++) {
-      for (let r = 0; r < rows; r++) {
-        windows.push({
-          x: x + padX + c * (8 + padX),
-          y: y + 14 + r * 24,
-          lit: rng() < 0.4,
-        });
-      }
+    const slots = roof === "gable" ? 1 + Math.floor(rng() * 2) : 2 + Math.floor(rng() * 3);
+    for (let s = 0; s < slots; s++) {
+      if (rng() > 0.55) continue; // most windows are dark
+      windows.push({
+        x: x + w / 2 - 1.5 + (rng() < 0.5 ? -7 : 7) * (rng() < 0.5 ? 0 : 1),
+        y: y + 16 + s * 22,
+      });
     }
     out.push({ x, y, w, h, roof, windows });
-    x += w + 4 + rng() * 10;
+    x += w + 1 + rng() * 6; // packed together, tiny gaps
   }
   return out;
 }
 
 function roofPath(b: Building): string {
+  if (b.roof === "gable") {
+    // Steep medieval pitch.
+    const peak = Math.min(46, 16 + b.w * 0.6);
+    return `M${b.x - 2} ${b.y} L${b.x + b.w / 2} ${b.y - peak} L${b.x + b.w + 2} ${b.y} Z`;
+  }
+  if (b.roof === "cone") {
+    // Tall conical "witch hat" with a slight eave overhang.
+    const peak = b.w * 1.6;
+    return `M${b.x - 3} ${b.y} L${b.x + b.w / 2} ${b.y - peak} L${b.x + b.w + 3} ${b.y} Z`;
+  }
   if (b.roof === "spire") {
-    const peak = 26 + b.w * 0.4;
-    return `M${b.x} ${b.y} L${b.x + b.w / 2} ${b.y - peak} L${b.x + b.w} ${b.y} Z`;
+    // Narrow church steeple.
+    const peak = 60 + b.w * 1.1;
+    const sw = b.w * 0.5;
+    const cx = b.x + b.w / 2;
+    return `M${cx - sw / 2} ${b.y} L${cx} ${b.y - peak} L${cx + sw / 2} ${b.y} Z`;
   }
   if (b.roof === "battlement") {
     const n = Math.max(2, Math.floor(b.w / 12));
@@ -170,7 +210,7 @@ function roofPath(b: Building): string {
     let d = `M${b.x} ${b.y}`;
     for (let i = 0; i < n; i++) {
       const x0 = b.x + i * step;
-      d += ` L${x0} ${b.y - 8} L${x0 + step / 2} ${b.y - 8} L${x0 + step / 2} ${b.y}`;
+      d += ` L${x0} ${b.y - 7} L${x0 + step / 2} ${b.y - 7} L${x0 + step / 2} ${b.y}`;
     }
     return d + " Z";
   }
@@ -178,12 +218,12 @@ function roofPath(b: Building): string {
 }
 
 /**
- * A blurred dark-fantasy city skyline — dense rooftops, towers and spires with
- * lit windows against a warm horizon glow. Decorative; sits behind the embers.
+ * A blurred dark-ages town skyline — packed gabled rooftops, round towers and a
+ * church steeple against a warm horizon glow. Decorative; behind the embers.
  */
 function CitySilhouette() {
-  const far = useMemo(() => generateCity(7, 60, 120, 260), []);
-  const near = useMemo(() => generateCity(42, 40, 200, 420), []);
+  const far = useMemo(() => generateCity(7, 0.62), []);
+  const near = useMemo(() => generateCity(42, 1), []);
 
   return (
     <div className="pointer-events-none absolute inset-0 z-0" aria-hidden="true">
@@ -199,11 +239,11 @@ function CitySilhouette() {
       <svg
         viewBox={`0 0 ${W} ${H}`}
         preserveAspectRatio="xMidYMax slice"
-        className="absolute bottom-0 left-0 h-[72%] w-full opacity-85"
+        className="absolute bottom-0 left-0 h-[64%] w-full opacity-85"
         style={{ filter: "blur(4px)" }}
       >
         <CityLayer buildings={far} fill="#0d0b09" winColor="rgba(217,122,52,0.5)" />
-        <CityLayer buildings={near} fill="#050403" winColor="rgba(232,138,58,0.75)" />
+        <CityLayer buildings={near} fill="#050403" winColor="rgba(232,138,58,0.8)" />
       </svg>
     </div>
   );
@@ -216,9 +256,9 @@ function CityLayer({ buildings, fill, winColor }: { buildings: Building[]; fill:
         <g key={i}>
           <rect x={b.x} y={b.y} width={b.w} height={b.h} fill={fill} />
           {b.roof !== "flat" && <path d={roofPath(b)} fill={fill} />}
-          {b.windows.map((win, j) =>
-            win.lit ? <rect key={j} x={win.x} y={win.y} width={4} height={6} fill={winColor} /> : null,
-          )}
+          {b.windows.map((win, j) => (
+            <rect key={j} x={win.x} y={win.y} width={3} height={5} fill={winColor} />
+          ))}
         </g>
       ))}
     </g>

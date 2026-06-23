@@ -73,9 +73,10 @@ export function CharacterCreate({ onClose }: { onClose: () => void }) {
   const [raceId, setRaceId] = useState("");
   const [subraceId, setSubraceId] = useState("");
   const [classId, setClassId] = useState("");
-  // Point-buy bases start at the floor; the player spends the budget up from 8.
+  // Default to the 5e standard array (costs exactly the 27-pt budget) so the
+  // sheet opens balanced; "vynulovat" drops to all-8 for free point-buy.
   const [abilities, setAbilities] = useState<Record<Ability, number>>({
-    str: 8, dex: 8, con: 8, int: 8, wis: 8, cha: 8,
+    str: 15, dex: 14, con: 13, int: 12, wis: 10, cha: 8,
   });
   const [skills, setSkills] = useState<string[]>([]);
   const [picked, setPicked] = useState<string[]>([]); // SRD spell-list selections
