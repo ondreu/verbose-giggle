@@ -17,6 +17,7 @@ interface SettingsView {
     piperFallback: boolean;
   };
   srdPath: string;
+  srd: { spells: number; monsters: number; classes: number; races: number; feats: number; total: number };
   campaign: string;
   campaigns: string[];
   activeNarrator: "mock" | "llm";
@@ -355,8 +356,18 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                   onChange={(e) => setSrdPath(e.target.value)}
                 />
               </Field>
+              {view.srd.total > 0 ? (
+                <p className="text-xs italic text-verdigris">
+                  Dataset načten: {view.srd.total} záznamů — {view.srd.spells} kouzel, {view.srd.monsters} nestvůr,{" "}
+                  {view.srd.classes} povolání, {view.srd.races} ras, {view.srd.feats} vlastností.
+                </p>
+              ) : (
+                <p className="text-xs italic text-blood">
+                  Žádný SRD dataset nenačten — zadej cestu ke složce s {`5e-SRD-*.json`} a ulož.
+                </p>
+              )}
               <p className="text-xs italic text-ink/50">
-                Cesta k SRD a kampaň se načítají při startu — uloží se nyní, použijí po restartu.
+                Cesta k SRD se po uložení namountuje hned. Změna kampaně se projeví po restartu serveru.
               </p>
             </fieldset>
 

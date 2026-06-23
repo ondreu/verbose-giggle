@@ -21,14 +21,15 @@ interface Ember {
   baseAlpha: number;
 }
 
-// Warm palette endpoints (gold → ember) sampled per particle.
-const GOLD = [201, 162, 39] as const;
-const EMBER = [217, 122, 52] as const;
+// Warm palette endpoints (bright ember → deep red) sampled per particle, biased
+// toward red for a livelier firelight glow.
+const EMBER = [232, 138, 58] as const;
+const RED = [196, 54, 28] as const;
 
 function mix(t: number): string {
-  const r = Math.round(GOLD[0] + (EMBER[0] - GOLD[0]) * t);
-  const g = Math.round(GOLD[1] + (EMBER[1] - GOLD[1]) * t);
-  const b = Math.round(GOLD[2] + (EMBER[2] - GOLD[2]) * t);
+  const r = Math.round(EMBER[0] + (RED[0] - EMBER[0]) * t);
+  const g = Math.round(EMBER[1] + (RED[1] - EMBER[1]) * t);
+  const b = Math.round(EMBER[2] + (RED[2] - EMBER[2]) * t);
   return `${r}, ${g}, ${b}`;
 }
 
@@ -50,15 +51,17 @@ export function EmberField() {
     const spawn = (atBottom: boolean): Ember => ({
       x: Math.random() * w,
       // New particles rise from just below the fold; the initial fill is scattered.
-      y: atBottom ? h + Math.random() * 40 : Math.random() * h,
-      r: 0.6 + Math.random() * 1.8,
-      vy: 8 + Math.random() * 22,
-      drift: 6 + Math.random() * 18,
+      y: atBottom ? h + Math.random() * 60 : Math.random() * h,
+      r: 0.5 + Math.random() * 2.2,
+      // Faster and more varied — a brisker, livelier rise.
+      vy: 14 + Math.random() * 46,
+      drift: 8 + Math.random() * 30,
       phase: Math.random() * Math.PI * 2,
-      swaySpeed: 0.3 + Math.random() * 0.6,
-      hue: Math.random(),
+      swaySpeed: 0.4 + Math.random() * 1.4,
+      // Red-biased: most particles sit toward the deep-red end.
+      hue: Math.pow(Math.random(), 0.6),
       flicker: Math.random() * Math.PI * 2,
-      baseAlpha: 0.25 + Math.random() * 0.45,
+      baseAlpha: 0.3 + Math.random() * 0.55,
     });
 
     const resize = () => {
@@ -71,7 +74,7 @@ export function EmberField() {
       canvas.style.height = `${h}px`;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       // Density scales with area but is capped so big screens stay cheap.
-      const count = Math.min(90, Math.round((w * h) / 26000));
+      const count = Math.min(120, Math.round((w * h) / 20000));
       embers = Array.from({ length: count }, () => spawn(false));
     };
 
@@ -79,9 +82,10 @@ export function EmberField() {
       ctx.clearRect(0, 0, w, h);
       ctx.globalCompositeOperation = "lighter";
       for (const e of embers) {
-        const flick = 0.65 + 0.35 * Math.sin(t * 0.004 + e.flicker);
+        // Faster, deeper flicker for a more alive, restless glow.
+        const flick = 0.5 + 0.5 * Math.sin(t * 0.009 + e.flicker);
         const alpha = e.baseAlpha * flick;
-        const px = e.x + Math.sin(t * 0.001 * e.swaySpeed + e.phase) * e.drift;
+        const px = e.x + Math.sin(t * 0.0016 * e.swaySpeed + e.phase) * e.drift;
         const grad = ctx.createRadialGradient(px, e.y, 0, px, e.y, e.r * 4);
         const rgb = mix(e.hue);
         grad.addColorStop(0, `rgba(${rgb}, ${alpha})`);

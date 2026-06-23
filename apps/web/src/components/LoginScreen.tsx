@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Icon } from "./Icon";
 import { EmberField } from "./EmberField";
 
@@ -105,11 +105,86 @@ function Field({ label, htmlFor, children }: { label: string; htmlFor: string; c
   );
 }
 
+/** Small deterministic PRNG so the skyline is dense but stable across renders. */
+function mulberry32(seed: number) {
+  return () => {
+    seed |= 0;
+    seed = (seed + 0x6d2b79f5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+const W = 1440;
+const H = 600;
+
+interface Building {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  roof: "flat" | "spire" | "battlement";
+  windows: { x: number; y: number; lit: boolean }[];
+}
+
+/** Generate a dense row of fantasy buildings with window grids. */
+function generateCity(seed: number, count: number, minH: number, maxH: number): Building[] {
+  const rng = mulberry32(seed);
+  const out: Building[] = [];
+  let x = -20;
+  while (x < W + 20 && out.length < count) {
+    const w = 28 + rng() * 64;
+    const h = minH + rng() * (maxH - minH);
+    const y = H - h;
+    const roll = rng();
+    const roof = roll < 0.22 ? "spire" : roll < 0.45 ? "battlement" : "flat";
+    // Window grid — columns/rows scaled to the footprint, some lit warm.
+    const windows: Building["windows"][number][] = [];
+    const cols = Math.max(1, Math.floor(w / 16));
+    const rows = Math.max(1, Math.floor(h / 26));
+    const padX = (w - cols * 8) / (cols + 1);
+    for (let c = 0; c < cols; c++) {
+      for (let r = 0; r < rows; r++) {
+        windows.push({
+          x: x + padX + c * (8 + padX),
+          y: y + 14 + r * 24,
+          lit: rng() < 0.4,
+        });
+      }
+    }
+    out.push({ x, y, w, h, roof, windows });
+    x += w + 4 + rng() * 10;
+  }
+  return out;
+}
+
+function roofPath(b: Building): string {
+  if (b.roof === "spire") {
+    const peak = 26 + b.w * 0.4;
+    return `M${b.x} ${b.y} L${b.x + b.w / 2} ${b.y - peak} L${b.x + b.w} ${b.y} Z`;
+  }
+  if (b.roof === "battlement") {
+    const n = Math.max(2, Math.floor(b.w / 12));
+    const step = b.w / n;
+    let d = `M${b.x} ${b.y}`;
+    for (let i = 0; i < n; i++) {
+      const x0 = b.x + i * step;
+      d += ` L${x0} ${b.y - 8} L${x0 + step / 2} ${b.y - 8} L${x0 + step / 2} ${b.y}`;
+    }
+    return d + " Z";
+  }
+  return "";
+}
+
 /**
- * A blurred dark-fantasy city skyline — towers, spires and rooftops against a
- * faint warm horizon glow. Decorative only; sits behind the embers and window.
+ * A blurred dark-fantasy city skyline — dense rooftops, towers and spires with
+ * lit windows against a warm horizon glow. Decorative; sits behind the embers.
  */
 function CitySilhouette() {
+  const far = useMemo(() => generateCity(7, 60, 120, 260), []);
+  const near = useMemo(() => generateCity(42, 40, 200, 420), []);
+
   return (
     <div className="pointer-events-none absolute inset-0 z-0" aria-hidden="true">
       {/* Warm horizon glow rising behind the rooftops. */}
@@ -117,34 +192,35 @@ function CitySilhouette() {
         className="absolute inset-0"
         style={{
           background:
-            "radial-gradient(120% 70% at 50% 100%, rgba(217,122,52,0.16), transparent 55%)," +
-            "radial-gradient(90% 50% at 50% 105%, rgba(201,162,39,0.12), transparent 60%)",
+            "radial-gradient(130% 80% at 50% 100%, rgba(217,122,52,0.22), transparent 55%)," +
+            "radial-gradient(90% 55% at 50% 108%, rgba(196,54,28,0.16), transparent 60%)",
         }}
       />
       <svg
-        viewBox="0 0 1440 600"
+        viewBox={`0 0 ${W} ${H}`}
         preserveAspectRatio="xMidYMax slice"
-        className="absolute bottom-0 left-0 h-[60%] w-full opacity-60"
-        style={{ filter: "blur(6px)" }}
+        className="absolute bottom-0 left-0 h-[72%] w-full opacity-85"
+        style={{ filter: "blur(4px)" }}
       >
-        {/* Far ridge of towers (lighter, hazier). */}
-        <g fill="#0c0a09" opacity="0.7">
-          <path d="M0 600 V360 h70 v-60 h26 v60 h60 v-110 l24 -34 24 34 v110 h70 v-44 h30 v44 h90 v-80 h26 v80 h120 v-60 h70 v60 h140 v-90 h28 v90 h120 v-50 h60 v50 h150 v-70 h30 v70 h130 V600 Z" />
-        </g>
-        {/* Near ridge — taller spires and keeps, fully dark. */}
-        <g fill="#060504">
-          <path d="M0 600 V440 h90 v-70 h40 v70 h70 v-150 l34 -48 34 48 v150 h60 v-90 h44 v90 h110 v-120 l30 -40 30 40 v120 h90 v-70 h50 v70 h120 v-180 l30 -44 30 44 v180 h80 v-100 h46 v100 h120 v-70 h60 v70 h150 V600 Z" />
-        </g>
-        {/* A few lit windows as faint warm specks. */}
-        <g fill="#d97a34" opacity="0.5">
-          <rect x="300" y="340" width="4" height="6" />
-          <rect x="312" y="356" width="4" height="6" />
-          <rect x="690" y="320" width="4" height="6" />
-          <rect x="702" y="340" width="4" height="6" />
-          <rect x="1010" y="300" width="4" height="6" />
-          <rect x="1022" y="322" width="4" height="6" />
-        </g>
+        <CityLayer buildings={far} fill="#0d0b09" winColor="rgba(217,122,52,0.5)" />
+        <CityLayer buildings={near} fill="#050403" winColor="rgba(232,138,58,0.75)" />
       </svg>
     </div>
+  );
+}
+
+function CityLayer({ buildings, fill, winColor }: { buildings: Building[]; fill: string; winColor: string }) {
+  return (
+    <g>
+      {buildings.map((b, i) => (
+        <g key={i}>
+          <rect x={b.x} y={b.y} width={b.w} height={b.h} fill={fill} />
+          {b.roof !== "flat" && <path d={roofPath(b)} fill={fill} />}
+          {b.windows.map((win, j) =>
+            win.lit ? <rect key={j} x={win.x} y={win.y} width={4} height={6} fill={winColor} /> : null,
+          )}
+        </g>
+      ))}
+    </g>
   );
 }

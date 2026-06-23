@@ -79,6 +79,20 @@ export class SessionManager {
     return createSrdIndex(this.srdOverrides);
   }
 
+  /** Record counts of the mounted SRD dataset, for a "is it loaded?" UI cue. */
+  srdStats(): { spells: number; monsters: number; classes: number; races: number; feats: number; total: number } {
+    const o = this.srdOverrides;
+    const counts = {
+      spells: Object.keys(o.spells).length,
+      monsters: Object.keys(o.monsters).length,
+      classes: Object.keys(o.classes).length,
+      races: Object.keys(o.races).length,
+      feats: Object.keys(o.feats).length,
+    };
+    const total = Object.values(o).reduce((sum, m) => sum + Object.keys(m).length, 0);
+    return { ...counts, total };
+  }
+
   /** Capture mutable actor state back into the session overlay after engine work. */
   private syncOverlay(gs: GameState): void {
     for (const [id, actor] of Object.entries(gs.actors)) {

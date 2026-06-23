@@ -140,6 +140,8 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
         piperFallback: config.piperUrl != null,
       },
       srdPath: config.srdPath,
+      // SRD dataset load summary so the table can confirm it's mounted.
+      srd: ctx.manager.srdStats(),
       // The selectable identity is the campaign *folder*, not its display name.
       campaign: stored.campaign ?? path.basename(ctx.manager.campaign.dir),
       campaignName: ctx.manager.campaign.config.name,
@@ -186,10 +188,19 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
     if (patch.campaign !== undefined) clean.campaign = patch.campaign;
 
     try {
+      const prevSrdPath = config.srdPath;
       const merged = await saveSettings(config.vaultPath, clean);
       // Rebuild the effective config + narrator from env + the new settings.
       config = applySettings(loadConfig(), merged);
       llm = makeLlm();
+      // If the SRD dataset path changed, re-mount it live so creation/leveling
+      // see the new dataset without a restart, and tell clients to re-hydrate.
+      if (config.srdPath !== prevSrdPath) {
+        await reopenManager();
+        const s = ctx.manager.srdStats();
+        app.log.info(`SRD remounted from ${config.srdPath}: ${s.total} records (${s.spells} spells, ${s.monsters} monsters)`);
+        ctx.bus.emit({ type: "reload", reason: "srd-remounted" });
+      }
       app.log.info(`Settings updated; narrator=${!config.llm.apiKey || config.llm.provider === "mock" ? "mock" : "llm"}`);
       return settingsView();
     } catch (err) {
