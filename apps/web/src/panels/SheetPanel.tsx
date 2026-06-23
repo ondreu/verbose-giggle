@@ -3,7 +3,7 @@ import { csCondition, csConditionDesc, csAbility, csAbilityAbbr, csClass, csFeat
 import { useGame } from "../store/store";
 import { Icon } from "../components/Icon";
 import { LevelUpModal } from "../components/LevelUpModal";
-import { FeatCard, SpellCard, Tip, ABILITY_TIP, SKILL_TIP } from "../components/InfoCard";
+import { FeatCard, FeatureCard, SpellCard, ConditionCard, Tip, ABILITY_TIP, SKILL_TIP } from "../components/InfoCard";
 import type { PickedTarget } from "../store/store";
 
 /** Turn a picked target into a Czech "na <cíl>" clause for the action sentence. */
@@ -255,18 +255,18 @@ export function SheetPanel() {
             {conditions.map((c) => {
               const open = openCond === c.name;
               return (
-                <button
-                  key={c.name}
-                  title={csConditionDesc(c.name)}
-                  onClick={() => setOpenCond(open ? null : c.name)}
-                  className={`rounded-sm border px-1.5 py-0.5 font-log text-[11px] transition-colors ${
-                    open
-                      ? "border-blood bg-blood/20 text-blood"
-                      : "border-blood/50 bg-blood/10 text-blood hover:bg-blood/20"
-                  }`}
-                >
-                  {csCondition(c.name)}
-                </button>
+                <ConditionCard key={c.name} name={csCondition(c.name)} description={csConditionDesc(c.name)}>
+                  <button
+                    onClick={() => setOpenCond(open ? null : c.name)}
+                    className={`rounded-sm border px-1.5 py-0.5 font-log text-[11px] transition-colors ${
+                      open
+                        ? "border-blood bg-blood/20 text-blood"
+                        : "border-blood/50 bg-blood/10 text-blood hover:bg-blood/20"
+                    }`}
+                  >
+                    {csCondition(c.name)}
+                  </button>
+                </ConditionCard>
               );
             })}
           </div>
@@ -282,7 +282,7 @@ export function SheetPanel() {
       {/* Features, feats & languages from the SRD (#20 + #42c).
           Features are shown as static info (passive — not action buttons, #43d). */}
       {(actor.features?.length ?? 0) > 0 && (
-        <TagRow label="Schopnosti" items={(actor.features ?? []).map(humanizeId)} />
+        <FeatureTagRow label="Schopnosti" ids={actor.features ?? []} />
       )}
       {(actor.feats?.length ?? 0) > 0 && (
         <FeatTagRow label="Vlastnosti (feats)" ids={actor.feats ?? []} />
@@ -438,6 +438,24 @@ function FeatTagRow({ label, ids }: { label: string; ids: string[] }) {
               {csFeat(id, humanizeId(id))}
             </span>
           </FeatCard>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** Class/racial features row with SRD hover cards (#42c). */
+function FeatureTagRow({ label, ids }: { label: string; ids: string[] }) {
+  return (
+    <div className="mt-3">
+      <div className="mb-1 text-[11px] uppercase tracking-wider text-ink/60">{label}</div>
+      <div className="flex flex-wrap gap-1.5">
+        {ids.map((id) => (
+          <FeatureCard key={id} id={id}>
+            <span className="cursor-default rounded-sm border border-ink/20 bg-ink/5 px-1.5 py-0.5 font-log text-[11px] text-ink/80 hover:border-gold/40 hover:text-ink/100">
+              {humanizeId(id)}
+            </span>
+          </FeatureCard>
         ))}
       </div>
     </div>

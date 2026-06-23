@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useGame } from "../store/store";
 import { Icon } from "../components/Icon";
+import { ItemCard, primeItemCache } from "../components/InfoCard";
 
 interface ResolvedItem {
   name: string;
@@ -31,7 +32,11 @@ export function InventoryPanel() {
     void (async () => {
       try {
         const res = await fetch(`/api/srd/items?ids=${encodeURIComponent(ids)}`);
-        if (res.ok) setResolved(await res.json());
+        if (res.ok) {
+          const data = await res.json();
+          setResolved(data);
+          primeItemCache(data); // share with ItemCard hover cards (#42c)
+        }
       } catch {
         /* fall back to humanized ids */
       }
@@ -56,16 +61,17 @@ export function InventoryPanel() {
         {actor.inventory.map((item) => {
           const info = resolved[item.id];
           const name = info?.name ?? humanize(item.id);
-          const tip = info?.description ?? (info?.rarity ? `${info.rarity}${info.category ? ` · ${info.category}` : ""}` : item.id);
           return (
             <li key={item.id} className="flex items-center gap-2 py-1">
               <span
                 className={`h-2 w-2 rounded-full ${item.equipped ? "bg-gold" : "bg-surface2"}`}
                 title={item.equipped ? "vybaveno" : "v batohu"}
               />
-              <span className={`font-body ${info?.magic ? "text-arcane" : "text-text"}`} title={tip}>
-                {name}
-              </span>
+              <ItemCard id={item.id}>
+                <span className={`cursor-default font-body ${info?.magic ? "text-arcane" : "text-text"}`}>
+                  {name}
+                </span>
+              </ItemCard>
               {info?.magic && (
                 <span className="font-log text-[9px] uppercase tracking-wider text-arcane/70" title={info.rarity}>
                   ✦

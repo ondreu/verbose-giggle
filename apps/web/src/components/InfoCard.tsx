@@ -24,6 +24,24 @@ interface FeatData {
   description?: string;
 }
 
+interface FeatureData {
+  id: string;
+  name: string;
+  level?: number;
+  class?: string;
+  subclass?: string;
+  description?: string;
+}
+
+interface ItemData {
+  id: string;
+  name: string;
+  category?: string;
+  rarity?: string;
+  magic: boolean;
+  description?: string;
+}
+
 const spellCache: Record<string, SpellData | null> = {};
 async function fetchSpell(id: string): Promise<SpellData | null> {
   if (id in spellCache) return spellCache[id]!;
@@ -49,6 +67,40 @@ async function fetchFeat(id: string): Promise<FeatData | null> {
     return featCache[id];
   } catch {
     return (featCache[id] = null);
+  }
+}
+
+const featureCache: Record<string, FeatureData | null> = {};
+async function fetchFeature(id: string): Promise<FeatureData | null> {
+  if (id in featureCache) return featureCache[id]!;
+  try {
+    const res = await fetch(`/api/srd/feature/${encodeURIComponent(id)}`);
+    if (!res.ok) return (featureCache[id] = null);
+    const data = await res.json();
+    featureCache[id] = data?.id ? (data as FeatureData) : null;
+    return featureCache[id];
+  } catch {
+    return (featureCache[id] = null);
+  }
+}
+
+// Items are resolved in a batch (equipment + magic items) and primed into this
+// cache by the inventory panel, but ItemCard can also fetch a single id lazily.
+const itemCache: Record<string, ItemData | null> = {};
+export function primeItemCache(items: Record<string, Omit<ItemData, "id">>) {
+  for (const [id, data] of Object.entries(items)) itemCache[id] = { id, ...data };
+}
+async function fetchItem(id: string): Promise<ItemData | null> {
+  if (id in itemCache) return itemCache[id]!;
+  try {
+    const res = await fetch(`/api/srd/items?ids=${encodeURIComponent(id)}`);
+    if (!res.ok) return (itemCache[id] = null);
+    const data = await res.json();
+    const hit = data?.[id];
+    itemCache[id] = hit ? ({ id, ...hit } as ItemData) : null;
+    return itemCache[id];
+  } catch {
+    return (itemCache[id] = null);
   }
 }
 
@@ -235,6 +287,96 @@ export function FeatCard({ id, children }: { id: string; children: React.ReactNo
         </TipPortal>
       )}
     </span>
+  );
+}
+
+/** Wraps a class/racial feature chip and shows its SRD description on hover (#42c). */
+export function FeatureCard({ id, children }: { id: string; children: React.ReactNode }) {
+  const [feature, setFeature] = useState<FeatureData | null>(null);
+  const { wrapRef, pos, show: trigger, hide } = useTip();
+
+  const show = () => {
+    trigger();
+    if (!feature) void fetchFeature(id).then(setFeature);
+  };
+
+  return (
+    <span ref={wrapRef} style={{ display: "contents" }} onMouseEnter={show} onMouseLeave={hide} onFocus={show} onBlur={hide}>
+      {children}
+      {pos && (
+        <TipPortal pos={pos}>
+          {feature ? (
+            <>
+              <p className="mb-0.5 font-display text-base text-text">{feature.name}</p>
+              {feature.level !== undefined && (
+                <p className="mb-1 font-log text-xs text-subtext0">{feature.level}. úroveň</p>
+              )}
+              {feature.description ? (
+                <p className="font-body text-[13px] leading-snug text-subtext1 line-clamp-6">{feature.description}</p>
+              ) : (
+                <p className="font-body text-xs italic text-subtext0">Popis není v datasetu.</p>
+              )}
+            </>
+          ) : (
+            <p className="font-log text-xs text-subtext0">načítám…</p>
+          )}
+        </TipPortal>
+      )}
+    </span>
+  );
+}
+
+/** Wraps an inventory item and shows its SRD card (rarity/category/desc) on hover (#42c). */
+export function ItemCard({ id, children }: { id: string; children: React.ReactNode }) {
+  const [item, setItem] = useState<ItemData | null>(itemCache[id] ?? null);
+  const { wrapRef, pos, show: trigger, hide } = useTip();
+
+  const show = () => {
+    trigger();
+    if (!item) void fetchItem(id).then(setItem);
+  };
+
+  return (
+    <span ref={wrapRef} style={{ display: "contents" }} onMouseEnter={show} onMouseLeave={hide} onFocus={show} onBlur={hide}>
+      {children}
+      {pos && (
+        <TipPortal pos={pos}>
+          {item ? (
+            <>
+              <p className="mb-0.5 font-display text-base text-text">{item.name}</p>
+              <p className="mb-1.5 font-log text-xs text-subtext0">
+                {[item.magic ? "magický předmět" : "vybavení", item.rarity, item.category].filter(Boolean).join(" · ")}
+              </p>
+              {item.description ? (
+                <p className="font-body text-[13px] leading-snug text-subtext1 line-clamp-6">{item.description}</p>
+              ) : (
+                <p className="font-body text-xs italic text-subtext0">Bez dalšího popisu.</p>
+              )}
+            </>
+          ) : (
+            <p className="font-log text-xs text-subtext0">načítám…</p>
+          )}
+        </TipPortal>
+      )}
+    </span>
+  );
+}
+
+/** Static condition tooltip — descriptions come from the Czech label map (#34/#42c). */
+export function ConditionCard({ name, description, children }: { name: string; description: string; children: React.ReactNode }) {
+  return (
+    <Tip
+      content={
+        <>
+          <p className="mb-0.5 font-display text-base text-text">{name}</p>
+          <p className="font-body text-[13px] leading-snug text-subtext1 line-clamp-6">
+            {description || "Popis není k dispozici."}
+          </p>
+        </>
+      }
+    >
+      {children}
+    </Tip>
   );
 }
 
