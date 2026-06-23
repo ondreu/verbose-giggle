@@ -586,22 +586,7 @@ Nové deterministické engine tools, aby LLM nikdy nepsalo stav světa přímo:
 DM prompt dostane instrukci rozpoznávat situace kdy by se frakce přiblížila/vzdálila
 cíli a volat příslušný nástroj — stejný deterministický princip jako u HP/spelů (#12).
 
-#### #49d — `/world` skill pro generování živého světa
-
-Nový Claude Code skill `.claude/skills/world/SKILL.md` pro vytvoření světa před
-kampaní. Vícefázový průchod:
-
-1. **Geografie** — kontinenty, regiony, klimatické zóny, hlavní lokace
-2. **Historie** — 3 epochy (před-historická / zlatý věk / současnost), klíčové události
-3. **Frakce** — 4–6 frakcí s cíli, zdroji, územím a vzájemnými vztahy (síť, ne seznam)
-4. **NPC sítě** — klíčové postavy napříč frakcemi, jejich osobní agendy
-5. **Tenze a hooky** — aktuální konflikty a spící hrozby z nichž vyrůstají kampaně
-6. **Timeline** — chronologie + 3–5 "tikajících bomb" s odhadem kdy explodují
-
-Konzistence přes world bible (stejný přístup jako #46d, ale bohatší).
-Výstup: `worlds/<name>/` připravený k odkázání z kampaní.
-
-#### #49e — Modifikovaný `/campaign` skill pro svět-aware generování
+#### #49d — Modifikovaný `/campaign` skill pro svět-aware generování
 
 Rozšíření `/campaign` skillu o volitelný parametr `--world <name>`:
 - Načte existující `worlds/<name>/` jako kontext
@@ -613,14 +598,12 @@ Rozšíření `/campaign` skillu o volitelný parametr `--world <name>`:
 #### Závislosti a pořadí
 
 ```
-#49a (vault layout) → #49b (schémata) → #49c (engine tools)
-#49d (/world skill) — nezávislý, lze dříve
-#49e (world-aware /campaign) — potřebuje #49a + #49d
+#49a (vault layout) → #49b (schémata) → #49c (engine tools) → #49d (world-aware /campaign)
 ```
 
 #49a–b jsou čisté přidání (neruší stávající kampaně). #49c rozšiřuje engine
-bez změny existujících nástrojů. #49d je standalone skill, #49e rozšíření
-stávajícího.
+bez změny existujících nástrojů. Svět si DM authorizuje ručně — žádná AI
+generace světa, jen infrastruktura pro jeho načtení a využití.
 
 ---
 
