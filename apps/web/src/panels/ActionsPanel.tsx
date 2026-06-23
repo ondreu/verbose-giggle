@@ -1,6 +1,7 @@
 import { csSkill } from "@adm/schemas";
 import { useGame } from "../store/store";
 import { Icon } from "../components/Icon";
+import { SpellCard } from "../components/InfoCard";
 import { targetClause } from "./SheetPanel";
 
 /** Prettify an id ("fire-bolt" / "longsword") into a readable label. */
@@ -119,17 +120,18 @@ export function ActionsPanel() {
           ))}
         </Group>
 
-        {/* Spells */}
+        {/* Spells (#42a hover cards) */}
         {actor.spells_known.length > 0 && (
           <Group label="Kouzla" icon="flame">
             {actor.spells_known.map((spell) => (
-              <Chip
-                key={spell}
-                label={pretty(spell)}
-                accent
-                disabled={disabled}
-                onClick={() => void aim(`Cíl pro ${pretty(spell)}`, (c) => `Sešlu kouzlo ${pretty(spell)} (${spell})${c}.`)}
-              />
+              <SpellCard key={spell} id={spell}>
+                <Chip
+                  label={pretty(spell)}
+                  accent
+                  disabled={disabled}
+                  onClick={() => void aim(`Cíl pro ${pretty(spell)}`, (c) => `Sešlu kouzlo ${pretty(spell)} (${spell})${c}.`)}
+                />
+              </SpellCard>
             ))}
           </Group>
         )}

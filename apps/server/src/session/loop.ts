@@ -1,6 +1,6 @@
 import { toolSpecs, type GameState } from "@adm/engine";
 import type { Llm, ChatMsg } from "../llm/client.js";
-import { aiTurnInstruction, CAMPAIGN_START, RECAP_PROMPT, sceneSnapshot, type SceneConnection, SYSTEM_PROMPT } from "../llm/prompt.js";
+import { aiTurnInstruction, ARRIVAL_BEAT, CAMPAIGN_START, RECAP_PROMPT, sceneSnapshot, type SceneConnection, SYSTEM_PROMPT } from "../llm/prompt.js";
 import type { EventBus } from "./events.js";
 import type { SessionManager } from "./manager.js";
 
@@ -152,6 +152,34 @@ export async function runIntro(opts: {
   await manager.checkpoint(gs);
   bus.emit({ type: "state", state: manager.session });
   return { intro };
+}
+
+/**
+ * Narrate the party's arrival at a location (#41b). Called after a `travel`
+ * command resolves — the DM describes the new place and invites the player to
+ * act. Mirrored after `runIntro` but fires on every travel, not just once.
+ */
+export async function runArrival(opts: {
+  manager: SessionManager;
+  llm: Llm;
+  bus: EventBus;
+}): Promise<{ narration: string }> {
+  const { manager, llm, bus } = opts;
+  const gs = manager.buildGameState();
+  const messages: ChatMsg[] = [
+    { role: "system", content: SYSTEM_PROMPT },
+    { role: "system", content: sceneSnapshot(manager.session, gs.actors, sceneConnections(manager)) },
+    { role: "user", content: ARRIVAL_BEAT },
+  ];
+  const narration = await executeToolLoop({ manager, llm, bus, gs, messages });
+  if (narration) {
+    manager.session.chat.push({ role: "assistant", content: narration });
+    bus.emit({ type: "narration", text: narration });
+    await manager.log(`\n**DM (příjezd):** ${narration}`);
+  }
+  await manager.checkpoint(gs);
+  bus.emit({ type: "state", state: manager.session });
+  return { narration };
 }
 
 /**
