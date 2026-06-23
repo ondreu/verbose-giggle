@@ -4,6 +4,7 @@ import { Icon } from "../components/Icon";
 import { Markdown } from "../components/Markdown";
 import { DiaryModal } from "./DiaryModal";
 import { QuestLogModal } from "./QuestLogModal";
+import { ReferenceModal } from "./ReferenceModal";
 
 
 export function ChatPanel() {
@@ -29,6 +30,7 @@ export function ChatPanel() {
   const [input, setInput] = useState("");
   const [diaryOpen, setDiaryOpen] = useState(false);
   const [questsOpen, setQuestsOpen] = useState(false);
+  const [refOpen, setRefOpen] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -86,6 +88,14 @@ export function ChatPanel() {
             deník
           </button>
           <button
+            className="flex items-center gap-1 font-log text-[11px] normal-case text-subtext0 hover:text-gold"
+            onClick={() => setRefOpen(true)}
+            title="Rejstřík pravidel (stavy, zranění, dovednosti…)"
+          >
+            <Icon name="document" size={12} />
+            pravidla
+          </button>
+          <button
             className="flex items-center gap-1 font-log text-[11px] normal-case text-subtext0 hover:text-gold disabled:opacity-50"
             onClick={() => void generateImage("scene", undefined, "Atmosféra scény")}
             disabled={busy || imageLoading}
@@ -131,6 +141,7 @@ export function ChatPanel() {
       </header>
       {diaryOpen && <DiaryModal onClose={() => setDiaryOpen(false)} />}
       {questsOpen && <QuestLogModal onClose={() => setQuestsOpen(false)} />}
+      {refOpen && <ReferenceModal onClose={() => setRefOpen(false)} />}
 
       <div className="flex-1 overflow-y-auto px-4 py-3">
         {narration.length === 0 && (

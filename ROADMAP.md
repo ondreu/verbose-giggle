@@ -419,31 +419,31 @@ sheet so the parchment is the one place you act from (BG3-style action surface).
     Equipment-Categories). Gate behind the features that use them so loading
     cost is only paid when needed. Unlocks **#13** and **#14**.
 
-- **#21 — Mine the descriptive/reference SRD data (tooltips, localization, rules
-  lookup).** The remaining files hold no new mechanics — those stay hardcoded in
-  the engine — but their *descriptions and names* are worth extracting for the
-  UI, Czech localization, and grounding the DM:
-  - **Damage types & resistance** (`5e-SRD-Damage-Types.json`) — the resistance
-    mechanic lives in `packages/engine/src/combat.ts`; mine the list +
-    descriptions to (a) verify the engine's `DamageType` enum is complete and
-    (b) drive player-facing tooltips/Czech labels (e.g. *bludgeoning → drtivé*).
-  - **Conditions** (`5e-SRD-Conditions.json`) — engine owns the effects; surface
-    the official descriptions as hover tooltips on the condition chips (sheet),
-    so players see what *Prone/Restrained/…* does.
-  - **Weapon properties** (`5e-SRD-Weapon-Properties.json`) — descriptions for
-    tooltips (finesse, versatile, reach…) on equipment.
-  - **Magic schools, alignments, ability scores** (`5e-SRD-Magic-Schools.json`,
-    `5e-SRD-Alignments.json`, `5e-SRD-Ability-Scores.json`) — label/description
-    sources for tooltips and the Czech label maps (`packages/schemas/src/labels.ts`).
-  - **Rules / rule sections** (`5e-SRD-Rules.json`, `5e-SRD-Rule-Sections.json`)
-    — an in-app, searchable rules reference panel, and optional grounding text
-    the DM can cite (read-only; never a source of authoritative numbers).
-  - **Skills / levels** (`5e-SRD-Skills.json`, `5e-SRD-Levels.json`) — use to
-    cross-check the hardcoded skill→ability map and XP/proficiency tables, and
-    as a localization source; not as runtime mechanics.
-  - **Work:** these feed labels/tooltips/reference, so prefer a build-time
-    extraction into the Czech label maps + a small descriptions accessor over
-    runtime loading. Supports #4 (kill English text) and #7/#1 (readable UI).
+- **[x] #21 — Mine the descriptive/reference SRD data (tooltips, localization,
+  rules lookup).** Done. The descriptive data is baked into static Czech label
+  maps in `packages/schemas/src/labels.ts` (build-time/static, so tooltips and
+  the reference work with no dataset mounted) and surfaced in the UI:
+  - **Damage types & resistance** — the engine `DamageType` enum is verified
+    complete and each type now has a Czech label (`DAMAGE_CS`, already) **and a
+    description** (`DAMAGE_DESC_CS` / `csDamageDesc`), e.g. *bludgeoning →
+    drtivé*. Completeness guarded by `packages/schemas/test/labels.test.ts`.
+  - **Conditions** — already localized with descriptions (`CONDITION_DESC_CS`,
+    #34); now also listed in the rules reference and covered by the completeness
+    test.
+  - **Weapon properties** — new `WEAPON_PROPERTY_CS` + `WEAPON_PROPERTY_DESC_CS`
+    (`csWeaponProperty`/`csWeaponPropertyDesc`); the inventory now shows weapon
+    property chips with Czech rules tooltips (the `/api/srd/items` endpoint
+    carries `properties`).
+  - **Magic schools, alignments, ability scores** — magic schools already
+    localized; added `ALIGNMENT_CS`/`csAlignment` and `ABILITY_DESC_CS`/
+    `csAbilityDesc` as the shared label/description source.
+  - **Rules reference** — new in-app, searchable `ReferenceModal`
+    (`apps/web/src/panels/`, opened from a "pravidla" toolbar button) listing
+    conditions, damage types, weapon properties, abilities, skills and magic
+    schools from the static maps. Read-only; never a source of numbers.
+  - **Skills / levels** — the engine `SKILL_ABILITY` map is cross-checked
+    against the localized `SKILL_CS` ids by `packages/engine/test/skills.test.ts`
+    (they must match exactly); XP/proficiency tables stay hardcoded.
   - **Out of scope (2024 ruleset):** `5e-SRD-Poisons.json`,
     `5e-SRD-Weapon-Mastery-Properties.json`, `Species/Subspecies` — only if the
     app ever targets the 2024 SRD; today it's 5.1/2014.
