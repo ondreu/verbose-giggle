@@ -104,6 +104,37 @@ export function spendEconomy(
   return { ok: true };
 }
 
+/**
+ * Give a previously spent action-economy slot back (§8.2). Used when a charged
+ * tool turns out to be a no-op — e.g. an attack on a target out of range, or a
+ * spell the caster can't actually cast. The action was never taken, so burning
+ * the slot would strand the actor (it would move into range and then be unable
+ * to attack). Mirror of `spendEconomy`; safe to call outside combat (no-op).
+ */
+export function refundEconomy(state: GameState, actorId: string, kind: ActionKind): void {
+  const c = state.session.combat;
+  if (!c || !c.budget) return;
+  const activeId = c.order[c.turn_index]?.actor;
+  // Off-turn activity only ever spends a reaction; refund that.
+  if (actorId !== activeId || kind === "reaction") {
+    c.budget.reaction = true;
+    return;
+  }
+  if (kind === "bonus") c.budget.bonus = true;
+  else c.budget.action = true;
+}
+
+/**
+ * A handler result counts as a "no-op refusal" when the action never actually
+ * happened: the engine returned an `error`, or a combat resolver flagged
+ * `noop` (out of range, no line of sight, can't act, friendly-fire unconfirmed).
+ */
+function isNoopResult(result: unknown): boolean {
+  if (!result || typeof result !== "object") return false;
+  const r = result as { noop?: unknown; error?: unknown };
+  return r.noop === true || typeof r.error === "string";
+}
+
 export const TOOLS: ToolDef[] = [
   def({
     name: "roll",
@@ -902,6 +933,7 @@ export function dispatch(state: GameState, name: string, rawArgs: unknown): Disp
   }
   // Enforce the action-economy budget before mutating state (§8.2): a refused
   // action spends nothing, and the refusal is logged so it's visible/auditable.
+  let charged: { kind: ActionKind; actorId: string } | null = null;
   if (tool.cost) {
     const cost = tool.cost(parsed.data, state);
     if (cost) {
@@ -915,12 +947,21 @@ export function dispatch(state: GameState, name: string, rawArgs: unknown): Disp
         });
         return { name, ok: false, error: spent.error };
       }
+      charged = cost;
     }
   }
   try {
     const result = tool.handler(state, parsed.data);
+    // The slot is charged before the handler validates range/reach/line-of-sight
+    // /spell list. If the action turned out to be a no-op, give the slot back so
+    // the actor can still act this turn (move into range, then attack) instead
+    // of wasting the turn on a refusal (#combat). A genuine miss is not a no-op.
+    if (charged && isNoopResult(result)) refundEconomy(state, charged.actorId, charged.kind);
     return { name, ok: true, result };
   } catch (err) {
+    // The handler threw after the slot was charged (e.g. unknown actor): the
+    // action never ran, so refund rather than silently burning the turn.
+    if (charged) refundEconomy(state, charged.actorId, charged.kind);
     return { name, ok: false, error: err instanceof Error ? err.message : String(err) };
   }
 }

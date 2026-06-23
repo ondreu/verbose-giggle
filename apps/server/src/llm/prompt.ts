@@ -43,17 +43,23 @@ Vyprávíš poutavě a atmosféricky v ČEŠTINĚ, ve druhé osobě k aktivnímu
   jako bonusová akce. Engine to vynucuje: vrátí-li nástroj chybu o vyčerpané
   akci, NEopakuj ji — místo toho použij pohyb, bonusovou akci, nebo ukonči tah
   (next_turn). Nikdy nedělej víc akcí za jeden tah, než pravidla dovolují.
-- UKONČENÍ TAHU: V boji VŽDY zavolej next_turn na konci každého tahu (po akci,
-  bonusové akci a pohybu). Bez next_turn se pořadí tahu nepohne a ostatní
-  postavy nemohou jednat. Pravidlo platí i pro hráče: po provedení akce zavolej
-  next_turn, jinak zůstane aktivní hráč zablokovaný.
-- AKTIVNÍ POSTAVA: Snapshots říká „Aktivní hráč: X" — vždy ho čti z
-  iniciativního pořadí, ne z jiného zdroje. Pokud hráčova zpráva uvádí
-  postavu formátem „Jméno · akce", OKAMŽITĚ proveď danou akci přes nástroj
-  (attack/cast_spell/move…) bez komentáře k pořadí tahů. Engine sám odmítne
-  neplatný tah — ty pak narruj odmítnutí. Nikdy NEPŘEDEM nevysvětluj pořadí;
-  jen volej nástroj. Na AI tahách nespouštěj akce za postavu, která není
-  aktivní, a nahrazuj je pouze reakcí pokud engine povolí.
+- UKONČENÍ TAHU: V boji se pořadí pohne JEN voláním next_turn. Zavolej ho,
+  jakmile aktivní postava dokončila svůj tah (akce + případná bonusová akce a
+  pohyb). Když next_turn zavoláš, tím tah té postavy KONČÍ — NEvyzývej tutéž
+  postavu k další akci („co uděláš dál?"). Místo toho na konci zprávy jasně
+  uveď, kdo je teď na tahu (např. „Na tahu je teď Elara."). Pokud má hráč ještě
+  nevyčerpaný rozpočet a chce pokračovat (další pohyb / bonusová akce),
+  next_turn NEvolej a tah nech otevřený — ale pak ani neoznamuj nového
+  aktivního hráče. Nikdy v jedné zprávě tah neukončuj a zároveň nevyzývej k
+  další akci — to mate, kdo je na tahu.
+- AKTIVNÍ POSTAVA: Aktivního čti VŽDY z iniciativního pořadí ve snapshotu
+  („Aktivní hráč: X" / „Na tahu: X"), ne z jiného zdroje. Na tahu smí jednat
+  JEN aktivní postava (plus reakce). NIKDY nevyprávěj ani neřeš akci postavy,
+  která není na tahu — ani tahy nepřátel během tahu hráče (ty se vyřeší samy,
+  až na ně přijde řada). Pokud hráčova zpráva uvádí postavu formátem
+  „Jméno · akce", OKAMŽITĚ proveď danou akci přes nástroj (attack/cast_spell/
+  move…) bez komentáře k pořadí tahů. Engine sám odmítne neplatný tah — ty pak
+  narruj odmítnutí; nepředstírej úspěch a nenahrazuj akci jinou.
 
 SCHOPNOSTI PODLE LISTU POSTAVY:
 - Postava může použít JEN kouzlo, schopnost nebo rys, který skutečně má na svém
@@ -108,6 +114,31 @@ STYL:
   v próze a zároveň nevynechej nástroj.`;
 
 /**
+ * Per-enemy range info handed to an AI actor so it can decide move-vs-attack
+ * deterministically (the engine computes the distance; the model never guesses
+ * grid math). `distFt` is null when positions aren't on a grid.
+ */
+export interface EnemyRange {
+  id: string;
+  distFt: number | null;
+}
+
+/**
+ * Authoritative, server-authored statement of whose turn it is (§8.3, #1).
+ * Built from `combat.order[turn_index]` — the SAME source the UI turn tracker
+ * reads — so the model's notion of the active actor can never drift from the
+ * screen. Injected as a system message on every combat turn.
+ */
+export function turnControlNote(activeId: string, activeName: string, controller: "human" | "ai"): string {
+  return (
+    `ŘÍZENÍ TAHU (závazné, ze systému — JEDINÝ zdroj pravdy o pořadí): na tahu je ` +
+    `${activeName} (${activeId}), ovládá: ${controller === "human" ? "hráč" : "PJ/AI"}. ` +
+    `Jednej pouze za tuto postavu (plus reakce). Akce jiných postav engine odmítne — ` +
+    `nevyprávěj ani neřeš jejich tahy, ty přijdou na řadu samy.`
+  );
+}
+
+/**
  * Instruction handed to the model when it must take an AI-controlled actor's
  * turn (§8.3). The actor acts through the SAME engine tools as a human, so AI
  * companions and enemies are bound by identical determinism. The `[AI-TAH]`
@@ -115,17 +146,23 @@ STYL:
  */
 export function aiTurnInstruction(
   actor: Actor,
-  enemies: string[],
+  enemies: EnemyRange[],
   allies: string[],
+  movementFt?: number,
 ): string {
+  const enemyList = enemies
+    .map((e) => (e.distFt != null ? `${e.id} (${e.distFt} ft)` : e.id))
+    .join(", ");
+  const move = movementFt ?? actor.speed;
   return [
     `[AI-TAH] Je řada na postavě ${actor.name} (${actor.id}, frakce: ${actor.faction}).`,
     actor.ai_profile ? `Profil chování: ${actor.ai_profile}` : "",
     `Jako Pán jeskyně ovládni tuto postavu na jejím tahu pomocí nástrojů.`,
-    `Pokud je cíl mimo dosah: nejdřív zavolej move (cílová buňka z pos= ve scéně), pak attack.`,
+    enemies.length ? `Vzdálenosti k nepřátelům: ${enemyList}. Tvůj pohyb tento tah: ${move} ft.` : "Žádní zjevní nepřátelé.",
+    `Útok nablízko má dosah 5 ft (zbraně s dosahem 10 ft). Je-li tvůj cíl dál, NEJDŘÍV se k němu přesuň nástrojem move (na sousední buňku), AŽ POTOM attack — v jednom tahu zvládneš pohyb i útok. Neútoč „naslepo" z dálky a pak se teprve nehýbej.`,
+    `Když attack přesto vrátí „mimo dosah / příliš daleko", akce se NEspotřebovala — přesuň se blíž a zaútoč znovu ve stejném tahu, neukončuj tah jen kvůli vzdálenosti.`,
     `Pohyb musí projít nástrojem move — nenarruj ho bez volání nástroje.`,
     `Po akci napiš 1–2 věty česky (např. „Shadowpaw vyklouzne ze stínu…").`,
-    enemies.length ? `Nepřátelé: ${enemies.join(", ")}.` : "Žádní zjevní nepřátelé.",
     allies.length ? `Spojenci: ${allies.join(", ")}.` : "",
     `Respektuj HP, AC a vzdálenosti ze scény. Čísla musí pocházet z nástrojů.`,
     `NEVOLEJ next_turn — správce tahu ho zavolá automaticky po skončení tohoto tahu.`,

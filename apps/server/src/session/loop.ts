@@ -1,6 +1,6 @@
-import { toolSpecs, type GameState } from "@adm/engine";
+import { gridDistanceFt, toolSpecs, type GameState } from "@adm/engine";
 import type { Llm, ChatMsg } from "../llm/client.js";
-import { aiTurnInstruction, ARRIVAL_BEAT, CAMPAIGN_START, RECAP_PROMPT, sceneSnapshot, type SceneConnection, type SceneQuest, SYSTEM_PROMPT } from "../llm/prompt.js";
+import { aiTurnInstruction, ARRIVAL_BEAT, CAMPAIGN_START, type EnemyRange, RECAP_PROMPT, sceneSnapshot, type SceneConnection, type SceneQuest, SYSTEM_PROMPT, turnControlNote } from "../llm/prompt.js";
 import type { EventBus } from "./events.js";
 import type { SessionManager } from "./manager.js";
 
@@ -94,6 +94,37 @@ function factionLists(manager: SessionManager, gs: GameState, actorId: string) {
 }
 
 /**
+ * Engine-computed distance (ft) from `actorId` to each enemy, so an AI actor
+ * can decide move-vs-attack without doing grid math itself (#2). Falls back to
+ * a null distance when there's no grid/positions.
+ */
+function enemyRanges(gs: GameState, actorId: string, enemies: string[]): EnemyRange[] {
+  const c = gs.session.combat;
+  const from = c?.tokens[actorId] ?? gs.actors[actorId]?.position ?? null;
+  return enemies.map((id) => {
+    const to = c?.tokens[id] ?? gs.actors[id]?.position ?? null;
+    const distFt =
+      c && from && to ? gridDistanceFt(from, to, c.grid.cell_ft, c.grid.shape, gs.variant.diagonals) : null;
+    return { id, distFt };
+  });
+}
+
+/**
+ * The authoritative active-turn directive for the LLM, sourced from the
+ * initiative pointer (the same source the UI turn tracker reads) so the model
+ * can never disagree with the screen about whose turn it is (#1). Returns null
+ * outside combat.
+ */
+function turnControlMessage(manager: SessionManager, gs: GameState): ChatMsg | null {
+  const c = gs.session.combat;
+  const activeId = c?.order[c.turn_index]?.actor;
+  if (!activeId) return null;
+  const actor = gs.actors[activeId] ?? manager.campaign.actors[activeId];
+  const controller = manager.campaign.actors[activeId]?.controller === "ai" ? "ai" : "human";
+  return { role: "system", content: turnControlNote(activeId, actor?.name ?? activeId, controller) };
+}
+
+/**
  * Player free-text turn: assemble context, run the loop, persist, then
  * auto-resolve any AI-controlled actors whose turn it now is.
  */
@@ -106,12 +137,25 @@ export async function runTurn(opts: {
   const { manager, llm, bus, input } = opts;
   const gs = manager.buildGameState();
 
+  // In combat, announce the active actor (from the initiative pointer) so the
+  // client's turn banner is driven by the same server signal on a human's turn,
+  // not only on AI turns (#1).
+  const combat = gs.session.combat;
+  const activeId = combat?.order[combat.turn_index]?.actor;
+  if (activeId) {
+    const a = gs.actors[activeId] ?? manager.campaign.actors[activeId];
+    const controller = manager.campaign.actors[activeId]?.controller === "ai" ? "ai" : "human";
+    bus.emit({ type: "actor_turn", actor: activeId, name: a?.name ?? activeId, controller });
+  }
+
   const recent = manager.session.chat.slice(-HISTORY_WINDOW).map(
     (m): ChatMsg => ({ role: m.role, content: m.content, name: m.name, tool_call_id: m.tool_call_id }),
   );
+  const turnNote = turnControlMessage(manager, gs);
   const messages: ChatMsg[] = [
     { role: "system", content: SYSTEM_PROMPT },
     { role: "system", content: sceneSnapshot(manager.session, gs.actors, sceneConnections(manager), availableQuests(manager)) },
+    ...(turnNote ? [turnNote] : []),
     ...recent,
     { role: "user", content: input },
   ];
@@ -237,16 +281,20 @@ async function runAiTurn(opts: {
   if (!actor) return;
   bus.emit({ type: "actor_turn", actor: actorId, name: actor.name, controller: "ai" });
   const { enemies, allies } = factionLists(manager, gs, actorId);
+  const ranges = enemyRanges(gs, actorId, enemies);
+  const movementFt = gs.session.combat?.budget?.movement ?? actor.speed;
 
   // Include recent chat history so the LLM has combat context when narrating.
   const recent = manager.session.chat.slice(-HISTORY_WINDOW).map(
     (m): ChatMsg => ({ role: m.role, content: m.content, name: m.name, tool_call_id: m.tool_call_id }),
   );
+  const turnNote = turnControlMessage(manager, gs);
   const messages: ChatMsg[] = [
     { role: "system", content: SYSTEM_PROMPT },
     { role: "system", content: sceneSnapshot(manager.session, gs.actors) },
+    ...(turnNote ? [turnNote] : []),
     ...recent,
-    { role: "user", content: aiTurnInstruction(actor, enemies, allies) },
+    { role: "user", content: aiTurnInstruction(actor, ranges, allies, movementFt) },
   ];
 
   const narration = await executeToolLoop({ manager, llm, bus, gs, messages });
