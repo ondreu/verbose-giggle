@@ -163,6 +163,88 @@ export const SPELL_SCHOOL_CS: Record<string, string> = {
   transmutation: "transmutace",
 };
 
+/**
+ * Short Czech descriptions for each damage type (#21). The resistance/
+ * vulnerability mechanic lives in the engine; these feed tooltips and the
+ * rules-reference panel so players know what each type means.
+ */
+export const DAMAGE_DESC_CS: Record<DamageType, string> = {
+  acid: "Leptavé zranění od kyselin, žíravin a dechu některých nestvůr.",
+  bludgeoning: "Tupé údery — kyje, pády, drcení a sevření.",
+  cold: "Mráz a ledový chlad; zpomaluje a křehne.",
+  fire: "Žár plamenů a výbuchů.",
+  force: "Čistá magická síla; málokdo vůči ní odolává.",
+  lightning: "Elektrické výboje a blesky.",
+  necrotic: "Zvadnutí života a temná energie nemrtvých.",
+  piercing: "Bodné rány — šípy, kopí, tesáky.",
+  poison: "Jedy a toxiny; mnoho tvorů je vůči nim odolných.",
+  psychic: "Útok na mysl, který nezanechává viditelné rány.",
+  radiant: "Zářivá, posvátná energie světla.",
+  slashing: "Sečné rány — meče, sekery, drápy.",
+  thunder: "Ohlušující rázová vlna zvuku.",
+};
+
+/**
+ * Weapon property ids → Czech label (#21). Mirrors the SRD weapon-properties
+ * list; ids stay English (SRD), the label is player-facing Czech.
+ */
+export const WEAPON_PROPERTY_CS: Record<string, string> = {
+  ammunition: "střelivo",
+  finesse: "elegantní",
+  heavy: "těžká",
+  light: "lehká",
+  loading: "nabíjení",
+  range: "dostřel",
+  reach: "dosah",
+  special: "zvláštní",
+  thrown: "vrhací",
+  "two-handed": "obouruční",
+  versatile: "všestranná",
+};
+
+/** Short Czech rules notes for weapon properties (#21), for tooltips. */
+export const WEAPON_PROPERTY_DESC_CS: Record<string, string> = {
+  ammunition: "Útok na dálku spotřebuje střelivo (šíp, šipku, kámen).",
+  finesse: "Pro útok i zranění si vybereš Sílu, nebo Obratnost.",
+  heavy: "Malé tvory ji ovládají s nevýhodou.",
+  light: "Vhodná pro boj dvěma zbraněmi (útok off-hand jako bonusová akce).",
+  loading: "Za akci/bonus/reakci s ní vystřelíš jen jednou.",
+  range: "Má dva dostřely; mimo bližší máš nevýhodu, za vzdálenějším nelze.",
+  reach: "Dosáhne o 5 stop dál, než je obvyklé.",
+  special: "Má vlastní zvláštní pravidlo (viz popis zbraně).",
+  thrown: "Můžeš ji hodit; používá stejnou vlastnost jako útok zblízka.",
+  "two-handed": "K útoku ji musíš držet oběma rukama.",
+  versatile: "Lze ji držet jednou i oběma rukama (větší kostka zranění).",
+};
+
+/** Alignment ids → Czech label (#21). */
+export const ALIGNMENT_CS: Record<string, string> = {
+  "lawful-good": "zákonně dobrý",
+  "neutral-good": "neutrálně dobrý",
+  "chaotic-good": "chaoticky dobrý",
+  "lawful-neutral": "zákonně neutrální",
+  "neutral": "neutrální",
+  "true-neutral": "ryze neutrální",
+  "chaotic-neutral": "chaoticky neutrální",
+  "lawful-evil": "zákonně zlý",
+  "neutral-evil": "neutrálně zlý",
+  "chaotic-evil": "chaoticky zlý",
+  "unaligned": "bez přesvědčení",
+};
+
+/**
+ * Short Czech descriptions of the six ability scores (#21). A single source for
+ * the rules-reference panel and ability tooltips (shared with the web UI).
+ */
+export const ABILITY_DESC_CS: Record<AbilityKey, string> = {
+  str: "Fyzická síla a atletika: útoky na blízko, nošení, šplh a skok.",
+  dex: "Hbitost a reflexy: iniciativa, útoky na dálku, AC v lehké zbroji, nenápadnost.",
+  con: "Zdraví a výdrž: maximum životů a záchrany proti jedu, vyčerpání a chladu.",
+  int: "Paměť a úsudek: magie kouzelníka, Mystika, Historie, Pátrání.",
+  wis: "Vnímavost a intuice: magie klerika/druida, Vnímání, Vhled, Přežití.",
+  cha: "Síla osobnosti: magie barda/čaroděje, Přesvědčování, Klamání, Zastrašování.",
+};
+
 /** A handful of common feats; unknown ids fall back to the SRD name. */
 export const FEAT_CS: Record<string, string> = {
   alert: "Ostražitý",
@@ -187,6 +269,23 @@ export function csCondition(name: string): string {
 }
 export function csConditionDesc(name: string): string {
   return CONDITION_DESC_CS[name as ConditionName] ?? "";
+}
+export function csDamageDesc(type?: string): string {
+  if (!type) return "";
+  return DAMAGE_DESC_CS[type as DamageType] ?? "";
+}
+export function csWeaponProperty(id: string): string {
+  return WEAPON_PROPERTY_CS[id] ?? id;
+}
+export function csWeaponPropertyDesc(id: string): string {
+  return WEAPON_PROPERTY_DESC_CS[id] ?? "";
+}
+export function csAlignment(id?: string): string {
+  if (!id) return "";
+  return ALIGNMENT_CS[id] ?? id;
+}
+export function csAbilityDesc(k: string): string {
+  return ABILITY_DESC_CS[k as AbilityKey] ?? "";
 }
 export function csAbility(k: string): string {
   return ABILITY_CS[k as AbilityKey] ?? k.toUpperCase();

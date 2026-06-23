@@ -471,11 +471,11 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
   app.get<{ Querystring: { ids?: string } }>("/api/srd/items", async (req) => {
     const srd = ctx.manager.srd();
     const ids = (req.query?.ids ?? "").split(",").map((s) => s.trim()).filter(Boolean);
-    const out: Record<string, { name: string; category?: string; rarity?: string; magic: boolean; description?: string }> = {};
+    const out: Record<string, { name: string; category?: string; rarity?: string; magic: boolean; description?: string; properties?: string[] }> = {};
     for (const id of ids) {
       const eq = srd.equipment(id);
       if (eq) {
-        out[id] = { name: eq.name, category: eq.category, magic: false };
+        out[id] = { name: eq.name, category: eq.category, magic: false, properties: eq.properties };
         continue;
       }
       const mi = srd.magicItem(id);
