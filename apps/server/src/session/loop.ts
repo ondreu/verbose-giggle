@@ -281,11 +281,17 @@ export async function resolveAiTurns(opts: {
     if (!actor || actor.controller === "human") return;
 
     const alive = (gs.actors[activeId]?.hp.current ?? 0) > 0;
+    const logBefore = manager.session.log.length;
     if (alive) {
       await runAiTurn({ manager, llm, bus, gs, actorId: activeId });
     }
-    // Advance past this AI actor (whether it acted or was down).
-    await manager.applyTool(gs, "next_turn", {});
+    // Only advance the turn if the LLM didn't already call next_turn itself
+    // (the system prompt tells the LLM to always call it, so we must detect the
+    // duplicate to avoid skipping two turns at once).
+    const nextTurnCalled = manager.session.log.slice(logBefore).some((l) => l.tool === "next_turn");
+    if (!nextTurnCalled) {
+      await manager.applyTool(gs, "next_turn", {});
+    }
     await manager.checkpoint(gs);
     bus.emit({ type: "state", state: manager.session });
   }

@@ -17,7 +17,7 @@ describe("startCombat token placement", () => {
     const cells = Object.values(tokens).map((p) => `${p.x},${p.y}`);
     expect(new Set(cells).size).toBe(cells.length);
 
-    // Friendly on the left edge, hostile on the right edge.
+    // Friendly on the left edge, hostile on the right edge (fallback placement).
     expect(tokens.a!.x).toBe(0);
     expect(tokens.b!.x).toBe(0);
     expect(tokens.g!.x).toBe(11);
