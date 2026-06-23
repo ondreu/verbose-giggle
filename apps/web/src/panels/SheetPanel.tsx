@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { csCondition, csConditionDesc, csAbility, csAbilityAbbr, csClass, csFeat, csLineage, type AbilityKey } from "@adm/schemas";
+import { csCondition, csConditionDesc, csAbility, csAbilityAbbr, csClass, csFeat, csLineage, csSkill, type AbilityKey } from "@adm/schemas";
 import { useGame } from "../store/store";
 import { Icon } from "../components/Icon";
 import { LevelUpModal } from "../components/LevelUpModal";
@@ -15,8 +15,23 @@ export function targetClause(t: PickedTarget): string {
 
 const mod = (score: number) => Math.floor((score - 10) / 2);
 const fmt = (m: number) => (m >= 0 ? `+${m}` : `${m}`);
+const pretty = (id: string) => id.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 /** Prettify an SRD spell id ("fire-bolt") into a readable label. */
-const prettySpell = (id: string) => id.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+const prettySpell = pretty;
+
+/** Armor/shields are not attacks (#43c). */
+const ARMOR_RE = /(armor|shield|mail|plate|breastplate)/i;
+const isWeaponId = (id: string) => !ARMOR_RE.test(id);
+
+/** Standard D&D combat actions available to any creature. */
+const STANDARD_ACTIONS: { label: string; icon: string; text: string }[] = [
+  { label: "Sprint", icon: "footprints", text: "Použiju akci Sprint (Dash) a zdvojnásobím svůj pohyb." },
+  { label: "Úhyb", icon: "shield", text: "Použiju akci Úhyb (Dodge) — útoky proti mně mají nevýhodu." },
+  { label: "Odpoutání", icon: "footprints", text: "Použiju akci Odpoutání (Disengage), abych se vyhnul příležitostným útokům." },
+  { label: "Pomoc", icon: "heart", text: "Použiju akci Pomoc (Help) a podpořím spojence." },
+  { label: "Úkryt", icon: "compass", text: "Pokusím se ukrýt (akce Úkryt) — hod na Nenápadnost." },
+  { label: "Pátrání", icon: "compass", text: "Použiju akci Pátrání (Search) a pozorně se rozhlédnu." },
+];
 
 /** Cumulative XP to REACH each level (index 0 = level 1). SRD. */
 const XP_THRESHOLDS = [
@@ -71,6 +86,18 @@ export function SheetPanel() {
       ? Math.max(0, Math.min(100, ((actor.xp - curFloor) / (nextFloor - curFloor)) * 100))
       : 100;
   const readyToLevel = nextFloor != null && actor.xp >= nextFloor;
+  const disabled = busy || downed;
+
+  // Action helpers for the consolidated action hub (#43).
+  const act = (text: string) => { if (!disabled) void sendAction(text); };
+  const aim = async (title: string, build: (clause: string) => string, allowNone = true) => {
+    if (disabled) return;
+    const t = await requestTarget(title, allowNone);
+    if (t === "cancelled") return;
+    void sendAction(build(targetClause(t)));
+  };
+
+  const equipped = actor.inventory.filter((i) => i.equipped && isWeaponId(i.id));
 
   return (
     <section className="parchment flex flex-col p-4 font-body">
@@ -193,27 +220,6 @@ export function SheetPanel() {
         </div>
       )}
 
-      {/* Known / prepared spells (#8 + #42a): cast buttons with SRD hover cards. */}
-      {actor.spells_known.length > 0 && (
-        <div className="mt-3">
-          <div className="mb-1 text-[11px] uppercase tracking-wider text-ink/60">Známá kouzla</div>
-          <div className="flex flex-wrap gap-1.5">
-            {actor.spells_known.map((spell) => (
-              <SpellCard key={spell} id={spell}>
-                <button
-                  disabled={busy || downed}
-                  onClick={() => void castSpellAt(spell)}
-                  className="flex items-center gap-1 rounded-sm border border-arcane/50 bg-arcane/10 px-1.5 py-0.5 font-body text-[12px] text-arcane transition-colors hover:bg-arcane/20 disabled:opacity-40"
-                >
-                  <Icon name="flame" size={11} />
-                  {prettySpell(spell)}
-                </button>
-              </SpellCard>
-            ))}
-          </div>
-        </div>
-      )}
-
       {/* Death saves — shown when the actor is down at 0 HP */}
       {downed && (
         <div className="mt-3 rounded-sm border border-blood/40 bg-blood/10 p-2">
@@ -273,7 +279,8 @@ export function SheetPanel() {
         </div>
       )}
 
-      {/* Features, feats & languages from the SRD (#20 + #42c). */}
+      {/* Features, feats & languages from the SRD (#20 + #42c).
+          Features are shown as static info (passive — not action buttons, #43d). */}
       {(actor.features?.length ?? 0) > 0 && (
         <TagRow label="Schopnosti" items={(actor.features ?? []).map(humanizeId)} />
       )}
@@ -283,6 +290,67 @@ export function SheetPanel() {
       {(actor.languages?.length ?? 0) > 0 && (
         <TagRow label="Jazyky" items={(actor.languages ?? []).map(humanizeId)} />
       )}
+
+      {/* ── Consolidated action hub (#43a) ── */}
+      <div className="mt-4 border-t border-ink/15 pt-3">
+        <div className="mb-2 font-display text-[11px] uppercase tracking-widest text-ink/50">
+          Akce
+        </div>
+
+        {/* Attacks (#43c: armor filtered out by isWeaponId) */}
+        <ActionGroup label="Útoky" icon="sword">
+          <ActionChip
+            label="Útok zbraní"
+            disabled={disabled}
+            onClick={() => void aim("Cíl útoku", (c) => `Zaútočím vybranou zbraní${c}.`, false)}
+          />
+          {equipped.map((i) => (
+            <ActionChip
+              key={i.id}
+              label={pretty(i.id)}
+              disabled={disabled}
+              onClick={() => void aim(`Cíl pro ${pretty(i.id)}`, (c) => `Zaútočím zbraní ${pretty(i.id)} (${i.id})${c}.`, false)}
+            />
+          ))}
+          <ActionChip label="Beze zbraně" disabled={disabled}
+            onClick={() => void aim("Cíl útoku beze zbraně", (c) => `Zaútočím beze zbraně (unarmed strike)${c}.`, false)} />
+          <ActionChip label="Strčení" disabled={disabled}
+            onClick={() => void aim("Cíl strčení", (c) => `Použiju speciální útok Strčení (Shove)${c} — pokus o sražení nebo odtlačení.`, false)} />
+          <ActionChip label="Chvat" disabled={disabled}
+            onClick={() => void aim("Cíl chvatu", (c) => `Pokusím se o Chvat (Grapple)${c}.`, false)} />
+        </ActionGroup>
+
+        {/* Standard actions */}
+        <ActionGroup label="Obecné akce" icon="d20">
+          {STANDARD_ACTIONS.map((a) => (
+            <ActionChip key={a.label} label={a.label} disabled={disabled} onClick={() => act(a.text)} />
+          ))}
+        </ActionGroup>
+
+        {/* Spells — shown once here; "Známá kouzla" above removed (#43b + #42a). */}
+        {actor.spells_known.length > 0 && (
+          <ActionGroup label="Kouzla" icon="flame">
+            {actor.spells_known.map((spell) => (
+              <SpellCard key={spell} id={spell}>
+                <ActionChip
+                  label={prettySpell(spell)}
+                  accent
+                  disabled={disabled}
+                  onClick={() => void aim(`Cíl pro ${prettySpell(spell)}`, (c) => `Sešlu kouzlo ${prettySpell(spell)} (${spell})${c}.`)}
+                />
+              </SpellCard>
+            ))}
+          </ActionGroup>
+        )}
+
+        {/* Skill checks */}
+        <ActionGroup label="Zkoušky" icon="compass">
+          {(["perception", "insight", "persuasion"] as const).map((sk) => (
+            <ActionChip key={sk} label={csSkill(sk)} disabled={disabled}
+              onClick={() => act(`Udělám zkoušku dovednosti ${csSkill(sk)}.`)} />
+          ))}
+        </ActionGroup>
+      </div>
     </section>
   );
 }
@@ -305,6 +373,43 @@ function TagRow({ label, items }: { label: string; items: string[] }) {
         ))}
       </div>
     </div>
+  );
+}
+
+/** Group header + chip row for the consolidated action hub (#43a). */
+function ActionGroup({ label, icon, children }: { label: string; icon: string; children: React.ReactNode }) {
+  return (
+    <div className="mb-2.5">
+      <div className="mb-1 flex items-center gap-1 font-log text-[10px] uppercase tracking-wider text-ink/50">
+        <Icon name={icon} size={10} />
+        {label}
+      </div>
+      <div className="flex flex-wrap gap-1">{children}</div>
+    </div>
+  );
+}
+
+/** Clickable action chip for the consolidated action hub (#43a). */
+function ActionChip({ label, onClick, disabled, accent, title }: {
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+  accent?: boolean;
+  title?: string;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      className={`rounded-sm border px-2 py-0.5 font-body text-[12px] transition-colors disabled:opacity-40 ${
+        accent
+          ? "border-arcane/50 bg-arcane/10 text-arcane hover:bg-arcane/20"
+          : "border-ink/25 bg-ink/5 text-ink/75 hover:border-ink/50 hover:text-ink"
+      }`}
+    >
+      {label}
+    </button>
   );
 }
 
