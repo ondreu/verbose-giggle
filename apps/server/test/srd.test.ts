@@ -31,8 +31,13 @@ describe("SRD dataset loader (5e-bits/5e-database shape)", () => {
           charisma: 10,
           challenge_rating: 0.5,
           damage_resistances: [],
+          special_abilities: [{ name: "Aggressive", desc: ["The orc can move toward a hostile as a bonus action."] }],
+          legendary_actions: [],
+          reactions: [],
           actions: [
             { name: "Greataxe", attack_bonus: 5, damage: [{ damage_dice: "1d12+3", damage_type: { index: "slashing" } }] },
+            { name: "Breath", dc: { dc_type: { index: "dexterity" }, dc_value: 11, success_type: "half" }, damage: [{ damage_dice: "2d6", damage_type: { index: "fire" } }] },
+            { name: "Multiattack" },
           ],
         },
       ]),
@@ -56,6 +61,12 @@ describe("SRD dataset loader (5e-bits/5e-database shape)", () => {
     expect(out.monsters.orc?.ac).toBe(13);
     expect(out.monsters.orc?.abilities.str).toBe(16);
     expect(out.monsters.orc?.actions[0]?.damage).toBe("1d12+3");
+    // Save-based action kept with its DC; bare "Multiattack" dropped.
+    const breath = out.monsters.orc?.actions.find((a) => a.name === "Breath");
+    expect(breath?.dc_ability).toBe("dex");
+    expect(breath?.dc_value).toBe(11);
+    expect(out.monsters.orc?.actions.some((a) => a.name === "Multiattack")).toBe(false);
+    expect(out.monsters.orc?.special_abilities[0]?.name).toBe("Aggressive");
     expect(out.spells.fireball?.level).toBe(3);
     expect(out.spells.fireball?.save?.ability).toBe("dex");
     expect(out.spells.fireball?.save?.effect).toBe("half"); // from dc_success

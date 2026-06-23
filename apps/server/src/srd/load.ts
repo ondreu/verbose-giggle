@@ -141,15 +141,29 @@ function mapMonster(m: Record<string, unknown>): SrdMonster | null {
     ? (m.actions as Record<string, unknown>[])
         .map((a) => {
           const dmg = Array.isArray(a.damage) ? (a.damage[0] as Record<string, unknown>) : undefined;
+          const dc = a.dc as { dc_type?: { index?: string }; dc_value?: number; success_type?: string } | undefined;
+          const dcAbility = dc?.dc_type?.index ? ABILITY_FULL[dc.dc_type.index] : undefined;
           return {
             name: String(a.name ?? "Attack"),
             attack_bonus: a.attack_bonus !== undefined ? intFrom(a.attack_bonus) : undefined,
             damage: dmg?.damage_dice ? String(dmg.damage_dice) : undefined,
             damage_type: (dmg?.damage_type as { index?: string })?.index,
+            dc_ability: dcAbility,
+            dc_value: dc?.dc_value !== undefined ? intFrom(dc.dc_value) : undefined,
+            dc_success: typeof dc?.success_type === "string" ? dc.success_type : undefined,
+            desc: descText(a.desc),
           };
         })
-        .filter((a) => a.damage)
+        // Keep attacks (damage) and save-based effects (a DC); drop pure fluff
+        // like a bare "Multiattack" line that the engine can't resolve.
+        .filter((a) => a.damage || a.dc_value !== undefined)
     : [];
+  const named = (v: unknown) =>
+    Array.isArray(v)
+      ? (v as Record<string, unknown>[])
+          .map((x) => ({ name: String(x.name ?? ""), description: descText(x.desc) }))
+          .filter((x) => x.name)
+      : [];
   return {
     id,
     name,
@@ -164,6 +178,9 @@ function mapMonster(m: Record<string, unknown>): SrdMonster | null {
     immunities: idxList(m.damage_immunities),
     vulnerabilities: idxList(m.damage_vulnerabilities),
     actions,
+    special_abilities: named(m.special_abilities),
+    legendary_actions: named(m.legendary_actions),
+    reactions: named(m.reactions),
   };
 }
 

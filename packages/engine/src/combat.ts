@@ -130,7 +130,9 @@ function resolveAttackProfile(state: GameState, attacker: Actor, weaponId?: stri
   // Monster action (srd_ref or inline) takes priority when no PC weapon given.
   const ref = attacker.srd_ref ? state.srd.monster(attacker.srd_ref) : undefined;
   if (ref && ref.actions.length > 0) {
-    const action = ref.actions[0]!;
+    // Prefer a weapon attack with damage; save-only effects (breath weapons)
+    // aren't a basic to-hit attack, so fall back only if nothing else exists.
+    const action = ref.actions.find((a) => a.damage) ?? ref.actions[0]!;
     return {
       toHitMod: action.attack_bonus ?? 0,
       damageExpr: action.damage ?? "1d4",

@@ -32,9 +32,19 @@ export const SrdMonster = z.object({
         reach_ft: z.number().int().optional(),
         damage: z.string().optional(), // e.g. "1d6+2"
         damage_type: z.string().optional(),
+        /** Save-based actions (breath weapons, etc.): the DC to resist. */
+        dc_ability: z.enum(["str", "dex", "con", "int", "wis", "cha"]).optional(),
+        dc_value: z.number().int().optional(),
+        dc_success: z.string().optional(), // "half" | "none" | …
+        desc: z.string().optional(),
       }),
     )
     .default([]),
+  /** Passive/innate traits (e.g. Pack Tactics, Keen Smell) for grounding. */
+  special_abilities: z.array(z.object({ name: z.string(), description: z.string().optional() })).default([]),
+  /** Legendary actions, for narration of high-CR foes. */
+  legendary_actions: z.array(z.object({ name: z.string(), description: z.string().optional() })).default([]),
+  reactions: z.array(z.object({ name: z.string(), description: z.string().optional() })).default([]),
 });
 export type SrdMonster = z.infer<typeof SrdMonster>;
 

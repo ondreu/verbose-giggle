@@ -25,6 +25,9 @@ export const MONSTERS: Record<string, SrdMonster> = {
     actions: [
       { name: "Scimitar", attack_bonus: 4, reach_ft: 5, damage: "1d6+2", damage_type: "slashing" },
     ],
+    special_abilities: [],
+    legendary_actions: [],
+    reactions: [],
   },
   "goblin-boss": {
     id: "goblin-boss",
@@ -44,6 +47,9 @@ export const MONSTERS: Record<string, SrdMonster> = {
     actions: [
       { name: "Scimitar", attack_bonus: 4, reach_ft: 5, damage: "1d6+2", damage_type: "slashing" },
     ],
+    special_abilities: [],
+    legendary_actions: [],
+    reactions: [],
   },
 };
 
