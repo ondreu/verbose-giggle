@@ -62,8 +62,10 @@ export function loadConfig(): Config {
     port: Number(process.env.PORT ?? 3000),
     host: process.env.HOST ?? "0.0.0.0",
     vaultPath,
-    // The SRD dataset lives at the server root (./srd), not inside the vault.
-    srdPath: process.env.SRD_PATH ?? "./srd",
+    // SRD dataset path. In the Docker image the dataset is mounted at /data/srd
+    // (see docker-compose: ./srd:/data/srd); that is the default so it loads
+    // with no extra config. Override with SRD_PATH (e.g. local dev).
+    srdPath: process.env.SRD_PATH ?? "/data/srd",
     llm: {
       baseUrl: process.env.LLM_BASE_URL ?? "https://api.mistral.ai/v1",
       apiKey: llmApiKey,
