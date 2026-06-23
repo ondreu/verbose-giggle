@@ -511,6 +511,119 @@ pro snadné přidání dalších jazyků. Řízeno třemi nezávislými přepín
 
 ---
 
+### #49 — Živý svět jako základ kampaní
+
+Přístupu "kampaň obsahuje svět jako kulisu" nahradit přístupem "svět existuje
+samostatně a kampaně jsou příběhy které se v něm odehrávají". Svět má vlastní
+logiku, frakce sledují vlastní cíle, NPC stárnou a reagují na dění — nezávisle
+na tom, zda a jaká kampaň právě běží.
+
+#### Proč to dává smysl
+
+Profesionální D&D settingy (Forgotten Realms, Eberron, Ravenloft) fungují takto:
+svět je primární, dobrodružství jsou epizody v něm. Kampaně pak mohou sdílet
+svět, navazovat na sebe a mít reálné důsledky — hráči ovlivnění frakci v kampani A
+to pocítí v kampani B.
+
+#### #49a — Vault layout: `worlds/` jako sdílená vrstva
+
+Rozšíření adresářové struktury vaultu o top-level `worlds/<name>/` nezávislý na
+kampaních. Kampaně odkazují na svět přes `world:` pole v `campaign.yaml`:
+
+```
+vault/
+  worlds/
+    forgotten-reaches/
+      factions/          ← frakce s cíli a vztahy
+      locations/         ← sdílené lokace, přežívají kampaně
+      lore/              ← sdílená lore, historie, legendy
+      timeline.md        ← chronologie světa + budoucí hooky
+  campaigns/
+    stiny-nad-krajem/    ← world: forgotten-reaches
+    navrat-do-tmy/       ← stejný svět, jiní hráči, navazující důsledky
+```
+
+Server při načítání kampaně sloučí lokace/lore ze světa s campaign-specific
+obsahem. Kampaně bez `world:` fungují beze změny (zpětná kompatibilita).
+
+#### #49b — Schéma: `Faction` a `WorldEvent`
+
+Nové typy entit v `@adm/schemas`:
+
+**Faction** (`factions/<id>.md`):
+```yaml
+type: faction
+id: temni-kultiste
+name: Temní kultisté
+goal: "Přivolat starobožstvo Marakathe"
+resources: low          # low | medium | high
+territory: [zricenina-vraniho-hradu, mlzne-blato]
+relationships:
+  rada-starsich: hostile
+  kupecky-cech: neutral
+progress: 0.3           # 0.0–1.0, jak blízko jsou svému cíli
+```
+
+**WorldEvent** (`lore/events/<id>.md`):
+```yaml
+type: world_event
+id: obchodni-cesty-zkolabovaly
+trigger: "faction.kupecky-cech.progress < 0.2"
+name: "Zkolabovaly obchodní cesty"
+consequences:
+  - location.ricni-brod.danger: high
+  - faction.kupecky-cech.resources: low
+```
+
+#### #49c — Engine nástroje pro živý svět
+
+Nové deterministické engine tools, aby LLM nikdy nepsalo stav světa přímo:
+- `faction_advance(id, delta)` — posune `progress` frakce, loguje do dice logu
+- `faction_relation(a, b, stance)` — změní vztah dvou frakcí
+- `world_event_trigger(id)` — aktivuje WorldEvent a aplikuje consequences
+- `location_danger(id, level)` — aktualizuje danger level lokace
+
+DM prompt dostane instrukci rozpoznávat situace kdy by se frakce přiblížila/vzdálila
+cíli a volat příslušný nástroj — stejný deterministický princip jako u HP/spelů (#12).
+
+#### #49d — `/world` skill pro generování živého světa
+
+Nový Claude Code skill `.claude/skills/world/SKILL.md` pro vytvoření světa před
+kampaní. Vícefázový průchod:
+
+1. **Geografie** — kontinenty, regiony, klimatické zóny, hlavní lokace
+2. **Historie** — 3 epochy (před-historická / zlatý věk / současnost), klíčové události
+3. **Frakce** — 4–6 frakcí s cíli, zdroji, územím a vzájemnými vztahy (síť, ne seznam)
+4. **NPC sítě** — klíčové postavy napříč frakcemi, jejich osobní agendy
+5. **Tenze a hooky** — aktuální konflikty a spící hrozby z nichž vyrůstají kampaně
+6. **Timeline** — chronologie + 3–5 "tikajících bomb" s odhadem kdy explodují
+
+Konzistence přes world bible (stejný přístup jako #46d, ale bohatší).
+Výstup: `worlds/<name>/` připravený k odkázání z kampaní.
+
+#### #49e — Modifikovaný `/campaign` skill pro svět-aware generování
+
+Rozšíření `/campaign` skillu o volitelný parametr `--world <name>`:
+- Načte existující `worlds/<name>/` jako kontext
+- Kampaňové lokace/NPC/frakce navazují na světové
+- Quest hooky vyrůstají z faction tensions ze světa
+- Po kampani: skill nabídne aktualizovat `faction.progress` a `world_events`
+  dle toho co se v kampani stalo — svět se poučí z důsledků
+
+#### Závislosti a pořadí
+
+```
+#49a (vault layout) → #49b (schémata) → #49c (engine tools)
+#49d (/world skill) — nezávislý, lze dříve
+#49e (world-aware /campaign) — potřebuje #49a + #49d
+```
+
+#49a–b jsou čisté přidání (neruší stávající kampaně). #49c rozšiřuje engine
+bez změny existujících nástrojů. #49d je standalone skill, #49e rozšíření
+stávajícího.
+
+---
+
 ## Deliverables the user can provide
 
 - **Showcase vault** — see `docs/SHOWCASE.md` for exactly what to author, the
