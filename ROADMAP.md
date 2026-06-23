@@ -303,10 +303,18 @@ shown, so the player never has to know the rules by heart.
 - **[x] #42b — Carry the missing fields.** Done. `mapSpell` and `SrdSpell`
   extended with `higher_level`, `casting_time`, `duration`, `components`,
   `concentration`, `ritual`, and `range_ft`; exposed via `/api/srd/spell/:id`.
-- **[~] #42c — Same cards for feats, skills, features, conditions, items.** Partial.
-  `FeatCard` added (lazy fetch `/api/srd/feat/:id`, hover tooltip with prereqs +
-  description). Used in SheetPanel feat chips and LevelUpModal. Skills, class
-  features, conditions, and items not yet covered.
+- **[x] #42c — Same cards for feats, skills, features, conditions, items.** Done.
+  `FeatCard` (lazy fetch `/api/srd/feat/:id`) on SheetPanel feat chips and
+  LevelUpModal; `FeatureCard` (lazy fetch `/api/srd/feature/:id`, which falls
+  back to the racial-trait table so one endpoint serves the mixed "Schopnosti"
+  row) on SheetPanel class/racial features and CharacterCreate trait chips;
+  `ItemCard` (batch-primed by InventoryPanel, lazy single fetch via
+  `/api/srd/items`) on inventory rows; `ConditionCard` (static Czech
+  `csConditionDesc`) on the sheet's condition chips; plus static `ABILITY_TIP`/
+  `SKILL_TIP` tooltips on ability/skill rows across SheetPanel, CharacterCreate,
+  LevelUpModal and the rules ReferenceModal. All routed through the shared
+  portal-based `Tip`/`TipPortal` in `InfoCard.tsx`, so they're never clipped or
+  hidden behind the map.
 - **[N/A] #42d — Note:** spell/feature *names* stay English (per the localization
   decision); only the surrounding chrome/labels are Czech.
 
