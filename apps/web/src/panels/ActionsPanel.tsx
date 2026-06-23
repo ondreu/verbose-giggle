@@ -6,6 +6,11 @@ import { targetClause } from "./SheetPanel";
 /** Prettify an id ("fire-bolt" / "longsword") into a readable label. */
 const pretty = (id: string) => id.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 
+/** Armor/shields are equipped too but are not attacks (#43c). Exclude them so the
+ *  "Útoky" list shows only weapons. SRD armor ids carry these tells. */
+const ARMOR_RE = /(armor|shield|mail|plate|breastplate)/i;
+const isWeaponId = (id: string) => !ARMOR_RE.test(id);
+
 /** Universal D&D actions available to any creature on its turn (SRD §Combat). */
 const STANDARD_ACTIONS: { label: string; icon: string; text: string }[] = [
   { label: "Sprint", icon: "footprints", text: "Použiju akci Sprint (Dash) a zdvojnásobím svůj pohyb." },
@@ -50,7 +55,7 @@ export function ActionsPanel() {
   const downed = overlayHp <= 0;
   const disabled = busy || downed;
 
-  const equipped = actor.inventory.filter((i) => i.equipped);
+  const equipped = actor.inventory.filter((i) => i.equipped && isWeaponId(i.id));
   // Authored class/racial abilities (optional passthrough frontmatter).
   const raw = (actor as unknown as { features?: unknown }).features;
   const features: Feature[] = Array.isArray(raw)

@@ -17,7 +17,7 @@ interface SettingsView {
     piperFallback: boolean;
   };
   srdPath: string;
-  srd: { spells: number; monsters: number; classes: number; races: number; feats: number; total: number };
+  srd: { spells: number; monsters: number; classes: number; subclasses: number; races: number; subraces: number; feats: number; total: number };
   campaign: string;
   campaigns: string[];
   activeNarrator: "mock" | "llm";
@@ -359,7 +359,8 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
               {view.srd.total > 0 ? (
                 <p className="text-xs italic text-verdigris">
                   Dataset načten: {view.srd.total} záznamů — {view.srd.spells} kouzel, {view.srd.monsters} nestvůr,{" "}
-                  {view.srd.classes} povolání, {view.srd.races} ras, {view.srd.feats} vlastností.
+                  {view.srd.classes} povolání ({view.srd.subclasses} podtříd), {view.srd.races} ras (
+                  {view.srd.subraces} podras), {view.srd.feats} vlastností.
                 </p>
               ) : (
                 <p className="text-xs italic text-blood">

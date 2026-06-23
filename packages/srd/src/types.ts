@@ -54,6 +54,12 @@ export const SrdSpell = z.object({
   level: z.number().int().min(0).max(9),
   school: z.string().optional(),
   casting_time: z.string().optional(),
+  /** Spell duration text (e.g. "Instantaneous", "Concentration, up to 1 minute"). */
+  duration: z.string().optional(),
+  /** Components (e.g. ["V","S","M"]) for the hover card (#42). */
+  components: z.array(z.string()).optional(),
+  /** Upcast prose from the SRD `higher_level` array, for the hover card (#42). */
+  higher_level: z.string().optional(),
   range_ft: z.number().int().optional(),
   concentration: z.boolean().default(false),
   ritual: z.boolean().default(false),

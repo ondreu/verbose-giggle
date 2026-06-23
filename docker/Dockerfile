@@ -65,6 +65,8 @@ ENV WEB_DIST=/app/apps/web/dist
 RUN mkdir -p /data/vault /data/maps /data/srd /data/state \
   && cp -r /app/data/vault.example/. /data/vault/ 2>/dev/null || true
 ENV VAULT_PATH=/data/vault
+# SRD dataset is mounted here by the Compose stacks (./srd:/data/srd).
+ENV SRD_PATH=/data/srd
 
 EXPOSE 3000
 

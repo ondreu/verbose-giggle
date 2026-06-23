@@ -86,7 +86,7 @@ Read by `apps/server/src/config.ts`. See [`.env.example`](.env.example) for the 
 | `LLM_BASE_URL` | `https://api.mistral.ai/v1` | No | OpenAI-compatible chat-completions base URL. Set to OpenRouter's to route there. |
 | `LLM_MODEL` | `mistral-medium-3.5` | No | Model id (overridable per campaign via `campaign.yaml`). |
 | `VAULT_PATH` | `./data/vault` | No | Path to the vault root (contains `campaigns/`). |
-| `SRD_PATH` | `./srd` | No | Full SRD dataset (5e-bits/5e-database JSON) at the server root; falls back to a bundled subset. |
+| `SRD_PATH` | `/data/srd` | No | Full SRD dataset (5e-bits/5e-database JSON); the Docker mount `./srd:/data/srd`. Falls back to a bundled subset. |
 | `CAMPAIGN` | _(first found)_ | No | Specific campaign folder under `<vault>/campaigns`. |
 | `AZURE_SPEECH_KEY` / `AZURE_SPEECH_REGION` | _(unset → Azure off)_ | No | **Primary TTS** — Azure AI Speech (expressive Czech). Set both to enable; falls back to Piper on error. |
 | `AZURE_TTS_VOICE` | `cs-CZ-AntoninNeural` | No | Azure voice (`cs-CZ-AntoninNeural` m, `cs-CZ-VlastaNeural` f). |
