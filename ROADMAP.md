@@ -185,14 +185,12 @@ on old code and items **#15, #17, #18** are likely already resolved by updating.
   for their own sake; keep the dark-fantasy intent in `theme/tokens.css`).
 - **#7 — Font legibility.** The display font is pretty but hard to read; bump
   weight/size a touch for body text and lean on Markdown (#1) for structure.
-- **[x] #51 — Deník kostek schovat jako vedlejší panel.** Done. Hody už nejsou
-  vplétány do narativního chatu (zdroj přerušujícího auto-scrollu) — žijí v novém
-  sbalitelném `DiceLogPanel.tsx` zakotveném nad vstupním polem v `ChatPanel`.
-  Panel čte `session.log` (takže historie hodů přežije reload, ne jen živé SSE),
-  filtruje na `ROLL_KINDS`, a má vlastní izolovaný auto-scroll, který nikdy
-  netahá za čtení příběhu. Standardně sbalený s počtem hodů v odznaku; stav
-  rozbalení se ukládá do `localStorage` (`Prefs.diceLogOpen`). Animovaná karta
-  hodu (#33) se přesunula do `DiceLogPanel` a animuje jen nejnovější záznam.
+- **[x] #51 — Deník kostek schovat jako vedlejší panel.** Done. Rušivý byl
+  *samostatný* panel `Deník kostek` v pravém railu (dole v `aside` v
+  `PlaySurface`), který scrolloval na každý nový záznam — ten byl odstraněn
+  (`DiceLog.tsx` smazán z obou layoutů). Inline animované karty hodů přímo v
+  chatu (#33, `RollLine` v `ChatPanel`) zůstávají zachované — ty fungují skvěle
+  a jsou hlavním způsobem, jak hráč hody vidí v kontextu vyprávění.
 - **#47 — UI layout adjustments per user sketches.** Visual and layout changes
   per wireframes supplied by the user. Awaiting delivery of sketches.
   - **#47a — Layout implementation.** Adjust panel layout, navigation and visual

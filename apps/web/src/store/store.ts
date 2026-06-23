@@ -3,14 +3,16 @@ import type { Actor, Campaign, Encounter, Location, LogEntry, SessionState } fro
 
 interface NarrationLine {
   id: number;
-  role: "dm" | "player";
+  role: "dm" | "player" | "roll";
   text: string;
   /** Display name of the acting character (player lines only); falls back in UI. */
   actor?: string;
+  /** Log kind for roll lines (attack/check/save/…), used for styling. */
+  kind?: string;
 }
 
-/** Dice-bearing log kinds rendered as animated roll cards in the dice log (#33/#51). */
-export const ROLL_KINDS = new Set([
+/** Dice-bearing log kinds surfaced inline in the chat as animated roll cards. */
+const ROLL_KINDS = new Set([
   "roll", "check", "save", "attack", "damage", "spell", "death-save", "initiative",
 ]);
 
@@ -46,11 +48,9 @@ const PREFS_KEY = "adm.prefs";
 interface Prefs {
   ttsEnabled: boolean;
   ttsProvider: TtsProvider;
-  /** Whether the collapsible dice-log panel is expanded (#51). */
-  diceLogOpen: boolean;
 }
 
-const DEFAULT_PREFS: Prefs = { ttsEnabled: false, ttsProvider: "auto", diceLogOpen: false };
+const DEFAULT_PREFS: Prefs = { ttsEnabled: false, ttsProvider: "auto" };
 
 function loadPrefs(): Prefs {
   try {
@@ -63,8 +63,6 @@ function loadPrefs(): Prefs {
         parsed.ttsProvider === "azure" || parsed.ttsProvider === "piper" || parsed.ttsProvider === "auto"
           ? parsed.ttsProvider
           : DEFAULT_PREFS.ttsProvider,
-      diceLogOpen:
-        typeof parsed.diceLogOpen === "boolean" ? parsed.diceLogOpen : DEFAULT_PREFS.diceLogOpen,
     };
   } catch {
     return { ...DEFAULT_PREFS };
@@ -110,8 +108,6 @@ interface GameStore {
   narration: NarrationLine[];
   ttsEnabled: boolean;
   ttsProvider: TtsProvider;
-  /** Whether the collapsible dice-log panel is expanded (#51). */
-  diceLogOpen: boolean;
   /** True while narration audio is actively playing (drives the stop button). */
   speaking: boolean;
   reachable: Cell[];
@@ -149,8 +145,6 @@ interface GameStore {
   fetchLog: () => Promise<string>;
   toggleTts: () => void;
   setTtsProvider: (provider: TtsProvider) => void;
-  /** Expand/collapse the dice-log panel (#51). */
-  toggleDiceLog: () => void;
   /** Stop any narration audio currently playing (#30). */
   stopSpeech: () => void;
   generateImage: (subject: ImageSubject, id?: string, label?: string) => Promise<void>;
@@ -211,7 +205,6 @@ export const useGame = create<GameStore>((set, get) => ({
   narration: [],
   ttsEnabled: initialPrefs.ttsEnabled,
   ttsProvider: initialPrefs.ttsProvider,
-  diceLogOpen: initialPrefs.diceLogOpen,
   speaking: false,
   reachable: [],
   aoeCells: [],
@@ -308,11 +301,19 @@ export const useGame = create<GameStore>((set, get) => ({
     });
     source.addEventListener("log", (e) => {
       const { entry } = JSON.parse((e as MessageEvent).data) as { entry: LogEntry };
-      // Dice rolls live in the collapsible dice-log panel (#51), sourced from
-      // session.log — no longer interleaved into the narrative chat.
-      set((s) =>
-        s.session ? { session: { ...s.session, log: [...s.session.log, entry] } } : {},
-      );
+      set((s) => {
+        const next: Partial<GameStore> = s.session
+          ? { session: { ...s.session, log: [...s.session.log, entry] } }
+          : {};
+        // Surface dice rolls inline in the chat (animated), not just in the log.
+        if (ROLL_KINDS.has(entry.kind)) {
+          next.narration = [
+            ...s.narration,
+            { id: lineSeq++, role: "roll", text: entry.detail, kind: entry.kind },
+          ];
+        }
+        return next;
+      });
     });
     source.addEventListener("state", (e) => {
       const { state } = JSON.parse((e as MessageEvent).data) as { state: SessionState };
@@ -474,7 +475,7 @@ export const useGame = create<GameStore>((set, get) => ({
   toggleTts: () =>
     set((s) => {
       const ttsEnabled = !s.ttsEnabled;
-      savePrefs({ ttsEnabled, ttsProvider: s.ttsProvider, diceLogOpen: s.diceLogOpen });
+      savePrefs({ ttsEnabled, ttsProvider: s.ttsProvider });
       // Turning narration off should silence anything already playing (#30).
       if (!ttsEnabled) stopAudio();
       return { ttsEnabled, speaking: ttsEnabled ? s.speaking : false };
@@ -482,15 +483,8 @@ export const useGame = create<GameStore>((set, get) => ({
 
   setTtsProvider: (provider) =>
     set((s) => {
-      savePrefs({ ttsEnabled: s.ttsEnabled, ttsProvider: provider, diceLogOpen: s.diceLogOpen });
+      savePrefs({ ttsEnabled: s.ttsEnabled, ttsProvider: provider });
       return { ttsProvider: provider };
-    }),
-
-  toggleDiceLog: () =>
-    set((s) => {
-      const diceLogOpen = !s.diceLogOpen;
-      savePrefs({ ttsEnabled: s.ttsEnabled, ttsProvider: s.ttsProvider, diceLogOpen });
-      return { diceLogOpen };
     }),
 
   stopSpeech: () => {
