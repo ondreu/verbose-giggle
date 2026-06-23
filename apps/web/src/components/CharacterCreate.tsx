@@ -40,7 +40,8 @@ interface ClassOpt {
   skillCount: number;
   skills: string[];
   caster: "full" | "half" | "warlock" | "none";
-  subclasses: { id: string; name: string }[];
+  subclasses: { id: string; name: string; description?: string }[];
+  subclassAtCreation: boolean;
   spellList?: SpellList;
 }
 interface PointBuy {
@@ -80,6 +81,7 @@ export function CharacterCreate({ onClose }: { onClose: () => void }) {
   const [raceId, setRaceId] = useState("");
   const [subraceId, setSubraceId] = useState("");
   const [classId, setClassId] = useState("");
+  const [subclassId, setSubclassId] = useState("");
   // Default to the 5e standard array (costs exactly the 27-pt budget) so the
   // sheet opens balanced; "vynulovat" drops to all-8 for free point-buy.
   const [abilities, setAbilities] = useState<Record<Ability, number>>({
@@ -104,12 +106,14 @@ export function CharacterCreate({ onClose }: { onClose: () => void }) {
   const race = opts?.races.find((r) => r.id === raceId);
   const subrace = race?.subraces.find((s) => s.id === subraceId);
   const cls = opts?.classes.find((c) => c.id === classId);
+  const subclass = cls?.subclasses.find((s) => s.id === subclassId);
   const spellList = cls?.spellList;
 
   // Reset skills when the class changes (their list is class-specific).
   useEffect(() => setSkills([]), [classId]);
-  // Reset spell picks when the class changes; reset subrace when race changes.
+  // Reset spell picks and subclass when the class changes; reset subrace when race changes.
   useEffect(() => setPicked([]), [classId]);
+  useEffect(() => setSubclassId(""), [classId]);
   useEffect(() => setSubraceId(""), [raceId]);
 
   const finalAbilities = useMemo(() => {
@@ -162,7 +166,10 @@ export function CharacterCreate({ onClose }: { onClose: () => void }) {
     });
   };
 
-  const canSubmit = name.trim() && race && cls && (!cls || skills.length === cls.skillCount) && !busy;
+  // A level-1-subclass class must have one picked (when the SRD offers any, #44b).
+  const needsSubclass = !!cls?.subclassAtCreation && (cls?.subclasses.length ?? 0) > 0;
+  const canSubmit =
+    name.trim() && race && cls && skills.length === cls.skillCount && (!needsSubclass || !!subclassId) && !busy;
 
   const submit = async () => {
     if (!race || !cls) return;
@@ -174,6 +181,7 @@ export function CharacterCreate({ onClose }: { onClose: () => void }) {
       race: race.id,
       subrace: subrace?.id,
       class: cls.id,
+      subclass: subclass?.id,
       abilities,
       skills,
       spells: chosenSpells,
@@ -274,6 +282,21 @@ export function CharacterCreate({ onClose }: { onClose: () => void }) {
                       {cls.hitDie} · záchrany {cls.saves.map(csAbility).join(", ")} · {cls.skillCount} dovednosti
                       {cls.caster !== "none" ? " · sesílatel" : ""}
                     </p>
+                  )}
+                  {/* Subclass at level 1 (cleric/sorcerer/warlock, #44b). */}
+                  {cls && cls.subclassAtCreation && cls.subclasses.length > 0 && (
+                    <div className="mt-2">
+                      <Label>Podpovolání</Label>
+                      <select className="settings-input bg-bg-crust text-text" value={subclassId} onChange={(e) => setSubclassId(e.target.value)}>
+                        <option value="">— vyber —</option>
+                        {cls.subclasses.map((s) => (
+                          <option key={s.id} value={s.id}>{s.name}</option>
+                        ))}
+                      </select>
+                      {subclass?.description && (
+                        <p className="mt-1 line-clamp-3 font-body text-[11px] leading-snug text-subtext0">{subclass.description}</p>
+                      )}
+                    </div>
                   )}
                 </div>
               </div>

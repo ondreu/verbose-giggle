@@ -38,6 +38,10 @@ interface ClassDef {
   /** Level-1 spell picks the GUI offers (caps on the SRD spell list, #20). */
   cantrips?: number;
   spells?: number;
+  /** True for classes that choose a subclass at level 1 (cleric/sorcerer/
+   *  warlock in SRD 5.1); most classes pick it at level 3, so the creation
+   *  flow only offers a subclass for these (#44b). */
+  subclassAtCreation?: boolean;
 }
 
 const RACES: Record<string, RaceDef> = {
@@ -66,12 +70,12 @@ const CLASSES: Record<string, ClassDef> = {
   monk: { name: "Mnich", hitDie: "d8", saves: ["str", "dex"], skillCount: 2, caster: "none", skills: ["acrobatics", "athletics", "history", "insight", "religion", "stealth"] },
   ranger: { name: "Hraničář", hitDie: "d10", saves: ["str", "dex"], skillCount: 3, caster: "half", skills: ["animal-handling", "athletics", "insight", "investigation", "nature", "perception", "stealth", "survival"] },
   paladin: { name: "Paladin", hitDie: "d10", saves: ["wis", "cha"], skillCount: 2, caster: "half", skills: ["athletics", "insight", "intimidation", "medicine", "persuasion", "religion"] },
-  cleric: { name: "Klerik", hitDie: "d8", saves: ["wis", "cha"], skillCount: 2, caster: "full", cantrips: 3, spells: 3, skills: ["history", "insight", "medicine", "persuasion", "religion"] },
+  cleric: { name: "Klerik", hitDie: "d8", saves: ["wis", "cha"], skillCount: 2, caster: "full", cantrips: 3, spells: 3, subclassAtCreation: true, skills: ["history", "insight", "medicine", "persuasion", "religion"] },
   druid: { name: "Druid", hitDie: "d8", saves: ["int", "wis"], skillCount: 2, caster: "full", cantrips: 2, spells: 3, skills: ["arcana", "animal-handling", "insight", "medicine", "nature", "perception", "religion", "survival"] },
   wizard: { name: "Kouzelník", hitDie: "d6", saves: ["int", "wis"], skillCount: 2, caster: "full", cantrips: 3, spells: 6, skills: ["arcana", "history", "insight", "investigation", "medicine", "religion"] },
-  sorcerer: { name: "Čaroděj", hitDie: "d6", saves: ["con", "cha"], skillCount: 2, caster: "full", cantrips: 4, spells: 2, skills: ["arcana", "deception", "insight", "intimidation", "persuasion", "religion"] },
+  sorcerer: { name: "Čaroděj", hitDie: "d6", saves: ["con", "cha"], skillCount: 2, caster: "full", cantrips: 4, spells: 2, subclassAtCreation: true, skills: ["arcana", "deception", "insight", "intimidation", "persuasion", "religion"] },
   bard: { name: "Bard", hitDie: "d8", saves: ["dex", "cha"], skillCount: 3, caster: "full", cantrips: 2, spells: 4, skills: PHYSICAL_SOCIAL },
-  warlock: { name: "Černokněžník", hitDie: "d8", saves: ["wis", "cha"], skillCount: 2, caster: "warlock", cantrips: 2, spells: 2, skills: ["arcana", "deception", "history", "intimidation", "investigation", "nature", "religion"] },
+  warlock: { name: "Černokněžník", hitDie: "d8", saves: ["wis", "cha"], skillCount: 2, caster: "warlock", cantrips: 2, spells: 2, subclassAtCreation: true, skills: ["arcana", "deception", "history", "intimidation", "investigation", "nature", "religion"] },
 };
 
 const HIT_DIE_MAX: Record<string, number> = { d6: 6, d8: 8, d10: 10, d12: 12 };
@@ -161,7 +165,7 @@ function subclassesFor(srd: SrdIndex | undefined, classId: string) {
   return srd.list
     .subclasses()
     .filter((s) => s.class === classId)
-    .map((s) => ({ id: s.id, name: s.name, flavor: s.flavor }));
+    .map((s) => ({ id: s.id, name: s.name, flavor: s.flavor, description: s.description }));
 }
 
 /** The cantrip + level-1 spell list a class may pick from (SRD, #20). */
@@ -205,6 +209,8 @@ export function creationOptions(srd?: SrdIndex) {
       skills: c.skills,
       caster: c.caster,
       subclasses: subclassesFor(srd, id),
+      /** Offer a subclass at creation only for level-1-choice classes (#44b). */
+      subclassAtCreation: c.subclassAtCreation ?? false,
       spellList: spellListFor(srd, id, c),
     })),
     feats,
@@ -268,6 +274,8 @@ export interface CharacterDraft {
   /** Optional SRD subrace id (when the chosen race offers subraces, #20). */
   subrace?: string;
   class: string;
+  /** Optional SRD subclass id for classes that choose one at level 1 (#44b). */
+  subclass?: string;
   /** Base ability scores before racial bonuses. */
   abilities: Record<Ability, number>;
   skills: string[];
@@ -307,6 +315,18 @@ export async function createCharacter(
     throw new Error(`Neplatná podrasa pro ${draft.race}: ${draft.subrace}`);
   }
   const subraceBonuses = (subrace?.ability_bonuses ?? {}) as Partial<Record<Ability, number>>;
+
+  // Resolve an optional subclass — only valid for level-1-choice classes
+  // (cleric/sorcerer/warlock) and must belong to the chosen class (#44b).
+  const subclass = draft.subclass ? srd?.subclass(draft.subclass) : undefined;
+  if (draft.subclass) {
+    if (!cls.subclassAtCreation) {
+      throw new Error(`${cls.name} si nevybírá podpovolání na 1. úrovni.`);
+    }
+    if (srd && (!subclass || subclass.class !== draft.class)) {
+      throw new Error(`Neplatné podpovolání pro ${draft.class}: ${draft.subclass}`);
+    }
+  }
 
   // Validate the base scores against point-buy: each 8–15, total ≤ 27 points.
   // This rejects an all-18 dump regardless of what the client sends.
@@ -354,8 +374,13 @@ export async function createCharacter(
   const srdRace = srd?.race(draft.race);
   const languages = Array.from(new Set(srdRace?.languages ?? []));
   const traits = Array.from(new Set([...(srdRace?.traits ?? []), ...(subrace?.traits ?? [])]));
+  // Level-1 class features plus, when a subclass is chosen at creation, its
+  // own level-1 features (#44b).
   const features = srd
-    ? srd.list.features().filter((f) => f.class === draft.class && (f.level ?? 1) === 1 && !f.subclass).map((f) => f.id)
+    ? srd.list
+        .features()
+        .filter((f) => f.class === draft.class && (f.level ?? 1) === 1 && (!f.subclass || f.subclass === draft.subclass))
+        .map((f) => f.id)
     : [];
 
   // Starting equipment from the SRD class (the guaranteed grants). Armor,
@@ -381,6 +406,7 @@ export async function createCharacter(
     faction: "party",
     race: subrace ? subrace.id : draft.race,
     class: draft.class,
+    ...(subclass ? { subclass: subclass.id } : {}),
     ...(draft.backstory?.trim() ? { backstory: draft.backstory.trim() } : {}),
     level: 1,
     xp: 0,

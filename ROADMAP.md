@@ -334,10 +334,15 @@ sheet so the parchment is the one place you act from (BG3-style action surface).
   traits and refuses a subrace from a different race. Audited by tests
   (`creation.test.ts`): invalid-subrace rejection and the `srdStats` subrace
   count.
-- **[~] #44b — Subclasses.** Partial. `levelUpOptions` returns subclasses from
+- **[x] #44b — Subclasses.** Done. `levelUpOptions` returns subclasses from
   the SRD for the right level, and `LevelUpModal` shows the subclass picker when
-  `needsSubclass` is true. Creation-time subclass picker not added (correct for
-  most 5e classes where subclass is a level 3+ choice).
+  `needsSubclass` is true. Creation now also offers a subclass for the SRD 5.1
+  classes that choose one at level 1 — **cleric, sorcerer, warlock** (flagged
+  `subclassAtCreation`); the other classes still pick it at level 3+ via the
+  level-up flow. `CharacterCreate` shows the picker (with flavour text) and
+  requires it when the SRD offers subclasses; `createCharacter` validates the
+  subclass belongs to the class, stores it, and grants its level-1 subclass
+  features alongside the base class features. Covered by `creation.test.ts`.
 - **[x] #44c — BG3-style level-up menu.** Done. `LevelUpModal.tsx` fully
   rewritten: HP section (blood), new class features (gold, expandable), subclass
   selection with inline description (arcane), ASI-or-feat with FeatCard link
