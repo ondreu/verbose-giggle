@@ -285,6 +285,76 @@ playtest (2026-06):
   subtle) that the DM still drives. Keep the deterministic `start_combat` path
   intact; this is presentation, not mechanics.
 
+### #42 — Rich interactive SRD tooltips / hover cards (cluster)
+
+The SRD dataset carries full descriptions and mechanics (see the sample
+`acid-arrow` record: `desc`, `higher_level`, `range`, `components`,
+`casting_time`, `duration`, `concentration`, `damage.damage_at_slot_level`,
+`school`); surface them as interactive cards on hover/focus everywhere an id is
+shown, so the player never has to know the rules by heart.
+
+- **#42a — Spell hover card.** On hovering a spell (sheet, actions, pickers,
+  level-up) show a card with: level + school, casting time, range, components,
+  duration, concentration/ritual flags, the description, base damage/heal **and
+  the upcast scaling** ("+1d4 za každý slot nad 2."). The numbers come from
+  `damage_by_slot`/`heal_by_slot`; the upcast prose from the SRD `higher_level`.
+- **#42b — Carry the missing fields.** Extend `mapSpell` + `SrdSpell`
+  (`apps/server/src/srd/load.ts`, `packages/srd/src/types.ts`) to keep
+  `higher_level`, `casting_time`, `duration` and `components` (currently dropped)
+  so the card has real data; expose them via the creation/level-up/spell
+  endpoints.
+- **#42c — Same cards for feats, skills, features, conditions, items.** Reuse a
+  shared `<InfoCard>`/tooltip primitive for feats (`srd.feat`), class/racial
+  features (`srd.feature`/`srd.trait`), skills (ability + SRD skill desc),
+  damage types, weapon properties and magic items — wherever a chip/label is
+  rendered. Pairs with #21 (mine descriptive SRD data) and #34 (condition chips).
+- **#42d — Note:** spell/feature *names* stay English (per the localization
+  decision); only the surrounding chrome/labels are Czech.
+
+### #43 — Character sheet as the single action hub (cluster)
+
+Today actions live in a separate "Akce — <jméno>" panel (`ActionsPanel.tsx`)
+*and* spells are duplicated on the parchment sheet. Collapse everything onto the
+sheet so the parchment is the one place you act from (BG3-style action surface).
+
+- **#43a — Remove the standalone "Akce" panel** and fold its groups (attacks,
+  general actions, spells, features, common checks) into `SheetPanel.tsx` under
+  the existing layout; drop it from `PlaySurface`'s rail.
+- **#43b — De-duplicate spells.** Spells currently render both at the top of the
+  sheet and again below; show them **once**, in the consolidated action area.
+- **#43c — Fix "Útoky" listing armor.** The attacks group lists every *equipped*
+  inventory item, so leather armor/shields appear as attacks. Filter to actual
+  weapons (item has `damage`, or SRD category weapon) — armor/shields never show
+  as an attack.
+- **#43d — Don't offer passive abilities as castable.** Passive/always-on
+  spells and features (no action to "use") must not appear as clickable cast/use
+  buttons. Gate by the spell's `casting_time`/`duration` (and feature type) so
+  only actually-usable actions are buttons; passives render as static info
+  (with a #42 tooltip).
+- **#43e — Keep determinism.** Every action still sends NL intent through the DM
+  loop → engine; this is a UI reorganization, not a rules change.
+
+### #44 — Full SRD subraces & subclasses + BG3-style level-up (cluster)
+
+- **#44a — Subraces from the SRD in creation.** Only one subrace shows (and in
+  Czech), so subrace data isn't reaching the picker even though the dataset is
+  mounted — verify `5e-SRD-Subraces.json` loads (`srdStats` should report a
+  subrace count; add it) and that `subracesFor` returns all subraces of the
+  chosen race with their ability bonuses + traits. Each subrace gets a #42 card.
+- **#44b — Subclasses.** None appear at creation — correct for most classes
+  (subclass is a later-level choice in 5e), **but** the choice must then exist in
+  the level-up flow at the right level. Confirm `5e-SRD-Subclasses.json` loads
+  and `choose_subclass` is offered when due.
+- **#44c — BG3-style level-up menu.** Rework `LevelUpModal.tsx` to mirror the
+  (improved) creation flow — a guided, sectioned surface for HP, ASI-or-feat,
+  subclass selection and new spells, with #42 cards throughout — instead of the
+  current compact modal.
+
+> **#1 (paladin/ranger free-text spell box) — fixed**, pending deploy: half
+> casters now show "získává kouzla od 2. úrovně" instead of the comma-separated
+> id input (`CharacterCreate.tsx`). The unmounted-SRD case now shows a clear
+> "mount the dataset" message rather than a free-text box.
+
 ---
 
 ## New features
