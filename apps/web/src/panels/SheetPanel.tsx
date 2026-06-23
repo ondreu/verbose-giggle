@@ -3,7 +3,7 @@ import { csCondition, csConditionDesc, csAbility, csAbilityAbbr, csClass, csFeat
 import { useGame } from "../store/store";
 import { Icon } from "../components/Icon";
 import { LevelUpModal } from "../components/LevelUpModal";
-import { FeatCard, SpellCard } from "../components/InfoCard";
+import { FeatCard, SpellCard, Tip } from "../components/InfoCard";
 import type { PickedTarget } from "../store/store";
 
 /** Turn a picked target into a Czech "na <cíl>" clause for the action sentence. */
@@ -23,15 +23,31 @@ const prettySpell = pretty;
 const ARMOR_RE = /(armor|shield|mail|plate|breastplate)/i;
 const isWeaponId = (id: string) => !ARMOR_RE.test(id);
 
+/** Czech ability descriptions shown in the tooltip. */
+const ABILITY_TIP: Record<string, string> = {
+  str: "Síla — fyzická zdatnost a atletika. Ovlivňuje útoky na blízko, hody na udržení a nošení těžkých věcí.",
+  dex: "Obratnost — hbitost a reflexy. Ovlivňuje iniciativu, útoky zbraněmi na dálku a lehké zbroje.",
+  con: "Odolnost — zdraví a výdrž. Určuje maximum životů a záchranné hody na výdrž.",
+  int: "Inteligence — paměť a analytické myšlení. Základ kouzelníka; ovlivňuje Mystiku, Historii a Přírodu.",
+  wis: "Moudrost — vnímavost a intuice. Základ klerika a druida; ovlivňuje Vnímání, Vhled a Přežití.",
+  cha: "Charisma — síla osobnosti a přesvědčivost. Základ barda a čaroděje; ovlivňuje Přesvědčování a Zastrašování.",
+};
+
 /** Standard D&D combat actions available to any creature. */
-const STANDARD_ACTIONS: { label: string; icon: string; text: string }[] = [
-  { label: "Sprint", icon: "footprints", text: "Použiju akci Sprint (Dash) a zdvojnásobím svůj pohyb." },
-  { label: "Úhyb", icon: "shield", text: "Použiju akci Úhyb (Dodge) — útoky proti mně mají nevýhodu." },
-  { label: "Odpoutání", icon: "footprints", text: "Použiju akci Odpoutání (Disengage), abych se vyhnul příležitostným útokům." },
-  { label: "Pomoc", icon: "heart", text: "Použiju akci Pomoc (Help) a podpořím spojence." },
-  { label: "Úkryt", icon: "compass", text: "Pokusím se ukrýt (akce Úkryt) — hod na Nenápadnost." },
-  { label: "Pátrání", icon: "compass", text: "Použiju akci Pátrání (Search) a pozorně se rozhlédnu." },
+const STANDARD_ACTIONS: { label: string; icon: string; text: string; tip: string }[] = [
+  { label: "Sprint", icon: "footprints", text: "Použiju akci Sprint (Dash) a zdvojnásobím svůj pohyb.", tip: "Dash — zdvojnásobí pohyb na tento tah. Nemůžeš útočit ani sesílat kouzla." },
+  { label: "Úhyb", icon: "shield", text: "Použiju akci Úhyb (Dodge) — útoky proti mně mají nevýhodu.", tip: "Dodge — všechny útoky proti tobě mají nevýhodu; záchranné hody na Obratnost s výhodou. Funguje, dokud se pohybuješ." },
+  { label: "Odpoutání", icon: "footprints", text: "Použiju akci Odpoutání (Disengage), abych se vyhnul příležitostným útokům.", tip: "Disengage — tvůj pohyb na tento tah nevyprovokuje příležitostné útoky." },
+  { label: "Pomoc", icon: "heart", text: "Použiju akci Pomoc (Help) a podpořím spojence.", tip: "Help — dáš spojenci výhodu na jeho příští hod na útok nebo dovednostní zkoušku." },
+  { label: "Úkryt", icon: "compass", text: "Pokusím se ukrýt (akce Úkryt) — hod na Nenápadnost.", tip: "Hide — hod na Nenápadnost vs. pasivní Vnímání nepřátel. Při úspěchu jsi skrytý." },
+  { label: "Pátrání", icon: "compass", text: "Použiju akci Pátrání (Search) a pozorně se rozhlédnu.", tip: "Search — věnuješ se aktivnímu hledání; DM rozhodne, zda odhalíš skryté věci nebo tvory." },
 ];
+
+const SKILL_TIP: Record<string, string> = {
+  perception: "Vnímání (Moudrost) — zachytíš skryté tvory, neobvyklé předměty nebo hrozby ve svém okolí.",
+  insight: "Vhled (Moudrost) — odhadneš záměry a emoce druhé osoby; poznáš, zda lže.",
+  persuasion: "Přesvědčování (Charisma) — ovlivníš ostatní taktním přístupem a vhodně volenými argumenty.",
+};
 
 /** Cumulative XP to REACH each level (index 0 = level 1). SRD. */
 const XP_THRESHOLDS = [
@@ -184,15 +200,13 @@ export function SheetPanel() {
       {/* Abilities */}
       <div className="mt-3 grid grid-cols-6 gap-1.5">
         {ABILITY_ORDER.map((key) => (
-          <div
-            key={key}
-            className="rounded-sm border border-ink/20 bg-ink/5 px-1 py-1 text-center"
-            title={csAbility(key)}
-          >
-            <div className="text-[10px] uppercase tracking-wider text-ink/60">{csAbilityAbbr(key)}</div>
-            <div className="font-display text-base leading-none">{fmt(mod(actor.abilities[key]))}</div>
-            <div className="font-log text-[10px] text-ink/55">{actor.abilities[key]}</div>
-          </div>
+          <Tip key={key} content={<p className="font-body text-[12px] leading-snug text-text">{ABILITY_TIP[key]}</p>}>
+            <div className="rounded-sm border border-ink/20 bg-ink/5 px-1 py-1 text-center">
+              <div className="text-[10px] uppercase tracking-wider text-ink/60">{csAbilityAbbr(key)}</div>
+              <div className="font-display text-base leading-none">{fmt(mod(actor.abilities[key]))}</div>
+              <div className="font-log text-[10px] text-ink/55">{actor.abilities[key]}</div>
+            </div>
+          </Tip>
         ))}
       </div>
 
@@ -299,31 +313,42 @@ export function SheetPanel() {
 
         {/* Attacks (#43c: armor filtered out by isWeaponId) */}
         <ActionGroup label="Útoky" icon="sword">
-          <ActionChip
-            label="Útok zbraní"
-            disabled={disabled}
-            onClick={() => void aim("Cíl útoku", (c) => `Zaútočím vybranou zbraní${c}.`, false)}
-          />
-          {equipped.map((i) => (
+          <Tip content={<p className="font-body text-[12px] leading-snug text-text">Útok libovolnou vybavenou zbraní. DM určí hod na útok a poškození.</p>}>
             <ActionChip
-              key={i.id}
-              label={pretty(i.id)}
+              label="Útok zbraní"
               disabled={disabled}
-              onClick={() => void aim(`Cíl pro ${pretty(i.id)}`, (c) => `Zaútočím zbraní ${pretty(i.id)} (${i.id})${c}.`, false)}
+              onClick={() => void aim("Cíl útoku", (c) => `Zaútočím vybranou zbraní${c}.`, false)}
             />
+          </Tip>
+          {equipped.map((i) => (
+            <Tip key={i.id} content={<p className="font-body text-[12px] leading-snug text-text">Útok zbraní {pretty(i.id)}.</p>}>
+              <ActionChip
+                label={pretty(i.id)}
+                disabled={disabled}
+                onClick={() => void aim(`Cíl pro ${pretty(i.id)}`, (c) => `Zaútočím zbraní ${pretty(i.id)} (${i.id})${c}.`, false)}
+              />
+            </Tip>
           ))}
-          <ActionChip label="Beze zbraně" disabled={disabled}
-            onClick={() => void aim("Cíl útoku beze zbraně", (c) => `Zaútočím beze zbraně (unarmed strike)${c}.`, false)} />
-          <ActionChip label="Strčení" disabled={disabled}
-            onClick={() => void aim("Cíl strčení", (c) => `Použiju speciální útok Strčení (Shove)${c} — pokus o sražení nebo odtlačení.`, false)} />
-          <ActionChip label="Chvat" disabled={disabled}
-            onClick={() => void aim("Cíl chvatu", (c) => `Pokusím se o Chvat (Grapple)${c}.`, false)} />
+          <Tip content={<p className="font-body text-[12px] leading-snug text-text">Úder pěstí nebo kolenem. Zásah: 1 + mod. Síly drtivého poškození.</p>}>
+            <ActionChip label="Beze zbraně" disabled={disabled}
+              onClick={() => void aim("Cíl útoku beze zbraně", (c) => `Zaútočím beze zbraně (unarmed strike)${c}.`, false)} />
+          </Tip>
+          <Tip content={<p className="font-body text-[12px] leading-snug text-text">Shove — sraž nebo odtlač protivníka na 5 stop. Protichůdný hod: Atletika vs. Atletika / Akrobacie.</p>}>
+            <ActionChip label="Strčení" disabled={disabled}
+              onClick={() => void aim("Cíl strčení", (c) => `Použiju speciální útok Strčení (Shove)${c} — pokus o sražení nebo odtlačení.`, false)} />
+          </Tip>
+          <Tip content={<p className="font-body text-[12px] leading-snug text-text">Grapple — zachyť protivníka; jeho rychlost klesne na 0. Protichůdný hod: Atletika vs. Atletika / Akrobacie.</p>}>
+            <ActionChip label="Chvat" disabled={disabled}
+              onClick={() => void aim("Cíl chvatu", (c) => `Pokusím se o Chvat (Grapple)${c}.`, false)} />
+          </Tip>
         </ActionGroup>
 
         {/* Standard actions */}
         <ActionGroup label="Obecné akce" icon="d20">
           {STANDARD_ACTIONS.map((a) => (
-            <ActionChip key={a.label} label={a.label} disabled={disabled} onClick={() => act(a.text)} />
+            <Tip key={a.label} content={<p className="font-body text-[12px] leading-snug text-text">{a.tip}</p>}>
+              <ActionChip label={a.label} disabled={disabled} onClick={() => act(a.text)} />
+            </Tip>
           ))}
         </ActionGroup>
 
@@ -346,8 +371,10 @@ export function SheetPanel() {
         {/* Skill checks */}
         <ActionGroup label="Zkoušky" icon="compass">
           {(["perception", "insight", "persuasion"] as const).map((sk) => (
-            <ActionChip key={sk} label={csSkill(sk)} disabled={disabled}
-              onClick={() => act(`Udělám zkoušku dovednosti ${csSkill(sk)}.`)} />
+            <Tip key={sk} content={<p className="font-body text-[12px] leading-snug text-text">{SKILL_TIP[sk]}</p>}>
+              <ActionChip label={csSkill(sk)} disabled={disabled}
+                onClick={() => act(`Udělám zkoušku dovednosti ${csSkill(sk)}.`)} />
+            </Tip>
           ))}
         </ActionGroup>
       </div>

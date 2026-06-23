@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { csSpellSchool } from "@adm/schemas";
 
 interface SpellData {
@@ -23,9 +24,7 @@ interface FeatData {
   description?: string;
 }
 
-/** Lazily fetched SRD spell data cached for the session. */
 const spellCache: Record<string, SpellData | null> = {};
-
 async function fetchSpell(id: string): Promise<SpellData | null> {
   if (id in spellCache) return spellCache[id]!;
   try {
@@ -40,7 +39,6 @@ async function fetchSpell(id: string): Promise<SpellData | null> {
 }
 
 const featCache: Record<string, FeatData | null> = {};
-
 async function fetchFeat(id: string): Promise<FeatData | null> {
   if (id in featCache) return featCache[id]!;
   try {
@@ -54,127 +52,155 @@ async function fetchFeat(id: string): Promise<FeatData | null> {
   }
 }
 
-/** Floating card that appears on hover/focus over its children. */
-function TooltipCard({ children }: { children: React.ReactNode }) {
-  return (
+// ── Portal tooltip infrastructure ─────────────────────────────────────────────
+// Renders into document.body so it's never clipped by overflow or hidden behind
+// the Leaflet map layer. Position is computed from the anchor element's viewport
+// rect; clamped to viewport edges; flips above/below based on available space.
+
+type TipPos = { left: number; y: number; above: boolean };
+
+function computePos(anchor: HTMLElement): TipPos {
+  const r = anchor.getBoundingClientRect();
+  const W = 320;
+  const cx = r.left + r.width / 2;
+  const above = r.top > 220;
+  return {
+    left: Math.max(12, Math.min(cx - W / 2, window.innerWidth - W - 12)),
+    y: above ? window.innerHeight - r.top + 8 : r.bottom + 8,
+    above,
+  };
+}
+
+function TipPortal({ pos, children }: { pos: TipPos; children: React.ReactNode }) {
+  return createPortal(
     <div
       role="tooltip"
-      className="pointer-events-none absolute bottom-full left-1/2 z-[3000] mb-1.5 w-64 -translate-x-1/2 rounded-sm border border-surface2 bg-bg-crust p-2.5 text-left shadow-xl"
+      style={{
+        position: "fixed",
+        zIndex: 9999,
+        width: 320,
+        left: pos.left,
+        ...(pos.above ? { bottom: pos.y } : { top: pos.y }),
+      }}
+      className="pointer-events-none rounded-sm border border-surface2 bg-bg-crust p-3 text-left shadow-2xl"
     >
       {children}
-    </div>
+    </div>,
+    document.body,
   );
 }
 
-/**
- * Wraps a spell button/chip and shows an SRD hover card on focus/hover (#42a).
- * Fetches spell data lazily and caches it for the session lifetime.
- */
-export function SpellCard({ id, children }: { id: string; children: React.ReactNode }) {
-  const [spell, setSpell] = useState<SpellData | null>(null);
-  const [visible, setVisible] = useState(false);
+// Shared hook. Wrapper uses display:contents so it never breaks grid/flex layout.
+// Position is taken from the first rendered child element.
+function useTip(delay = 250) {
+  const wrapRef = useRef<HTMLSpanElement>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [pos, setPos] = useState<TipPos | null>(null);
 
   const show = () => {
     if (timerRef.current) clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(() => setVisible(true), 300);
-    if (!spell) void fetchSpell(id).then(setSpell);
+    timerRef.current = setTimeout(() => {
+      const span = wrapRef.current;
+      if (!span) return;
+      const anchor = (span.firstElementChild as HTMLElement | null) ?? span;
+      setPos(computePos(anchor));
+    }, delay);
   };
   const hide = () => {
     if (timerRef.current) clearTimeout(timerRef.current);
-    setVisible(false);
+    setPos(null);
   };
 
   useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current); }, []);
+  return { wrapRef, pos, show, hide };
+}
 
-  if (!spell || !visible) {
-    return (
-      <span className="relative" onMouseEnter={show} onMouseLeave={hide} onFocus={show} onBlur={hide}>
-        {children}
-      </span>
-    );
-  }
+// ── Public components ──────────────────────────────────────────────────────────
 
-  const levelLabel = spell.level === 0 ? "trik" : `${spell.level}. úroveň`;
-  const schoolLabel = spell.school ? csSpellSchool(spell.school) : "";
-  const flagBits = [
-    spell.concentration && "soustředění",
-    spell.ritual && "rituál",
-  ].filter(Boolean).join(", ");
+/** Generic static tooltip. Wrap any element; show `content` on hover/focus. */
+export function Tip({ content, children }: { content: React.ReactNode; children: React.ReactNode }) {
+  const { wrapRef, pos, show, hide } = useTip();
+  return (
+    <span ref={wrapRef} style={{ display: "contents" }} onMouseEnter={show} onMouseLeave={hide} onFocus={show} onBlur={hide}>
+      {children}
+      {pos && <TipPortal pos={pos}>{content}</TipPortal>}
+    </span>
+  );
+}
+
+/** Wraps a spell chip and shows a full SRD card on hover. */
+export function SpellCard({ id, children }: { id: string; children: React.ReactNode }) {
+  const [spell, setSpell] = useState<SpellData | null>(null);
+  const { wrapRef, pos, show: trigger, hide } = useTip();
+
+  const show = () => {
+    trigger();
+    if (!spell) void fetchSpell(id).then(setSpell);
+  };
 
   return (
-    <span className="relative" onMouseEnter={show} onMouseLeave={hide} onFocus={show} onBlur={hide}>
+    <span ref={wrapRef} style={{ display: "contents" }} onMouseEnter={show} onMouseLeave={hide} onFocus={show} onBlur={hide}>
       {children}
-      {visible && (
-        <TooltipCard>
-          <p className="mb-0.5 font-display text-sm text-text">{spell.name}</p>
-          <p className="mb-1.5 font-log text-[10px] text-subtext0">
-            {levelLabel}{schoolLabel ? ` · ${schoolLabel}` : ""}
-            {flagBits ? ` · ${flagBits}` : ""}
-          </p>
-          {spell.casting_time && (
-            <Row label="Čas" value={spell.casting_time} />
-          )}
-          {spell.range_ft !== undefined && (
-            <Row label="Dosah" value={`${spell.range_ft} ft`} />
-          )}
-          {spell.duration && (
-            <Row label="Trvání" value={spell.duration} />
-          )}
-          {spell.components && spell.components.length > 0 && (
-            <Row label="Složky" value={spell.components.join(", ")} />
-          )}
-          {spell.description && (
-            <p className="mt-1.5 line-clamp-4 font-body text-[11px] leading-snug text-subtext1">
-              {spell.description}
-            </p>
-          )}
-          {spell.higher_level && (
-            <p className="mt-1 font-body text-[10px] italic leading-snug text-subtext0">
-              {spell.higher_level}
-            </p>
-          )}
-        </TooltipCard>
+      {pos && (
+        <TipPortal pos={pos}>
+          {spell ? <SpellBody spell={spell} /> : <p className="font-log text-[11px] text-subtext0">načítám…</p>}
+        </TipPortal>
       )}
     </span>
   );
 }
 
-/**
- * Wraps a feat chip and shows its SRD description on hover (#42c).
- */
+function SpellBody({ spell }: { spell: SpellData }) {
+  const levelLabel = spell.level === 0 ? "trik" : `${spell.level}. úroveň`;
+  const schoolLabel = spell.school ? csSpellSchool(spell.school) : "";
+  const flags = [spell.concentration && "soustředění", spell.ritual && "rituál"].filter(Boolean).join(", ");
+  return (
+    <>
+      <p className="mb-0.5 font-display text-sm text-text">{spell.name}</p>
+      <p className="mb-1.5 font-log text-[10px] text-subtext0">
+        {levelLabel}{schoolLabel ? ` · ${schoolLabel}` : ""}{flags ? ` · ${flags}` : ""}
+      </p>
+      {spell.casting_time && <Row label="Čas" value={spell.casting_time} />}
+      {spell.range_ft !== undefined && <Row label="Dosah" value={`${spell.range_ft} ft`} />}
+      {spell.duration && <Row label="Trvání" value={spell.duration} />}
+      {spell.components && spell.components.length > 0 && <Row label="Složky" value={spell.components.join(", ")} />}
+      {spell.description && (
+        <p className="mt-1.5 line-clamp-6 font-body text-[11px] leading-snug text-subtext1">{spell.description}</p>
+      )}
+      {spell.higher_level && (
+        <p className="mt-1 font-body text-[10px] italic leading-snug text-subtext0">{spell.higher_level}</p>
+      )}
+    </>
+  );
+}
+
+/** Wraps a feat chip and shows its SRD description on hover. */
 export function FeatCard({ id, children }: { id: string; children: React.ReactNode }) {
   const [feat, setFeat] = useState<FeatData | null>(null);
-  const [visible, setVisible] = useState(false);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const { wrapRef, pos, show: trigger, hide } = useTip();
 
   const show = () => {
-    if (timerRef.current) clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(() => setVisible(true), 300);
+    trigger();
     if (!feat) void fetchFeat(id).then(setFeat);
   };
-  const hide = () => {
-    if (timerRef.current) clearTimeout(timerRef.current);
-    setVisible(false);
-  };
-
-  useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current); }, []);
 
   return (
-    <span className="relative" onMouseEnter={show} onMouseLeave={hide} onFocus={show} onBlur={hide}>
+    <span ref={wrapRef} style={{ display: "contents" }} onMouseEnter={show} onMouseLeave={hide} onFocus={show} onBlur={hide}>
       {children}
-      {visible && feat?.description && (
-        <TooltipCard>
-          <p className="mb-0.5 font-display text-sm text-text">{feat.name}</p>
-          {feat.prerequisites.length > 0 && (
-            <p className="mb-1 font-log text-[10px] text-subtext0">
-              Požadavky: {feat.prerequisites.join(", ")}
-            </p>
+      {pos && (
+        <TipPortal pos={pos}>
+          {feat ? (
+            <>
+              <p className="mb-0.5 font-display text-sm text-text">{feat.name}</p>
+              {feat.prerequisites.length > 0 && (
+                <p className="mb-1 font-log text-[10px] text-subtext0">Požadavky: {feat.prerequisites.join(", ")}</p>
+              )}
+              <p className="font-body text-[11px] leading-snug text-subtext1 line-clamp-6">{feat.description}</p>
+            </>
+          ) : (
+            <p className="font-log text-[11px] text-subtext0">načítám…</p>
           )}
-          <p className="font-body text-[11px] leading-snug text-subtext1 line-clamp-5">
-            {feat.description}
-          </p>
-        </TooltipCard>
+        </TipPortal>
       )}
     </span>
   );

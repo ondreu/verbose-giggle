@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { csAbility, csAbilityAbbr, csSkill, csSpellSchool } from "@adm/schemas";
+import { csAbility, csAbilityAbbr, csSkill } from "@adm/schemas";
 import { useGame } from "../store/store";
 import { Icon } from "./Icon";
+import { SpellCard } from "./InfoCard";
 
 type Ability = "str" | "dex" | "con" | "int" | "wis" | "cha";
 
@@ -445,23 +446,23 @@ function SpellPicker({
       <div className="flex flex-wrap gap-1.5">
         {spells.map((s) => {
           const on = picked.includes(s.id);
-          const disabled = !on && full;
+          const dis = !on && full;
           return (
-            <button
-              key={s.id}
-              onClick={() => onToggle(s.id)}
-              disabled={disabled}
-              title={s.school ? csSpellSchool(s.school) : undefined}
-              className={`rounded-sm border px-2 py-0.5 font-log text-[11px] ${
-                on
-                  ? "border-gold/60 bg-gold/10 text-gold"
-                  : disabled
-                    ? "border-surface1 text-subtext0/40"
-                    : "border-surface2 text-subtext1 hover:border-gold/40"
-              }`}
-            >
-              {s.name}
-            </button>
+            <SpellCard key={s.id} id={s.id}>
+              <button
+                onClick={() => onToggle(s.id)}
+                disabled={dis}
+                className={`rounded-sm border px-2 py-0.5 font-log text-[11px] ${
+                  on
+                    ? "border-gold/60 bg-gold/10 text-gold"
+                    : dis
+                      ? "border-surface1 text-subtext0/40"
+                      : "border-surface2 text-subtext1 hover:border-gold/40"
+                }`}
+              >
+                {s.name}
+              </button>
+            </SpellCard>
           );
         })}
       </div>
