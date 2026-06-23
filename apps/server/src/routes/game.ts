@@ -12,7 +12,7 @@ import type { EventBus } from "../session/events.js";
 import { SessionManager } from "../session/manager.js";
 import { createCampaign } from "../vault/scaffold.js";
 import { listFiles, zipDir } from "../vault/zip.js";
-import { forgeCampaign, type ForgeInput } from "../vault/forge.js";
+import { forgeCampaign, type ForgeInput, type ProgressCallback } from "../vault/forge.js";
 import { createCharacter, creationOptions, levelUpOptions, removeFromParty, type CharacterDraft } from "../vault/creation.js";
 import {
   checkpointTurn,
@@ -280,6 +280,50 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
     } catch (err) {
       return reply.code(400).send({ error: err instanceof Error ? err.message : String(err) });
     }
+  });
+
+  /** Streaming SSE variant — emits progress events for each generation phase (#46b). */
+  app.post<{ Body: ForgeInput & { select?: boolean } }>("/api/campaigns/forge/stream", async (req, reply) => {
+    reply.raw.writeHead(200, {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+    });
+
+    const send = (event: string, data: unknown) => {
+      if (!reply.raw.writableEnded) {
+        reply.raw.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+      }
+    };
+
+    req.raw.on("close", () => { /* client disconnected — writes will be no-ops via writableEnded */ });
+
+    try {
+      const onProgress: ProgressCallback = (phase, msg) => send("progress", { phase, msg });
+      const { folder, usedLlm } = await forgeCampaign(
+        config.vaultPath,
+        llm,
+        req.body as ForgeInput,
+        onProgress,
+      );
+
+      if (req.body?.select !== false) {
+        send("progress", { phase: "Aktivace", msg: "Přepínám aktivní kampaň…" });
+        await saveSettings(config.vaultPath, { campaign: folder });
+        config = applySettings(loadConfig(), await loadSettings(config.vaultPath));
+        await reopenManager(folder);
+        llm = makeLlm();
+        ctx.bus.emit({ type: "reload", reason: "campaign-forged" });
+      }
+
+      send("done", { ok: true, folder, usedLlm });
+    } catch (err) {
+      send("error", { error: err instanceof Error ? err.message : String(err) });
+    } finally {
+      reply.raw.end();
+    }
+
+    return reply;
   });
 
   /** Switch the active campaign — persists the choice and hot-swaps in place. */

@@ -185,6 +185,13 @@ on old code and items **#15, #17, #18** are likely already resolved by updating.
   for their own sake; keep the dark-fantasy intent in `theme/tokens.css`).
 - **#7 — Font legibility.** The display font is pretty but hard to read; bump
   weight/size a touch for body text and lean on Markdown (#1) for structure.
+- **#47 — UI layout adjustments per user sketches.** Visual and layout changes
+  per wireframes supplied by the user. Awaiting delivery of sketches.
+  - **#47a — Layout implementation.** Adjust panel layout, navigation and visual
+    hierarchy per supplied wireframes. Preserve responsiveness and existing
+    functionality.
+  - **#47b — Design consistency.** Verify changes stay within the existing design
+    system (Catppuccin colours, font stack, panel/parchment motifs).
 - **[x] #11 — Resizable UI panels.** Done. The three-column play surface is now
   a `PlaySurface` component (`apps/web/src/components/PlaySurface.tsx`) with
   draggable splitters between chat/map and map/rail; widths are stored as
@@ -457,36 +464,24 @@ kopii dat a přeložit ji do češtiny.
 
 ### #46 — AI skill pro tvorbu kampaní
 
-Specializovaný skill (Claude Code slash-command) pro generování komplexních,
-dlouhých a narativně konzistentních kampaní. Měl by fungovat jako vestavěný
-příkaz v aplikaci i jako samostatně použitelný nástroj mimo ni.
-
-- **#46a — Skill definice a prompt.** Navrhnout `campaign-writer` skill
-  (`/campaign`) s řízeným, vícefázovým průchodem: premisa → svět → NPC sítě →
-  lokace → quest arc → encounter tabulky → session zero. Výstup odpovídá
-  vault schématu aplikace (YAML frontmatter + Markdown tělo).
-- **#46b — Integrace do aplikace.** Skill spustitelný z CampaignManager UI
-  (nové tlačítko „Generovat kampaň AI"). Průběh generování se zobrazí jako
-  streaming v chatu. Výsledek se uloží přímo do aktivního vault adresáře.
-- **#46c — Standalone použití.** Skill funguje jako samostatný Claude Code
-  slash-command mimo tuto aplikaci — výstup do souborů v aktuálním adresáři,
-  konfigurovatelný přes argumenty (`/campaign --setting "dark fantasy" --sessions 6`).
-- **#46d — Narativní konzistence.** Skill sleduje interní stav (vytvořené NPC,
-  lokace, foreshadowing) přes celou délku generování, aby kampaň dávala smysl
-  jako celek, ne jako sled nezávislých textů.
-
----
-
-### #47 — Úpravy UI dle uživatelských nákresů layoutu
-
-Vizuální a layoutové změny dle schémat dodaných uživatelem. Konkrétní rozsah
-bude upřesněn při dodání nákresů.
-
-- **#47a — Implementace layoutu.** Přizpůsobit rozvržení panelů, navigaci
-  a vizuální hierarchii dle dodaných nákresů. Zachovat responzivitu a stávající
-  funkčnost.
-- **#47b — Konzistence designu.** Ověřit, že změny nevybočují ze stávajícího
-  design systému (Catppuccin barvy, font stack, panel/parchment motivy).
+- **[x] #46a — Skill definice a prompt.** `.claude/commands/campaign.md` definuje
+  `/campaign` slash-command s řízeným 6fázovým průchodem: základ světa → lokace →
+  NPC + bestiary → quest arc → střetnutí → session zero. Výstup odpovídá vault
+  schématu (YAML frontmatter + Markdown tělo). Konfigurovatelný přes argumenty
+  (`--name`, `--setting`, `--sessions`, `--detail`, `--output`).
+- **[x] #46b — Integrace do aplikace.** Nový endpoint `POST /api/campaigns/forge/stream`
+  streamuje průběh generování jako SSE (Server-Sent Events). Komponenta
+  `ForgeCampaign` v `StartMenu.tsx` přijímá events přes Fetch ReadableStream a
+  zobrazuje live progress log (fáze + zpráva), vstupní pole jsou blokována po
+  dobu generování.
+- **[x] #46c — Standalone použití.** Skill detekuje kontext: v ADM projektu zapisuje
+  do `data/vault.example/campaigns/`, jinak do `./` v aktuálním adresáři. Funguje
+  identicky mimo aplikaci jako Claude Code slash-command.
+- **[x] #46d — Narativní konzistence.** Server-side `WorldBible` objekt se buduje
+  fázi po fázi: každá LLM výzva obdrží obsah všech předchozích fází, takže NPC
+  odkazují na skutečné lokace, cíle questu odkazují na skutečné NPC, nepřátelé
+  ve střetnutích jsou definováni v bestiary. Per-fázové fallbacky zachovávají
+  konzistenci i bez LLM.
 
 ---
 
