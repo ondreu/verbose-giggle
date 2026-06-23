@@ -185,6 +185,12 @@ on old code and items **#15, #17, #18** are likely already resolved by updating.
   for their own sake; keep the dark-fantasy intent in `theme/tokens.css`).
 - **#7 — Font legibility.** The display font is pretty but hard to read; bump
   weight/size a touch for body text and lean on Markdown (#1) for structure.
+- **#51 — Deník kostek schovat jako vedlejší panel.** Deník kostek (dice log)
+  je bonusový doplněk, ne primární obsah — ale automatické scrollování na nový
+  záznam neustále přerušuje čtení narativního chatu. Přesunout ho do skryté /
+  sbalitelné sekce (tab vedle chatu, drawer, kolapsibilní panel apod.) tak aby
+  byl dostupný pro ty kdo ho chtějí sledovat, ale standardně nepřekážel.
+  `apps/web/src/panels/ChatPanel.tsx` nebo nový `DiceLogPanel.tsx`.
 - **#47 — UI layout adjustments per user sketches.** Visual and layout changes
   per wireframes supplied by the user. Awaiting delivery of sketches.
   - **#47a — Layout implementation.** Adjust panel layout, navigation and visual
