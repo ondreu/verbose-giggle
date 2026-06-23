@@ -162,6 +162,124 @@ describe("character creation", () => {
     expect(actor!.spells_known).toEqual(["mage-hand", "magic-missile"]);
   });
 
+  it("rejects a subrace that doesn't belong to the chosen race, and counts subraces in srdStats (#44a)", async () => {
+    const srdDir = await fs.mkdtemp(path.join(os.tmpdir(), "adm-srd-"));
+    tmpRoots.push(srdDir);
+    await fs.writeFile(
+      path.join(srdDir, "5e-SRD-Races.json"),
+      JSON.stringify([
+        { index: "elf", name: "Elf", speed: 30, ability_bonuses: [{ ability_score: { index: "dex" }, bonus: 2 }], subraces: [{ index: "high-elf" }] },
+        { index: "dwarf", name: "Dwarf", speed: 25, ability_bonuses: [{ ability_score: { index: "con" }, bonus: 2 }], subraces: [{ index: "hill-dwarf" }] },
+      ]),
+    );
+    await fs.writeFile(
+      path.join(srdDir, "5e-SRD-Subraces.json"),
+      JSON.stringify([
+        { index: "high-elf", name: "High Elf", race: { index: "elf" }, ability_bonuses: [{ ability_score: { index: "int" }, bonus: 1 }], racial_traits: [{ index: "elf-weapon-training" }], desc: ["Skilled with blade and bow."] },
+        { index: "hill-dwarf", name: "Hill Dwarf", race: { index: "dwarf" }, ability_bonuses: [{ ability_score: { index: "wis" }, bonus: 1 }], racial_traits: [{ index: "dwarven-toughness" }] },
+      ]),
+    );
+
+    const mgr = await SessionManager.open(await freshCampaign(), { srdDir });
+
+    // srdStats reports the mounted subrace count for the "is it loaded?" cue.
+    expect(mgr.srdStats().subraces).toBe(2);
+
+    // creationOptions groups each subrace under its own race only, carrying
+    // traits + description for the creation UI (#44a).
+    const opts = creationOptions(mgr.srd());
+    const elf = opts.races.find((r) => r.id === "elf");
+    const dwarf = opts.races.find((r) => r.id === "dwarf");
+    expect(elf?.subraces.map((s) => s.id)).toEqual(["high-elf"]);
+    expect(dwarf?.subraces.map((s) => s.id)).toEqual(["hill-dwarf"]);
+    expect(elf?.subraces[0]?.traits).toContain("elf-weapon-training");
+    expect(elf?.subraces[0]?.description).toMatch(/blade/i);
+
+    // A subrace from a different race must be refused, not silently applied.
+    await expect(
+      createCharacter(
+        mgr.campaign,
+        {
+          name: "Mismatch",
+          race: "elf",
+          subrace: "hill-dwarf", // dwarf subrace on an elf
+          class: "fighter",
+          abilities: { str: 15, dex: 14, con: 13, int: 10, wis: 12, cha: 8 },
+          skills: ["athletics", "perception"],
+        },
+        mgr.srd(),
+      ),
+    ).rejects.toThrow(/podrasa/i);
+  });
+
+  it("offers a level-1 subclass for cleric/sorcerer/warlock and applies it (#44b)", async () => {
+    const srdDir = await fs.mkdtemp(path.join(os.tmpdir(), "adm-srd-"));
+    tmpRoots.push(srdDir);
+    await fs.writeFile(
+      path.join(srdDir, "5e-SRD-Subclasses.json"),
+      JSON.stringify([
+        { index: "life", name: "Life Domain", class: { index: "cleric" }, subclass_flavor: "Divine Domain", desc: ["Healing and preservation."] },
+        { index: "thief", name: "Thief", class: { index: "rogue" }, desc: ["Fast hands."] },
+      ]),
+    );
+    await fs.writeFile(
+      path.join(srdDir, "5e-SRD-Features.json"),
+      JSON.stringify([
+        { index: "spellcasting-cleric", name: "Spellcasting", level: 1, class: { index: "cleric" } },
+        { index: "life-domain-bonus-proficiency", name: "Bonus Proficiency", level: 1, class: { index: "cleric" }, subclass: { index: "life" } },
+        { index: "disciple-of-life", name: "Disciple of Life", level: 1, class: { index: "cleric" }, subclass: { index: "life" } },
+      ]),
+    );
+
+    const dir = await freshCampaign();
+    const mgr = await SessionManager.open(dir, { srdDir });
+
+    // The cleric class is flagged to choose its subclass at level 1; rogue isn't.
+    const opts = creationOptions(mgr.srd());
+    const cleric = opts.classes.find((c) => c.id === "cleric");
+    const rogue = opts.classes.find((c) => c.id === "rogue");
+    expect(cleric?.subclassAtCreation).toBe(true);
+    expect(cleric?.subclasses.map((s) => s.id)).toContain("life");
+    expect(rogue?.subclassAtCreation).toBe(false);
+
+    const { id } = await createCharacter(
+      mgr.campaign,
+      {
+        name: "Brother Aldric",
+        race: "human",
+        class: "cleric",
+        subclass: "life",
+        abilities: { str: 12, dex: 10, con: 14, int: 8, wis: 15, cha: 13 },
+        skills: ["medicine", "religion"],
+      },
+      mgr.srd(),
+    );
+
+    const reloaded = await SessionManager.open(dir, { srdDir });
+    const actor = reloaded.campaign.actors[id];
+    expect(actor!.subclass).toBe("life");
+    // Both the base class feature and the chosen subclass's level-1 features land.
+    expect(actor!.features).toEqual(
+      expect.arrayContaining(["spellcasting-cleric", "life-domain-bonus-proficiency", "disciple-of-life"]),
+    );
+
+    // A subclass on a class that doesn't choose one at level 1 is refused.
+    await expect(
+      createCharacter(
+        mgr.campaign,
+        {
+          name: "Sneaky",
+          race: "human",
+          class: "rogue",
+          subclass: "thief",
+          abilities: { str: 10, dex: 15, con: 13, int: 12, wis: 8, cha: 14 },
+          skills: ["stealth", "acrobatics", "perception", "investigation"],
+        },
+        mgr.srd(),
+      ),
+    ).rejects.toThrow(/nevybírá podpovolání/i);
+  });
+
   it("grants class starting equipment and computes AC from armor (#20)", async () => {
     const srdDir = await fs.mkdtemp(path.join(os.tmpdir(), "adm-srd-"));
     tmpRoots.push(srdDir);

@@ -510,6 +510,14 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
     return ctx.manager.srd().feat(req.params.id) ?? {};
   });
 
+  /** Look up a class/racial feature by id for hover cards (#42c). Falls back to
+   *  the racial trait table when the id isn't a class feature, so a single
+   *  endpoint serves the sheet's "Schopnosti" row (features + traits mixed). */
+  app.get<{ Params: { id: string } }>("/api/srd/feature/:id", (req) => {
+    const srd = ctx.manager.srd();
+    return srd.feature(req.params.id) ?? srd.trait(req.params.id) ?? {};
+  });
+
   // --- Character creation (#14) --------------------------------------------
   app.get("/api/creation/options", async () => creationOptions(ctx.manager.srd()));
 
