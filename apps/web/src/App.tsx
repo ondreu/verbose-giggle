@@ -8,6 +8,7 @@ import { SettingsModal } from "./components/SettingsModal";
 import { StartMenu } from "./components/StartMenu";
 import { GameOverModal } from "./components/GameOverModal";
 import { EmberField } from "./components/EmberField";
+import { LoginScreen } from "./components/LoginScreen";
 
 export default function App() {
   const hydrate = useGame((s) => s.hydrate);
@@ -20,6 +21,9 @@ export default function App() {
   const intro = useGame((s) => s.intro);
   const narrationLen = useGame((s) => s.narration.length);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // Pre-prepared auth gate (#auth, stub): shown first, but fully bypassable —
+  // "continue without account" enters the app exactly as before. No backend yet.
+  const [authed, setAuthed] = useState(false);
 
   useEffect(() => {
     void hydrate();
@@ -30,6 +34,8 @@ export default function App() {
   useEffect(() => {
     if (view === "play" && campaign && narrationLen === 0) void intro();
   }, [view, campaign, narrationLen, intro]);
+
+  if (!authed) return <LoginScreen onContinue={() => setAuthed(true)} />;
 
   if (view === "home") {
     return (
