@@ -175,7 +175,7 @@ export function SpellCard({ id, children }: { id: string; children: React.ReactN
       {children}
       {pos && (
         <TipPortal pos={pos}>
-          {spell ? <SpellBody spell={spell} /> : <p className="font-log text-[11px] text-subtext0">načítám…</p>}
+          {spell ? <SpellBody spell={spell} /> : <p className="font-log text-xs text-subtext0">načítám…</p>}
         </TipPortal>
       )}
     </span>
@@ -188,8 +188,8 @@ function SpellBody({ spell }: { spell: SpellData }) {
   const flags = [spell.concentration && "soustředění", spell.ritual && "rituál"].filter(Boolean).join(", ");
   return (
     <>
-      <p className="mb-0.5 font-display text-sm text-text">{spell.name}</p>
-      <p className="mb-1.5 font-log text-[10px] text-subtext0">
+      <p className="mb-0.5 font-display text-base text-text">{spell.name}</p>
+      <p className="mb-1.5 font-log text-xs text-subtext0">
         {levelLabel}{schoolLabel ? ` · ${schoolLabel}` : ""}{flags ? ` · ${flags}` : ""}
       </p>
       {spell.casting_time && <Row label="Čas" value={spell.casting_time} />}
@@ -197,10 +197,10 @@ function SpellBody({ spell }: { spell: SpellData }) {
       {spell.duration && <Row label="Trvání" value={spell.duration} />}
       {spell.components && spell.components.length > 0 && <Row label="Složky" value={spell.components.join(", ")} />}
       {spell.description && (
-        <p className="mt-1.5 line-clamp-6 font-body text-[11px] leading-snug text-subtext1">{spell.description}</p>
+        <p className="mt-1.5 line-clamp-6 font-body text-[13px] leading-snug text-subtext1">{spell.description}</p>
       )}
       {spell.higher_level && (
-        <p className="mt-1 font-body text-[10px] italic leading-snug text-subtext0">{spell.higher_level}</p>
+        <p className="mt-1 font-body text-xs italic leading-snug text-subtext0">{spell.higher_level}</p>
       )}
     </>
   );
@@ -223,14 +223,14 @@ export function FeatCard({ id, children }: { id: string; children: React.ReactNo
         <TipPortal pos={pos}>
           {feat ? (
             <>
-              <p className="mb-0.5 font-display text-sm text-text">{feat.name}</p>
+              <p className="mb-0.5 font-display text-base text-text">{feat.name}</p>
               {feat.prerequisites.length > 0 && (
-                <p className="mb-1 font-log text-[10px] text-subtext0">Požadavky: {feat.prerequisites.join(", ")}</p>
+                <p className="mb-1 font-log text-xs text-subtext0">Požadavky: {feat.prerequisites.join(", ")}</p>
               )}
-              <p className="font-body text-[11px] leading-snug text-subtext1 line-clamp-6">{feat.description}</p>
+              <p className="font-body text-[13px] leading-snug text-subtext1 line-clamp-6">{feat.description}</p>
             </>
           ) : (
-            <p className="font-log text-[11px] text-subtext0">načítám…</p>
+            <p className="font-log text-xs text-subtext0">načítám…</p>
           )}
         </TipPortal>
       )}
@@ -240,7 +240,7 @@ export function FeatCard({ id, children }: { id: string; children: React.ReactNo
 
 function Row({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex gap-1.5 font-log text-[10px]">
+    <div className="flex gap-1.5 font-log text-xs">
       <span className="shrink-0 text-subtext0">{label}:</span>
       <span className="text-subtext1">{value}</span>
     </div>
