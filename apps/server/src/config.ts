@@ -62,7 +62,8 @@ export function loadConfig(): Config {
     port: Number(process.env.PORT ?? 3000),
     host: process.env.HOST ?? "0.0.0.0",
     vaultPath,
-    srdPath: process.env.SRD_PATH ?? `${vaultPath.replace(/\/$/, "")}/srd`,
+    // The SRD dataset lives at the server root (./srd), not inside the vault.
+    srdPath: process.env.SRD_PATH ?? "./srd",
     llm: {
       baseUrl: process.env.LLM_BASE_URL ?? "https://api.mistral.ai/v1",
       apiKey: llmApiKey,

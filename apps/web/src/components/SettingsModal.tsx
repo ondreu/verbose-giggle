@@ -351,7 +351,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
               <Field label="Cesta k SRD">
                 <input
                   className="settings-input"
-                  placeholder="<vault>/srd"
+                  placeholder="./srd"
                   value={srdPath}
                   onChange={(e) => setSrdPath(e.target.value)}
                 />
