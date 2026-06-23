@@ -102,11 +102,11 @@ export function PlaySurface() {
       className="grid min-h-0 flex-1 gap-0 p-3"
       style={{ gridTemplateColumns: `${layout.chat}fr 0.6rem ${map}fr 0.6rem ${layout.rail}fr` }}
     >
-      <div className="min-h-0"><ChatPanel /></div>
+      <div className="min-h-0 min-w-0"><ChatPanel /></div>
       <Splitter onPointerDown={startDrag("chat")} />
-      <div className="min-h-0"><MapPanel /></div>
+      <div className="min-h-0 min-w-0"><MapPanel /></div>
       <Splitter onPointerDown={startDrag("rail")} />
-      <aside className="flex min-h-0 flex-col gap-3 overflow-y-auto">
+      <aside className="flex min-h-0 min-w-0 flex-col gap-3 overflow-y-auto">
         <SheetPanel />
         <TurnTracker />
         <InventoryPanel />
