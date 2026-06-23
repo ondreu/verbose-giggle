@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { csAbility, csFeat, type Actor } from "@adm/schemas";
 import { useGame } from "../store/store";
 import { Icon } from "./Icon";
-import { FeatCard, SpellCard } from "./InfoCard";
+import { FeatCard, SpellCard, Tip, ABILITY_TIP } from "./InfoCard";
 
 const ASI_LEVELS = [4, 8, 12, 16, 19];
 const AVG_DIE: Record<string, number> = { d6: 4, d8: 5, d10: 6, d12: 7 };
@@ -197,10 +197,10 @@ export function LevelUpModal({ actor, onClose }: { actor: Actor; onClose: () => 
         {isAsi && (
           <Section icon="d20" label="Zvýšení vlastností nebo vlastnost" color="gold">
             <div className="mb-2 flex flex-wrap gap-1.5">
-              <ModeBtn label="+1 do dvou" active={asiMode === "two"} onClick={() => setAsiMode("two")} />
-              <ModeBtn label="+2 do jedné" active={asiMode === "one"} onClick={() => setAsiMode("one")} />
+              <ModeBtn label="+1 do dvou" active={asiMode === "two"} onClick={() => setAsiMode("two")} tip="Zvyš dvě různé vlastnosti každou o 1 bod (maximum 20)." />
+              <ModeBtn label="+2 do jedné" active={asiMode === "one"} onClick={() => setAsiMode("one")} tip="Zvyš jednu vlastnost o 2 body (maximum 20)." />
               {(opts?.feats.length ?? 0) > 0 && (
-                <ModeBtn label="Vlastnost (feat)" active={asiMode === "feat"} onClick={() => setAsiMode("feat")} />
+                <ModeBtn label="Vlastnost (feat)" active={asiMode === "feat"} onClick={() => setAsiMode("feat")} tip="Místo zvýšení vlastností získáš speciální schopnost (feat)." />
               )}
             </div>
             {asiMode === "feat" ? (
@@ -326,8 +326,8 @@ function Section({
   );
 }
 
-function ModeBtn({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
-  return (
+function ModeBtn({ label, active, onClick, tip }: { label: string; active: boolean; onClick: () => void; tip?: string }) {
+  const btn = (
     <button
       onClick={onClick}
       className={`rounded-sm border px-2 py-0.5 font-log text-[11px] ${
@@ -337,22 +337,26 @@ function ModeBtn({ label, active, onClick }: { label: string; active: boolean; o
       {label}
     </button>
   );
+  if (!tip) return btn;
+  return <Tip content={<p className="font-body text-[12px] leading-snug text-text">{tip}</p>}>{btn}</Tip>;
 }
 
 function AbilitySelect({ value, onChange, actor }: {
   value: Ability; onChange: (a: Ability) => void; actor: Actor;
 }) {
   return (
-    <select
-      className="settings-input flex-1 bg-bg-crust text-text"
-      value={value}
-      onChange={(e) => onChange(e.target.value as Ability)}
-    >
-      {ABILITIES.map((a) => (
-        <option key={a} value={a}>
-          {csAbility(a)} ({actor.abilities[a]})
-        </option>
-      ))}
-    </select>
+    <Tip content={<p className="font-body text-[12px] leading-snug text-text">{ABILITY_TIP[value]}</p>}>
+      <select
+        className="settings-input flex-1 bg-bg-crust text-text"
+        value={value}
+        onChange={(e) => onChange(e.target.value as Ability)}
+      >
+        {ABILITIES.map((a) => (
+          <option key={a} value={a}>
+            {csAbility(a)} ({actor.abilities[a]})
+          </option>
+        ))}
+      </select>
+    </Tip>
   );
 }
