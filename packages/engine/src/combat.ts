@@ -163,6 +163,13 @@ export interface AttackResult {
   damage?: number;
   type?: string;
   detail: string;
+  /**
+   * True when the attack never actually happened — a precondition refusal
+   * (out of range/reach, no line of sight, friendly-fire unconfirmed, can't
+   * act). The action wasn't taken, so the dispatcher refunds the spent
+   * action-economy slot. A real miss is NOT a no-op (the action was used).
+   */
+  noop?: boolean;
 }
 
 /** Resolve a weapon attack: to-hit vs AC, crit on nat 20, doubled dice on crit. */
@@ -181,7 +188,7 @@ export function attack(
   if (!args.allow_friendly && attacker.id !== target.id && onSameSide(attacker.faction, target.faction)) {
     const detail = `${attacker.name} míří na spojence ${target.name} — útok na člena družiny vyžaduje výslovné potvrzení.`;
     log(state, { kind: "attack", actor: args.attacker, target: args.target, detail, tool: "attack" });
-    return { to_hit: 0, hit: false, crit: false, detail };
+    return { to_hit: 0, hit: false, crit: false, detail, noop: true };
   }
 
   const profile = resolveAttackProfile(state, attacker, args.weapon);
@@ -197,7 +204,7 @@ export function attack(
     if (!cov.clearLineOfSight) {
       const detail = `${attacker.name} nemůže zasáhnout ${target.name} — plně kryt (mimo dohled)`;
       log(state, { kind: "attack", actor: args.attacker, target: args.target, detail, tool: "attack" });
-      return { to_hit: 0, hit: false, crit: false, detail };
+      return { to_hit: 0, hit: false, crit: false, detail, noop: true };
     }
     coverAc = cov.acBonus;
     if (cov.cover !== "none") coverNote = ` (kryt ${cov.cover}: +${cov.acBonus} AC)`;
@@ -220,7 +227,7 @@ export function attack(
       if (maxRangeFt && distFt > maxRangeFt) {
         const detail = `${attacker.name} je mimo dostřel — vzdálenost ${distFt} ft přesahuje dosah zbraně ${maxRangeFt} ft`;
         log(state, { kind: "attack", actor: args.attacker, target: args.target, detail, tool: "attack" });
-        return { to_hit: 0, hit: false, crit: false, detail };
+        return { to_hit: 0, hit: false, crit: false, detail, noop: true };
       }
     } else {
       // Melee: 5 ft default reach; 10 ft for "reach" weapons; use monster action reach if available.
@@ -232,7 +239,7 @@ export function attack(
       if (distFt > reachFt) {
         const detail = `${attacker.name} je příliš daleko od ${target.name} pro útok nablízko — vzdálenost ${distFt} ft, dosah ${reachFt} ft`;
         log(state, { kind: "attack", actor: args.attacker, target: args.target, detail, tool: "attack" });
-        return { to_hit: 0, hit: false, crit: false, detail };
+        return { to_hit: 0, hit: false, crit: false, detail, noop: true };
       }
     }
   }
@@ -241,7 +248,7 @@ export function attack(
   if (cmods.blocked) {
     const detail = `${attacker.name} nemůže útočit (neschopen jednat)`;
     log(state, { kind: "attack", actor: args.attacker, target: args.target, detail, tool: "attack" });
-    return { to_hit: 0, hit: false, crit: false, detail };
+    return { to_hit: 0, hit: false, crit: false, detail, noop: true };
   }
   const adv = combineAdv([args.advantage ?? "none", cmods.advantage]);
 
