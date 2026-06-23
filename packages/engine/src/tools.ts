@@ -72,20 +72,28 @@ export function spendEconomy(
   const activeId = c.order[c.turn_index]?.actor;
   const onTurn = actorId === activeId;
 
-  // Off-turn activity is only possible via a reaction (e.g. opportunity attack).
-  if (!onTurn || kind === "reaction") {
-    if (!c.budget.reaction) {
+  // Off-turn activity: only reactions (opportunity attacks etc.) are permitted.
+  // An action or bonus action off-turn would let a wrong character act on another's turn.
+  if (!onTurn) {
+    if (kind !== "reaction") {
       return {
         ok: false,
-        error: onTurn
-          ? `${name} už v tomto kole použil reakci.`
-          : `${name} není na tahu a nemá volnou reakci.`,
+        error: `${name} není na tahu — mimo kolo lze provést jen reakci.`,
       };
+    }
+    if (!c.budget.reaction) {
+      return { ok: false, error: `${name} nemá volnou reakci v tomto kole.` };
     }
     c.budget.reaction = false;
     return { ok: true };
   }
 
+  // On own turn: action / bonus / reaction each use their respective slot.
+  if (kind === "reaction") {
+    if (!c.budget.reaction) return { ok: false, error: `${name} už v tomto kole použil reakci.` };
+    c.budget.reaction = false;
+    return { ok: true };
+  }
   if (kind === "bonus") {
     if (!c.budget.bonus) return { ok: false, error: `${name} už v tomto tahu použil bonusovou akci.` };
     c.budget.bonus = false;
@@ -159,7 +167,9 @@ export const TOOLS: ToolDef[] = [
   }),
   def({
     name: "attack",
-    description: "Resolve a weapon attack from attacker against target (to-hit vs AC, damage on hit).",
+    description:
+      "Resolve a weapon attack from attacker against target (to-hit vs AC, damage on hit). " +
+      "Set reaction:true ONLY for off-turn opportunity attacks (uses the attacker's reaction slot).",
     readOnly: false,
     schema: z.object({
       attacker: z.string(),
@@ -167,6 +177,7 @@ export const TOOLS: ToolDef[] = [
       weapon: z.string().optional(),
       advantage: Advantage,
       allow_friendly: z.boolean().optional(),
+      reaction: z.boolean().optional(),
     }),
     parameters: {
       type: "object",
@@ -179,10 +190,14 @@ export const TOOLS: ToolDef[] = [
           type: "boolean",
           description: "Set true ONLY when the player has explicitly confirmed attacking a party/ally member.",
         },
+        reaction: {
+          type: "boolean",
+          description: "Set true ONLY for off-turn opportunity attacks; uses the attacker's reaction slot.",
+        },
       },
       required: ["attacker", "target"],
     },
-    cost: (args) => ({ kind: "action", actorId: args.attacker }),
+    cost: (args) => ({ kind: args.reaction ? "reaction" : "action", actorId: args.attacker }),
     handler: (state, args) => {
       const res = attack(state, args);
       // Auto-apply damage on hit so the LLM never narrates an unapplied number.
