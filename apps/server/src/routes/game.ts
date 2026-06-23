@@ -440,6 +440,32 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
     return out;
   });
 
+  // --- SRD lookup endpoints for UI tooltips / hover cards (#42) -----------
+
+  /** Look up one spell by id. Returns 404 when the SRD dataset isn't mounted
+   *  or the spell is unknown; the client falls back to showing the raw id. */
+  app.get<{ Params: { id: string } }>("/api/srd/spell/:id", (req) => {
+    const spell = ctx.manager.srd().spell(req.params.id);
+    return spell ?? {};
+  });
+
+  /** Batch spell lookup by comma-separated ids (for sheet/picker tooltips). */
+  app.get<{ Querystring: { ids?: string } }>("/api/srd/spells", (req) => {
+    const ids = (req.query?.ids ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+    const out: Record<string, unknown> = {};
+    const srd = ctx.manager.srd();
+    for (const id of ids) {
+      const s = srd.spell(id);
+      if (s) out[id] = s;
+    }
+    return out;
+  });
+
+  /** Look up a feat by id for hover cards (#42c). */
+  app.get<{ Params: { id: string } }>("/api/srd/feat/:id", (req) => {
+    return ctx.manager.srd().feat(req.params.id) ?? {};
+  });
+
   // --- Character creation (#14) --------------------------------------------
   app.get("/api/creation/options", async () => creationOptions(ctx.manager.srd()));
 

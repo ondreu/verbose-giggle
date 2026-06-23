@@ -3,6 +3,7 @@ import { csCondition, csConditionDesc, csAbility, csAbilityAbbr, csClass, csFeat
 import { useGame } from "../store/store";
 import { Icon } from "../components/Icon";
 import { LevelUpModal } from "../components/LevelUpModal";
+import { FeatCard, SpellCard } from "../components/InfoCard";
 import type { PickedTarget } from "../store/store";
 
 /** Turn a picked target into a Czech "na <cíl>" clause for the action sentence. */
@@ -192,23 +193,22 @@ export function SheetPanel() {
         </div>
       )}
 
-      {/* Known / prepared spells (#8): list with cast buttons so a caster can
-          actually pick a spell from the sheet, not just see empty slots. */}
+      {/* Known / prepared spells (#8 + #42a): cast buttons with SRD hover cards. */}
       {actor.spells_known.length > 0 && (
         <div className="mt-3">
           <div className="mb-1 text-[11px] uppercase tracking-wider text-ink/60">Známá kouzla</div>
           <div className="flex flex-wrap gap-1.5">
             {actor.spells_known.map((spell) => (
-              <button
-                key={spell}
-                disabled={busy || downed}
-                title={`Seslat ${prettySpell(spell)}`}
-                onClick={() => void castSpellAt(spell)}
-                className="flex items-center gap-1 rounded-sm border border-arcane/50 bg-arcane/10 px-1.5 py-0.5 font-body text-[12px] text-arcane transition-colors hover:bg-arcane/20 disabled:opacity-40"
-              >
-                <Icon name="flame" size={11} />
-                {prettySpell(spell)}
-              </button>
+              <SpellCard key={spell} id={spell}>
+                <button
+                  disabled={busy || downed}
+                  onClick={() => void castSpellAt(spell)}
+                  className="flex items-center gap-1 rounded-sm border border-arcane/50 bg-arcane/10 px-1.5 py-0.5 font-body text-[12px] text-arcane transition-colors hover:bg-arcane/20 disabled:opacity-40"
+                >
+                  <Icon name="flame" size={11} />
+                  {prettySpell(spell)}
+                </button>
+              </SpellCard>
             ))}
           </div>
         </div>
@@ -273,12 +273,12 @@ export function SheetPanel() {
         </div>
       )}
 
-      {/* Features, feats & languages from the SRD (#20). */}
+      {/* Features, feats & languages from the SRD (#20 + #42c). */}
       {(actor.features?.length ?? 0) > 0 && (
         <TagRow label="Schopnosti" items={(actor.features ?? []).map(humanizeId)} />
       )}
       {(actor.feats?.length ?? 0) > 0 && (
-        <TagRow label="Vlastnosti (feats)" items={(actor.feats ?? []).map((f) => csFeat(f, humanizeId(f)))} />
+        <FeatTagRow label="Vlastnosti (feats)" ids={actor.feats ?? []} />
       )}
       {(actor.languages?.length ?? 0) > 0 && (
         <TagRow label="Jazyky" items={(actor.languages ?? []).map(humanizeId)} />
@@ -302,6 +302,24 @@ function TagRow({ label, items }: { label: string; items: string[] }) {
           <span key={`${t}-${i}`} className="rounded-sm border border-ink/20 bg-ink/5 px-1.5 py-0.5 font-log text-[11px] text-ink/80">
             {t}
           </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** Feats row with SRD hover cards (#42c). */
+function FeatTagRow({ label, ids }: { label: string; ids: string[] }) {
+  return (
+    <div className="mt-3">
+      <div className="mb-1 text-[11px] uppercase tracking-wider text-ink/60">{label}</div>
+      <div className="flex flex-wrap gap-1.5">
+        {ids.map((id) => (
+          <FeatCard key={id} id={id}>
+            <span className="cursor-default rounded-sm border border-ink/20 bg-ink/5 px-1.5 py-0.5 font-log text-[11px] text-ink/80 hover:border-gold/40 hover:text-ink/100">
+              {csFeat(id, humanizeId(id))}
+            </span>
+          </FeatCard>
         ))}
       </div>
     </div>
