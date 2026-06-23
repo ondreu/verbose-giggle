@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { csAbility, csAbilityAbbr, csSkill } from "@adm/schemas";
 import { useGame } from "../store/store";
 import { Icon } from "./Icon";
-import { SpellCard, Tip, ABILITY_TIP, SKILL_TIP } from "./InfoCard";
+import { FeatureCard, SpellCard, Tip, ABILITY_TIP, SKILL_TIP } from "./InfoCard";
 
 type Ability = "str" | "dex" | "con" | "int" | "wis" | "cha";
 
@@ -11,6 +11,7 @@ interface SubraceOpt {
   name: string;
   bonuses: Partial<Record<Ability, number>>;
   traits: string[];
+  description?: string;
 }
 interface RaceOpt {
   id: string;
@@ -59,6 +60,11 @@ interface Options {
 
 const mod = (n: number) => Math.floor((n - 10) / 2);
 const fmt = (m: number) => (m >= 0 ? `+${m}` : `${m}`);
+/** Turn an SRD id like "elf-weapon-training" into "Elf weapon training". */
+const humanizeId = (id: string) => {
+  const s = id.replace(/[-_]/g, " ").trim();
+  return s.charAt(0).toUpperCase() + s.slice(1);
+};
 
 /**
  * Guided character creation (#14): race, class, ability scores (standard array,
@@ -240,6 +246,17 @@ export function CharacterCreate({ onClose }: { onClose: () => void }) {
                         <p className="mt-1 font-log text-[10px] text-subtext0">
                           {Object.entries(subrace.bonuses).map(([k, v]) => `${csAbility(k)} +${v}`).join(", ")}
                         </p>
+                      )}
+                      {subrace && subrace.traits.length > 0 && (
+                        <div className="mt-1 flex flex-wrap gap-1">
+                          {subrace.traits.map((t) => (
+                            <FeatureCard key={t} id={t}>
+                              <span className="cursor-default rounded-sm border border-surface2 bg-bg-mantle/50 px-1.5 py-0.5 font-log text-[10px] text-subtext1 hover:border-gold/40">
+                                {humanizeId(t)}
+                              </span>
+                            </FeatureCard>
+                          ))}
+                        </div>
                       )}
                     </div>
                   )}

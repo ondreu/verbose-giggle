@@ -131,6 +131,7 @@ export interface SubraceOption {
   name: string;
   bonuses: Partial<Record<Ability, number>>;
   traits: string[];
+  description?: string;
 }
 export interface SpellOption {
   id: string;
@@ -150,6 +151,7 @@ function subracesFor(srd: SrdIndex | undefined, raceId: string): SubraceOption[]
       name: csSubrace(s.id, s.name),
       bonuses: s.ability_bonuses as Partial<Record<Ability, number>>,
       traits: s.traits,
+      description: s.description,
     }));
 }
 

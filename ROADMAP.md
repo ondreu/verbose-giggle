@@ -327,9 +327,13 @@ sheet so the parchment is the one place you act from (BG3-style action surface).
 
 ### #44 — Full SRD subraces & subclasses + BG3-style level-up (cluster)
 
-- **[~] #44a — Subraces from the SRD in creation.** Partial. SRD loader already
-  handles `5e-SRD-Subraces.json`; subrace verification and `srdStats` subrace
-  count not yet explicitly audited.
+- **[x] #44a — Subraces from the SRD in creation.** Done. `creationOptions`
+  groups each subrace under its parent race only and now carries its traits +
+  description; the creation UI surfaces the subrace's racial traits as
+  hover-card chips (#42c). `createCharacter` applies subrace ability bonuses +
+  traits and refuses a subrace from a different race. Audited by tests
+  (`creation.test.ts`): invalid-subrace rejection and the `srdStats` subrace
+  count.
 - **[~] #44b — Subclasses.** Partial. `levelUpOptions` returns subclasses from
   the SRD for the right level, and `LevelUpModal` shows the subclass picker when
   `needsSubclass` is true. Creation-time subclass picker not added (correct for
