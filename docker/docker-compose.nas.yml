@@ -7,13 +7,27 @@
 #   - cloudflared je standardní service (žádný profil) — vždy se spustí
 #   - Caddy je vynechán — veřejný přístup zajišťuje Cloudflare Tunnel
 #   - piper používá předem sestavenou image z GHCR (žádný lokální build)
+#   - vault_data je pojmenovaný Docker volume (ne bind mount) — data přežijí
+#     jakoukoliv aktualizaci image přes Watchtower nebo Docker GUI bez ztráty
+#     kampaní
 #
 # Před spuštěním:
 #   1. Nastav CLOUDFLARE_TUNNEL_TOKEN (viz níže).
 #   2. Stáhni hlasový model pro Piper (cs_CZ-jirka-medium.onnx + .onnx.json)
 #      a ulož ho do ./piper-voices/ (viz README).
-#   3. Zkopíruj data/vault.example do ./vault nebo nastav vlastní kampaň.
-#   4. (Volitelné) Nastav LLM_API_KEY pro živý LLM; bez klíče běží offline mock.
+#   3. (Volitelné) Nastav LLM_API_KEY pro živý LLM; bez klíče běží offline mock.
+#   Při prvním spuštění se vault automaticky zaséje příkladovou kampaní.
+#
+# Přístup k souborům kampání (pro ruční editaci):
+#   docker run --rm -v vault_data:/vault -v $(pwd):/backup alpine \
+#     tar czf /backup/vault-backup.tar.gz -C /vault .
+#
+# MIGRACE ze starého bind mount ./vault:
+#   1. Přidej dočasně do volumes sekce app: `- ./vault:/data/vault-legacy`
+#   2. Přidej env: `- VAULT_LEGACY_PATH=/data/vault-legacy`
+#   3. Spusť `docker compose -f docker-compose.nas.yml up -d` — entrypoint
+#      automaticky zkopíruje ./vault → vault_data.
+#   4. Odebeř oba dočasné řádky a restartuj.
 
 services:
   app:
@@ -33,7 +47,13 @@ services:
       - PIPER_URL=http://piper:5000
       - BASIC_AUTH=${BASIC_AUTH:-}
     volumes:
-      - ./vault:/data/vault
+      # Named volume — Docker Engine spravuje storage; data přežijí aktualizaci
+      # image přes Watchtower i `docker compose down`. DOPORUČENO pro NAS.
+      - vault_data:/data/vault
+      # Alternativa pro přímý přístup k souborům na hostiteli (bind mount):
+      # Přejmenuj/zakomentuj řádek výše a odkomentuj níže. Data z předchozího
+      # named volume se automaticky NEzkopírují — nutná ruční migrace.
+      # - ./vault:/data/vault
       - ./maps:/data/maps
       - ./srd:/data/srd
     labels:
@@ -71,3 +91,9 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     command: --interval 3600 --label-enable
+
+volumes:
+  # Docker-managed persistent storage for the vault (campaigns, settings, state).
+  # Survives: `docker compose down`, image updates via Watchtower, container
+  # recreation. Never deleted by `docker compose down` (only by `down -v`).
+  vault_data:
