@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { csAbility, csFeat, csSpellSchool, type Actor } from "@adm/schemas";
+import { csAbility, csFeat, type Actor } from "@adm/schemas";
 import { useGame } from "../store/store";
 import { Icon } from "./Icon";
-import { FeatCard } from "./InfoCard";
+import { FeatCard, SpellCard } from "./InfoCard";
 
 const ASI_LEVELS = [4, 8, 12, 16, 19];
 const AVG_DIE: Record<string, number> = { d6: 4, d8: 5, d10: 6, d12: 7 };
@@ -241,17 +241,17 @@ export function LevelUpModal({ actor, onClose }: { actor: Actor; onClose: () => 
               {spellList.map((s) => {
                 const on = picked.includes(s.id);
                 return (
-                  <button
-                    key={s.id}
-                    onClick={() => toggleSpell(s.id)}
-                    title={s.school ? csSpellSchool(s.school) : undefined}
-                    className={`rounded-sm border px-2 py-0.5 font-log text-[11px] transition-colors ${
-                      on ? "border-arcane/60 bg-arcane/15 text-arcane" : "border-surface2 text-subtext1 hover:border-arcane/40 hover:text-subtext2"
-                    }`}
-                  >
-                    {s.name}
-                    <span className="ml-1 text-subtext0">{s.level === 0 ? "trik" : s.level}</span>
-                  </button>
+                  <SpellCard key={s.id} id={s.id}>
+                    <button
+                      onClick={() => toggleSpell(s.id)}
+                      className={`rounded-sm border px-2 py-0.5 font-log text-[11px] transition-colors ${
+                        on ? "border-arcane/60 bg-arcane/15 text-arcane" : "border-surface2 text-subtext1 hover:border-arcane/40 hover:text-subtext2"
+                      }`}
+                    >
+                      {s.name}
+                      <span className="ml-1 text-subtext0">{s.level === 0 ? "trik" : s.level}</span>
+                    </button>
+                  </SpellCard>
                 );
               })}
             </div>
