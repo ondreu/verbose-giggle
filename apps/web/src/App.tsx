@@ -7,6 +7,7 @@ import { ImageModal } from "./components/ImageModal";
 import { SettingsModal } from "./components/SettingsModal";
 import { StartMenu } from "./components/StartMenu";
 import { GameOverModal } from "./components/GameOverModal";
+import { EmberField } from "./components/EmberField";
 
 export default function App() {
   const hydrate = useGame((s) => s.hydrate);
@@ -33,6 +34,7 @@ export default function App() {
   if (view === "home") {
     return (
       <>
+        <EmberField />
         <ImageModal />
         {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
         <StartMenu onSettings={() => setSettingsOpen(true)} />
@@ -41,8 +43,10 @@ export default function App() {
   }
 
   return (
-    <div className="flex h-full flex-col">
-      <ImageModal />
+    <>
+      <EmberField />
+      <div className="relative z-10 flex h-full flex-col">
+        <ImageModal />
       <GameOverModal />
       {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
       <header className="flex items-center gap-3 border-b border-black bg-bg-mantle px-4 py-2">
@@ -69,7 +73,7 @@ export default function App() {
           {connected ? "spojeno" : "odpojeno"}
         </span>
         <button
-          className="flex items-center gap-1.5 rounded-sm border border-surface2 px-2.5 py-1 font-log text-xs text-subtext1 transition-colors hover:border-gold/60 hover:text-gold"
+          className="btn-ghost text-xs"
           title="Hlavní nabídka (kampaně, tvorba postavy, zálohy)"
           onClick={() => setView("home")}
         >
@@ -89,8 +93,9 @@ export default function App() {
       {/* Play surface: narration + map are the focal point; mechanics rail at
           right. Columns are resizable with persisted widths (#11). */}
       <PlaySurface />
-      {/* Global target chooser (#38): list / free-text / click a token on the map. */}
-      <TargetPicker />
-    </div>
+        {/* Global target chooser (#38): list / free-text / click a token on the map. */}
+        <TargetPicker />
+      </div>
+    </>
   );
 }

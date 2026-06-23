@@ -30,7 +30,7 @@ export function StartMenu({ onSettings }: { onSettings: () => void }) {
   const active = campaigns.find((c) => c.active);
 
   return (
-    <div className="min-h-full overflow-y-auto bg-bg-crust">
+    <div className="relative z-10 min-h-full overflow-y-auto">
       {createChar && <CharacterCreate onClose={() => setCreateChar(false)} />}
       <div className="mx-auto flex max-w-3xl flex-col gap-5 px-5 py-10">
         <div className="flex items-center gap-3">
@@ -39,10 +39,7 @@ export function StartMenu({ onSettings }: { onSettings: () => void }) {
             <h1 className="font-display text-3xl tracking-wide text-text">Pán jeskyně</h1>
             <p className="font-body text-subtext0">Samostatně hostovaný AI vypravěč pro D&amp;D 5e</p>
           </div>
-          <button
-            className="ml-auto flex items-center gap-1.5 rounded-sm border border-surface2 px-2.5 py-1.5 font-log text-xs text-subtext1 hover:border-gold/60 hover:text-gold"
-            onClick={onSettings}
-          >
+          <button className="btn-ghost ml-auto text-xs" onClick={onSettings}>
             <Icon name="gear" size={14} /> Nastavení
           </button>
         </div>
@@ -57,7 +54,7 @@ export function StartMenu({ onSettings }: { onSettings: () => void }) {
               </div>
             </div>
             <button
-              className="flex items-center gap-1.5 rounded-sm border border-surface2 px-3 py-2.5 font-log text-sm text-subtext1 hover:border-gold/60 hover:text-gold disabled:opacity-50"
+              className="btn-ghost text-sm"
               onClick={async () => {
                 setMapMsg(null);
                 const r = await generateCampaignMap();
@@ -68,10 +65,7 @@ export function StartMenu({ onSettings }: { onSettings: () => void }) {
             >
               <Icon name="camera" size={14} /> {busy ? "Generuji…" : "Mapa (AI)"}
             </button>
-            <button
-              className="flex items-center gap-1.5 rounded-sm border border-surface2 px-3 py-2.5 font-log text-sm text-subtext1 hover:border-gold/60 hover:text-gold"
-              onClick={() => setCreateChar(true)}
-            >
+            <button className="btn-ghost text-sm" onClick={() => setCreateChar(true)}>
               <Icon name="scroll" size={14} /> Nová postava
             </button>
             <button className="btn-gold px-5 py-2.5 text-sm" onClick={() => setView("play")}>
@@ -124,16 +118,12 @@ function CampaignList({
             {c.active ? (
               <span className="font-log text-[10px] uppercase tracking-wider text-gold">aktivní</span>
             ) : (
-              <button
-                className="rounded-sm border border-surface2 px-2.5 py-1 font-log text-[11px] text-subtext1 hover:border-gold/60 hover:text-gold disabled:opacity-40"
-                disabled={busy}
-                onClick={() => void onSelect(c.folder)}
-              >
+              <button className="btn-ghost text-[11px]" disabled={busy} onClick={() => void onSelect(c.folder)}>
                 otevřít
               </button>
             )}
             <button
-              className="rounded-sm border border-surface2 px-2.5 py-1 font-log text-[11px] text-subtext1 hover:border-gold/60 hover:text-gold"
+              className="btn-ghost text-[11px]"
               onClick={() => onManage(c)}
               title="Spravovat: procházet soubory, export, smazat"
             >
@@ -179,10 +169,7 @@ function ForgeCampaign() {
           <Icon name="flame" size={15} className="text-arcane" />
           <h2 className="panel-title pb-0">Postavit kampaň s AI</h2>
         </div>
-        <button
-          className="flex items-center gap-1 font-log text-xs text-subtext1 hover:text-gold"
-          onClick={() => setOpen((o) => !o)}
-        >
+        <button className="btn-link flex items-center gap-1 text-xs" onClick={() => setOpen((o) => !o)}>
           {open ? "zavřít" : "spustit průvodce"}
         </button>
       </div>
@@ -272,10 +259,7 @@ function CreateCampaign() {
     <section className="panel p-4">
       <div className="flex items-center justify-between">
         <h2 className="panel-title pb-0">Nová kampaň</h2>
-        <button
-          className="flex items-center gap-1 font-log text-xs text-subtext1 hover:text-gold"
-          onClick={() => setOpen((o) => !o)}
-        >
+        <button className="btn-link flex items-center gap-1 text-xs" onClick={() => setOpen((o) => !o)}>
           <Icon name="scroll" size={13} /> {open ? "zavřít" : "vytvořit"}
         </button>
       </div>
@@ -385,19 +369,13 @@ function RollbackPanel() {
                   >
                     potvrdit obnovu
                   </button>
-                  <button
-                    className="font-log text-[11px] text-subtext0 hover:text-gold"
-                    onClick={() => setConfirmId(null)}
-                  >
+                  <button className="btn-link text-[11px]" onClick={() => setConfirmId(null)}>
                     zpět
                   </button>
                 </>
               ) : (
                 <>
-                  <button
-                    className="rounded-sm border border-surface2 px-2 py-1 font-log text-[11px] text-subtext1 hover:border-gold/60 hover:text-gold"
-                    onClick={() => setConfirmId(s.id)}
-                  >
+                  <button className="btn-ghost text-[11px]" onClick={() => setConfirmId(s.id)}>
                     obnovit
                   </button>
                   <button
