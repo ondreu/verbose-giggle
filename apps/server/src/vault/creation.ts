@@ -229,9 +229,11 @@ function classIdOf(actorClass: string | undefined): string | undefined {
  */
 export function levelUpOptions(
   srd: SrdIndex,
-  actor: { class?: string; subclass?: string; spell_slots?: Record<string, unknown>; spells_known?: string[] },
+  actor: { class?: string; subclass?: string; level?: number; spell_slots?: Record<string, unknown>; spells_known?: string[] },
 ) {
   const classId = classIdOf(actor.class);
+  const nextLevel = (actor.level ?? 1) + 1;
+
   // Highest spell tier the actor currently has a slot for (cantrips always ok).
   const tiers = Object.keys(actor.spell_slots ?? {}).map((t) => Number(t)).filter((n) => Number.isFinite(n));
   const maxLevel = tiers.length ? Math.max(...tiers) : 0;
@@ -246,7 +248,16 @@ export function levelUpOptions(
 
   const subclasses = classId && !actor.subclass ? subclassesFor(srd, classId) : [];
   const feats = srd.list.feats().map((f) => ({ id: f.id, name: f.name }));
-  return { spellList, subclasses, feats };
+
+  // Features the next level grants — names + descriptions for the BG3-style UI (#44c).
+  const newFeatures = classId
+    ? srd.list
+        .features()
+        .filter((f) => f.class === classId && (f.level ?? 1) === nextLevel && !f.subclass)
+        .map((f) => ({ id: f.id, name: f.name, description: f.description }))
+    : [];
+
+  return { spellList, subclasses, feats, newFeatures };
 }
 
 export interface CharacterDraft {
