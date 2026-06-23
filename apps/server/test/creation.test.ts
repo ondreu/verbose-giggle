@@ -121,6 +121,59 @@ describe("character creation", () => {
     expect(actor!.spells_known).toEqual(["mage-hand", "magic-missile"]);
   });
 
+  it("grants class starting equipment and computes AC from armor (#20)", async () => {
+    const srdDir = await fs.mkdtemp(path.join(os.tmpdir(), "adm-srd-"));
+    tmpRoots.push(srdDir);
+    await fs.writeFile(
+      path.join(srdDir, "5e-SRD-Classes.json"),
+      JSON.stringify([
+        {
+          index: "fighter",
+          name: "Fighter",
+          hit_die: 10,
+          saving_throws: [{ index: "str" }, { index: "con" }],
+          starting_equipment: [
+            { equipment: { index: "chain-mail" }, quantity: 1 },
+            { equipment: { index: "shield" }, quantity: 1 },
+            { equipment: { index: "rations" }, quantity: 10 },
+          ],
+        },
+      ]),
+    );
+    await fs.writeFile(
+      path.join(srdDir, "5e-SRD-Equipment.json"),
+      JSON.stringify([
+        { index: "chain-mail", name: "Chain Mail", equipment_category: { index: "armor" }, armor_category: "Heavy", armor_class: { base: 16, dex_bonus: false }, weight: 55 },
+        { index: "shield", name: "Shield", equipment_category: { index: "armor" }, armor_category: "Shield", armor_class: { base: 2, dex_bonus: false }, weight: 6 },
+        { index: "rations", name: "Rations", equipment_category: { index: "adventuring-gear" }, weight: 2 },
+      ]),
+    );
+
+    const dir = await freshCampaign();
+    const mgr = await SessionManager.open(dir, { srdDir });
+    const { id } = await createCharacter(
+      mgr.campaign,
+      {
+        name: "Bron",
+        race: "human",
+        class: "fighter",
+        abilities: { str: 15, dex: 14, con: 14, int: 10, wis: 12, cha: 8 },
+        skills: ["athletics", "perception"],
+      },
+      mgr.srd(),
+    );
+
+    const reloaded = await SessionManager.open(dir, { srdDir });
+    const actor = reloaded.campaign.actors[id];
+    // Chain mail (16, no dex) + shield (2) = 18, regardless of the +2 DEX.
+    expect(actor!.ac).toBe(18);
+    const ids = actor!.inventory.map((i) => i.id);
+    expect(ids).toEqual(expect.arrayContaining(["chain-mail", "shield", "rations"]));
+    // Armor + shield are equipped; plain gear is not.
+    expect(actor!.inventory.find((i) => i.id === "chain-mail")?.equipped).toBe(true);
+    expect(actor!.inventory.find((i) => i.id === "rations")?.equipped).toBeUndefined();
+  });
+
   it("rejects a spell that is not on the class list when SRD is mounted (#20)", async () => {
     const srdDir = await fs.mkdtemp(path.join(os.tmpdir(), "adm-srd-"));
     tmpRoots.push(srdDir);

@@ -79,6 +79,35 @@ const STANDARD_ARRAY = [15, 14, 13, 12, 10, 8];
 
 const abilityMod = (score: number) => Math.floor((score - 10) / 2);
 
+/**
+ * Armor Class from equipped SRD armor (#20): the best body armor (base + a
+ * dex contribution capped per category) plus any shield, else unarmored
+ * (10 + DEX). Items without armor data are ignored, so this degrades to the
+ * unarmored value when no dataset is mounted.
+ */
+function computeArmorClass(
+  srd: SrdIndex | undefined,
+  inventory: { id: string; equipped?: boolean }[],
+  dexMod: number,
+): number {
+  let bestBody = 10 + dexMod; // unarmored default
+  let shield = 0;
+  for (const entry of inventory) {
+    if (!entry.equipped) continue;
+    const eq = srd?.equipment(entry.id);
+    if (!eq || eq.ac === undefined) continue;
+    const cat = eq.armor_category ?? "";
+    if (cat === "shield" || eq.id.includes("shield")) {
+      shield = Math.max(shield, eq.ac);
+      continue;
+    }
+    // dex_bonus flag controls whether DEX adds; max_bonus caps it (medium armor).
+    const dexPart = eq.ac_dex_bonus ? Math.min(dexMod, eq.ac_max_bonus ?? Infinity) : 0;
+    bestBody = Math.max(bestBody, eq.ac + dexPart);
+  }
+  return bestBody + shield;
+}
+
 export interface SubraceOption {
   id: string;
   name: string;
@@ -288,6 +317,15 @@ export async function createCharacter(
     ? srd.list.features().filter((f) => f.class === draft.class && (f.level ?? 1) === 1 && !f.subclass).map((f) => f.id)
     : [];
 
+  // Starting equipment from the SRD class (the guaranteed grants). Armor,
+  // shields and weapons start equipped so AC and attacks resolve out of the box.
+  const inventory = (srd ? srd.class(draft.class)?.starting_equipment ?? [] : []).map((e) => {
+    const eq = srd?.equipment(e.id);
+    const equipped = eq ? eq.ac !== undefined || eq.damage !== undefined : undefined;
+    return { id: e.id, qty: e.qty, ...(equipped ? { equipped: true } : {}) };
+  });
+  const ac = computeArmorClass(srd, inventory, dexMod);
+
   const takenIds = new Set(Object.keys(campaign.actors));
   const id = uniqueId(slugify(name), takenIds);
 
@@ -308,7 +346,7 @@ export async function createCharacter(
     proficiency_bonus: 2,
     proficiencies: { saves: cls.saves, skills, weapons: [], armor: [] },
     hp: { max: hpMax, current: hpMax, temp: 0 },
-    ac: 10 + dexMod,
+    ac,
     speed: srdRace?.speed ?? race.speed,
     hit_dice: { type: cls.hitDie, total: 1, remaining: 1 },
     spell_slots,
@@ -318,7 +356,7 @@ export async function createCharacter(
     feats: [],
     conditions: [],
     concentration: null,
-    inventory: [],
+    inventory,
     attunement: [],
     death_saves: { success: 0, fail: 0 },
     position: null,

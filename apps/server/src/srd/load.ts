@@ -238,6 +238,7 @@ function mapEquipment(e: Record<string, unknown>): SrdEquipment | null {
   if (!id || !name) return null;
   const dmg = e.damage as { damage_dice?: string; damage_type?: { index?: string } } | undefined;
   const range = e.range as { normal?: number } | undefined;
+  const armor = e.armor_class as { base?: number; dex_bonus?: boolean; max_bonus?: number } | undefined;
   return {
     id,
     name,
@@ -246,7 +247,10 @@ function mapEquipment(e: Record<string, unknown>): SrdEquipment | null {
     damage: dmg?.damage_dice,
     damage_type: dmg?.damage_type?.index,
     properties: idxList(e.properties),
-    ac: (e.armor_class as { base?: number })?.base,
+    ac: armor?.base,
+    armor_category: typeof e.armor_category === "string" ? e.armor_category.toLowerCase() : undefined,
+    ac_dex_bonus: typeof armor?.dex_bonus === "boolean" ? armor.dex_bonus : undefined,
+    ac_max_bonus: typeof armor?.max_bonus === "number" ? armor.max_bonus : undefined,
     range_ft: range?.normal,
   };
 }
@@ -286,6 +290,14 @@ function mapClass(c: Record<string, unknown>): SrdClass | null {
   const name = c.name as string | undefined;
   if (!id || !name) return null;
   const spellAbility = refIndex((c.spellcasting as { spellcasting_ability?: unknown })?.spellcasting_ability);
+  const starting = Array.isArray(c.starting_equipment)
+    ? (c.starting_equipment as Record<string, unknown>[])
+        .map((s) => {
+          const eqId = refIndex(s.equipment);
+          return eqId ? { id: eqId, qty: intFrom(s.quantity, 1) } : null;
+        })
+        .filter((x): x is { id: string; qty: number } => x !== null)
+    : [];
   return {
     id,
     name,
@@ -294,6 +306,7 @@ function mapClass(c: Record<string, unknown>): SrdClass | null {
     proficiencies: idxList(c.proficiencies),
     spellcasting_ability: spellAbility ? ABILITY_FULL[spellAbility] : undefined,
     subclasses: idxList(c.subclasses),
+    starting_equipment: starting,
   };
 }
 

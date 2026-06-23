@@ -77,6 +77,10 @@ export const SrdEquipment = z.object({
   damage_type: z.string().optional(),
   properties: z.array(z.string()).default([]),
   ac: z.number().int().optional(),
+  /** Armor only: category (light/medium/heavy/shield) + dex contribution to AC. */
+  armor_category: z.string().optional(),
+  ac_dex_bonus: z.boolean().optional(),
+  ac_max_bonus: z.number().int().optional(),
   range_ft: z.number().int().optional(),
 });
 export type SrdEquipment = z.infer<typeof SrdEquipment>;
@@ -114,6 +118,8 @@ export const SrdClass = z.object({
   proficiencies: z.array(z.string()).default([]),
   spellcasting_ability: Ability.optional(),
   subclasses: z.array(z.string()).default([]),
+  /** Guaranteed starting equipment (the fixed grants, not the choices). */
+  starting_equipment: z.array(z.object({ id: z.string(), qty: z.number().int() })).default([]),
 });
 export type SrdClass = z.infer<typeof SrdClass>;
 
