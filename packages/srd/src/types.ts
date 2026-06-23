@@ -53,6 +53,14 @@ export const SrdSpell = z.object({
     .optional(),
   damage: z.string().optional(),
   damage_type: z.string().optional(),
+  /** Damage dice keyed by slot level the spell is cast at (leveled spells). */
+  damage_by_slot: z.record(z.string(), z.string()).optional(),
+  /** Damage dice keyed by caster level (cantrip scaling). */
+  damage_by_level: z.record(z.string(), z.string()).optional(),
+  /** Healing dice keyed by slot level (e.g. Cure Wounds); spell mod added by the engine. */
+  heal_by_slot: z.record(z.string(), z.string()).optional(),
+  /** Area of effect, for grounding/narration. */
+  aoe: z.object({ shape: z.string(), size: z.number().int() }).optional(),
   description: z.string().optional(),
   /** Class ids whose spell list this spell appears on (for pickers, #20). */
   classes: z.array(z.string()).default([]),

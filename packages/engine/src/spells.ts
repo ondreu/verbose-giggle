@@ -1,3 +1,5 @@
+import type { Actor } from "@adm/schemas";
+import type { SrdSpell } from "@adm/srd";
 import { roll, rollD20 } from "./dice.js";
 import { applyDamage, heal } from "./combat.js";
 import { savingThrow } from "./checks.js";
@@ -34,6 +36,26 @@ function spellMod(state: GameState, casterId: string): number {
 function spellSaveDc(state: GameState, casterId: string): number {
   const a = getActor(state, casterId);
   return 8 + a.proficiency_bonus + spellMod(state, casterId);
+}
+
+/** Pick the value from a numeric-keyed scaling map for level `n` (highest key ≤ n). */
+function scaledDice(map: Record<string, string> | undefined, n: number): string | undefined {
+  if (!map) return undefined;
+  const keys = Object.keys(map)
+    .map((k) => Number(k))
+    .filter((k) => Number.isFinite(k) && k <= n)
+    .sort((a, b) => b - a);
+  return keys.length ? map[String(keys[0])] : undefined;
+}
+
+/**
+ * Damage dice for a cast: cantrips scale by caster level, leveled spells by the
+ * slot used. Falls back to the spell's base `damage`. SRD-mounted spells carry
+ * the scaling maps (#20); the bundled subset just has `damage`.
+ */
+function spellDamageDice(spell: SrdSpell, caster: Actor, slotLevel: number): string | undefined {
+  if (spell.level === 0) return scaledDice(spell.damage_by_level, caster.level) ?? spell.damage;
+  return scaledDice(spell.damage_by_slot, Math.max(slotLevel, spell.level)) ?? spell.damage;
 }
 
 /**
@@ -91,6 +113,10 @@ export function castSpell(
     detail: "",
   };
   const mod = spellMod(state, args.caster);
+  const slotForScaling = Math.max(args.slot_level, spell.level);
+  const damageDice = spellDamageDice(spell, caster, slotForScaling);
+  // Healing dice for the slot used (SRD heal_by_slot), spell mod added below.
+  const healDice = scaledDice(spell.heal_by_slot, slotForScaling);
 
   if (spell.attack === "ranged" || spell.attack === "melee") {
     result.attacks = [];
@@ -101,8 +127,8 @@ export function castSpell(
       const crit = d20.natural === 20;
       const hit = crit || (d20.natural !== 1 && d20.total >= target.ac);
       let dmg: number | undefined;
-      if (hit && spell.damage) {
-        const r = roll(spell.damage, state.rng);
+      if (hit && damageDice) {
+        const r = roll(damageDice, state.rng);
         dmg = crit ? r.total + (r.total - r.modifier) : r.total;
         applyDamage(state, { target: t, amount: dmg, type: spell.damage_type });
       }
@@ -111,21 +137,24 @@ export function castSpell(
   } else if (spell.save) {
     result.saves = [];
     const dc = spellSaveDc(state, args.caster);
+    // dc_success: "half" → half damage on a save; "none"/anything else → no damage.
+    const onSuccess = spell.save.effect === "half" ? "half" : "none";
     for (const t of targets) {
       const save = savingThrow(state, { actor: t, ability: spell.save.ability, dc });
       let dmg: number | undefined;
-      if (spell.damage) {
-        const r = roll(spell.damage, state.rng);
-        dmg = save.success ? Math.floor(r.total / 2) : r.total;
-        applyDamage(state, { target: t, amount: dmg, type: spell.damage_type });
+      if (damageDice) {
+        const r = roll(damageDice, state.rng);
+        dmg = save.success ? (onSuccess === "half" ? Math.floor(r.total / 2) : 0) : r.total;
+        if (dmg) applyDamage(state, { target: t, amount: dmg, type: spell.damage_type });
       }
       result.saves.push({ target: t, success: save.success, damage: dmg });
     }
-  } else if (spell.damage && spell.damage_type === "radiant" && spell.id.includes("cure")) {
-    // Healing spell.
+  } else if (healDice || (spell.damage && spell.damage_type === "radiant" && spell.id.includes("cure"))) {
+    // Healing spell — SRD heal_by_slot, or the bundled cure-* heuristic.
+    const dice = healDice ?? spell.damage!;
     result.healed = [];
     for (const t of targets) {
-      const r = roll(`${spell.damage}+${mod}`, state.rng);
+      const r = roll(`${dice}+${mod}`, state.rng);
       heal(state, { target: t, amount: r.total });
       result.healed.push({ target: t, amount: r.total });
     }

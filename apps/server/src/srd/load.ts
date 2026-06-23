@@ -167,26 +167,66 @@ function mapMonster(m: Record<string, unknown>): SrdMonster | null {
   };
 }
 
+/** Coerce a `{ "1": "3d6", ... }` scaling map of dice strings. */
+function diceMap(v: unknown): Record<string, string> | undefined {
+  if (!v || typeof v !== "object") return undefined;
+  const out: Record<string, string> = {};
+  for (const [k, val] of Object.entries(v as Record<string, unknown>)) {
+    if (typeof val === "string" && val.trim()) out[k] = val.trim();
+  }
+  return Object.keys(out).length ? out : undefined;
+}
+
+/** Lowest-keyed value of a numeric-keyed map — the spell's base dice. */
+function lowestDice(m?: Record<string, string>): string | undefined {
+  if (!m) return undefined;
+  const keys = Object.keys(m)
+    .map((k) => Number(k))
+    .filter((n) => Number.isFinite(n))
+    .sort((a, b) => a - b);
+  return keys.length ? m[String(keys[0])] : undefined;
+}
+
 function mapSpell(s: Record<string, unknown>): SrdSpell | null {
   const id = (s.index ?? s.id) as string | undefined;
   const name = s.name as string | undefined;
   if (!id || !name) return null;
-  const dc = s.dc as { dc_type?: { index?: string } } | undefined;
-  const dmg = s.damage as { damage_type?: { index?: string } } | undefined;
+  const dc = s.dc as { dc_type?: { index?: string }; dc_success?: string } | undefined;
+  const dmg = s.damage as
+    | { damage_type?: { index?: string }; damage_at_slot_level?: unknown; damage_at_character_level?: unknown }
+    | undefined;
+  const level = intFrom(s.level, 0);
+  const attackType = typeof s.attack_type === "string" ? s.attack_type.toLowerCase() : "";
+  const attack: "melee" | "ranged" | "none" = attackType === "ranged" || attackType === "melee" ? attackType : "none";
+
+  const damage_by_slot = diceMap(dmg?.damage_at_slot_level);
+  const damage_by_level = diceMap(dmg?.damage_at_character_level);
+  const heal_by_slot = diceMap(s.heal_at_slot_level);
+  // Base dice for the legacy `damage` path (cantrips scale by level, else by slot).
+  const damage = level === 0 ? lowestDice(damage_by_level) : lowestDice(damage_by_slot);
+
+  const aoeRaw = s.area_of_effect as { type?: string; size?: number } | undefined;
+  const aoe = aoeRaw?.type && typeof aoeRaw.size === "number" ? { shape: aoeRaw.type, size: aoeRaw.size } : undefined;
+
   return {
     id,
     name,
-    level: intFrom(s.level, 0),
+    level,
     school: (s.school as { index?: string })?.index,
     range_ft: intFrom(s.range, 0) || undefined,
     concentration: Boolean(s.concentration),
     ritual: Boolean(s.ritual),
-    attack: "none",
+    attack,
     save:
       dc?.dc_type?.index && ABILITY_FULL[dc.dc_type.index]
-        ? { ability: ABILITY_FULL[dc.dc_type.index]!, effect: "half" }
+        ? { ability: ABILITY_FULL[dc.dc_type.index]!, effect: (dc.dc_success ?? "half").toLowerCase() }
         : undefined,
+    damage,
     damage_type: dmg?.damage_type?.index,
+    damage_by_slot,
+    damage_by_level,
+    heal_by_slot,
+    aoe,
     description: Array.isArray(s.desc) ? (s.desc as string[]).join(" ") : undefined,
     classes: idxList(s.classes),
   };

@@ -40,7 +40,9 @@ describe("SRD dataset loader (5e-bits/5e-database shape)", () => {
     await fs.writeFile(
       path.join(dir, "5e-SRD-Spells.json"),
       JSON.stringify([
-        { index: "fireball", name: "Fireball", level: 3, school: { index: "evocation" }, concentration: false, range: "150 feet", damage: { damage_type: { index: "fire" } }, dc: { dc_type: { index: "dexterity" } } },
+        { index: "fireball", name: "Fireball", level: 3, school: { index: "evocation" }, concentration: false, range: "150 feet", attack_type: null, area_of_effect: { type: "sphere", size: 20 }, damage: { damage_type: { index: "fire" }, damage_at_slot_level: { "3": "8d6", "4": "9d6" } }, dc: { dc_type: { index: "dexterity" }, dc_success: "half" } },
+        { index: "fire-bolt", name: "Fire Bolt", level: 0, attack_type: "ranged", damage: { damage_type: { index: "fire" }, damage_at_character_level: { "1": "1d10", "5": "2d10" } } },
+        { index: "cure-wounds", name: "Cure Wounds", level: 1, heal_at_slot_level: { "1": "1d8", "2": "2d8" } },
       ]),
     );
     await fs.writeFile(
@@ -56,8 +58,16 @@ describe("SRD dataset loader (5e-bits/5e-database shape)", () => {
     expect(out.monsters.orc?.actions[0]?.damage).toBe("1d12+3");
     expect(out.spells.fireball?.level).toBe(3);
     expect(out.spells.fireball?.save?.ability).toBe("dex");
+    expect(out.spells.fireball?.save?.effect).toBe("half"); // from dc_success
     expect(out.spells.fireball?.range_ft).toBe(150);
     expect(out.spells.fireball?.classes ?? []).toEqual([]); // none tagged here
+    // Damage scaling + AoE + attack type now mapped (#20 spell mechanics).
+    expect(out.spells.fireball?.damage_by_slot?.["3"]).toBe("8d6");
+    expect(out.spells.fireball?.damage).toBe("8d6"); // base = lowest slot
+    expect(out.spells.fireball?.aoe).toEqual({ shape: "sphere", size: 20 });
+    expect(out.spells["fire-bolt"]?.attack).toBe("ranged");
+    expect(out.spells["fire-bolt"]?.damage_by_level?.["5"]).toBe("2d10");
+    expect(out.spells["cure-wounds"]?.heal_by_slot?.["2"]).toBe("2d8");
     expect(out.equipment.greataxe?.damage).toBe("1d12");
   });
 
