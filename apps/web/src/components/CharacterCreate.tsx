@@ -283,7 +283,7 @@ export function CharacterCreate({ onClose }: { onClose: () => void }) {
                     const canInc = pb ? base < pb.max && ((pb.cost[base + 1] ?? 0) - (pb.cost[base] ?? 0)) <= remaining : false;
                     const canDec = pb ? base > pb.min : false;
                     return (
-                      <Tip key={k} content={<p className="font-body text-[12px] leading-snug text-text">{ABILITY_TIP[k]}</p>}>
+                      <Tip key={k} content={<p className="font-body text-sm leading-snug text-text">{ABILITY_TIP[k]}</p>}>
                         <div className="flex items-center gap-2 rounded-sm border border-surface1 bg-bg-mantle/50 px-2 py-1.5">
                           <div className="flex-1">
                             <div className="text-[10px] uppercase tracking-wider text-subtext0">{csAbilityAbbr(k)}</div>
@@ -318,7 +318,7 @@ export function CharacterCreate({ onClose }: { onClose: () => void }) {
                       const on = skills.includes(s);
                       const full = !on && skills.length >= cls.skillCount;
                       return (
-                        <Tip key={s} content={<p className="font-body text-[12px] leading-snug text-text">{SKILL_TIP[s] ?? csSkill(s)}</p>}>
+                        <Tip key={s} content={<p className="font-body text-sm leading-snug text-text">{SKILL_TIP[s] ?? csSkill(s)}</p>}>
                           <button
                             onClick={() => toggleSkill(s)}
                             disabled={full}

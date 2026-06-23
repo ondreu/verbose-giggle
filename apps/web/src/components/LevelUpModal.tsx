@@ -338,14 +338,14 @@ function ModeBtn({ label, active, onClick, tip }: { label: string; active: boole
     </button>
   );
   if (!tip) return btn;
-  return <Tip content={<p className="font-body text-[12px] leading-snug text-text">{tip}</p>}>{btn}</Tip>;
+  return <Tip content={<p className="font-body text-sm leading-snug text-text">{tip}</p>}>{btn}</Tip>;
 }
 
 function AbilitySelect({ value, onChange, actor }: {
   value: Ability; onChange: (a: Ability) => void; actor: Actor;
 }) {
   return (
-    <Tip content={<p className="font-body text-[12px] leading-snug text-text">{ABILITY_TIP[value]}</p>}>
+    <Tip content={<p className="font-body text-sm leading-snug text-text">{ABILITY_TIP[value]}</p>}>
       <select
         className="settings-input flex-1 bg-bg-crust text-text"
         value={value}

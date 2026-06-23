@@ -186,7 +186,7 @@ export function SheetPanel() {
       {/* Abilities */}
       <div className="mt-3 grid grid-cols-6 gap-1.5">
         {ABILITY_ORDER.map((key) => (
-          <Tip key={key} content={<p className="font-body text-[12px] leading-snug text-text">{ABILITY_TIP[key]}</p>}>
+          <Tip key={key} content={<p className="font-body text-sm leading-snug text-text">{ABILITY_TIP[key]}</p>}>
             <div className="rounded-sm border border-ink/20 bg-ink/5 px-1 py-1 text-center">
               <div className="text-[10px] uppercase tracking-wider text-ink/60">{csAbilityAbbr(key)}</div>
               <div className="font-display text-base leading-none">{fmt(mod(actor.abilities[key]))}</div>
@@ -271,7 +271,7 @@ export function SheetPanel() {
             })}
           </div>
           {openCond && (
-            <p className="mt-1.5 rounded-sm border border-ink/20 bg-ink/5 px-2 py-1 font-body text-[12px] leading-snug text-ink/80">
+            <p className="mt-1.5 rounded-sm border border-ink/20 bg-ink/5 px-2 py-1 font-body text-sm leading-snug text-ink/80">
               <span className="font-semibold">{csCondition(openCond)}:</span>{" "}
               {csConditionDesc(openCond) || "Popis není k dispozici."}
             </p>
@@ -299,7 +299,7 @@ export function SheetPanel() {
 
         {/* Attacks (#43c: armor filtered out by isWeaponId) */}
         <ActionGroup label="Útoky" icon="sword">
-          <Tip content={<p className="font-body text-[12px] leading-snug text-text">Útok libovolnou vybavenou zbraní. DM určí hod na útok a poškození.</p>}>
+          <Tip content={<p className="font-body text-sm leading-snug text-text">Útok libovolnou vybavenou zbraní. DM určí hod na útok a poškození.</p>}>
             <ActionChip
               label="Útok zbraní"
               disabled={disabled}
@@ -307,7 +307,7 @@ export function SheetPanel() {
             />
           </Tip>
           {equipped.map((i) => (
-            <Tip key={i.id} content={<p className="font-body text-[12px] leading-snug text-text">Útok zbraní {pretty(i.id)}.</p>}>
+            <Tip key={i.id} content={<p className="font-body text-sm leading-snug text-text">Útok zbraní {pretty(i.id)}.</p>}>
               <ActionChip
                 label={pretty(i.id)}
                 disabled={disabled}
@@ -315,15 +315,15 @@ export function SheetPanel() {
               />
             </Tip>
           ))}
-          <Tip content={<p className="font-body text-[12px] leading-snug text-text">Úder pěstí nebo kolenem. Zásah: 1 + mod. Síly drtivého poškození.</p>}>
+          <Tip content={<p className="font-body text-sm leading-snug text-text">Úder pěstí nebo kolenem. Zásah: 1 + mod. Síly drtivého poškození.</p>}>
             <ActionChip label="Beze zbraně" disabled={disabled}
               onClick={() => void aim("Cíl útoku beze zbraně", (c) => `Zaútočím beze zbraně (unarmed strike)${c}.`, false)} />
           </Tip>
-          <Tip content={<p className="font-body text-[12px] leading-snug text-text">Shove — sraž nebo odtlač protivníka na 5 stop. Protichůdný hod: Atletika vs. Atletika / Akrobacie.</p>}>
+          <Tip content={<p className="font-body text-sm leading-snug text-text">Shove — sraž nebo odtlač protivníka na 5 stop. Protichůdný hod: Atletika vs. Atletika / Akrobacie.</p>}>
             <ActionChip label="Strčení" disabled={disabled}
               onClick={() => void aim("Cíl strčení", (c) => `Použiju speciální útok Strčení (Shove)${c} — pokus o sražení nebo odtlačení.`, false)} />
           </Tip>
-          <Tip content={<p className="font-body text-[12px] leading-snug text-text">Grapple — zachyť protivníka; jeho rychlost klesne na 0. Protichůdný hod: Atletika vs. Atletika / Akrobacie.</p>}>
+          <Tip content={<p className="font-body text-sm leading-snug text-text">Grapple — zachyť protivníka; jeho rychlost klesne na 0. Protichůdný hod: Atletika vs. Atletika / Akrobacie.</p>}>
             <ActionChip label="Chvat" disabled={disabled}
               onClick={() => void aim("Cíl chvatu", (c) => `Pokusím se o Chvat (Grapple)${c}.`, false)} />
           </Tip>
@@ -332,7 +332,7 @@ export function SheetPanel() {
         {/* Standard actions */}
         <ActionGroup label="Obecné akce" icon="d20">
           {STANDARD_ACTIONS.map((a) => (
-            <Tip key={a.label} content={<p className="font-body text-[12px] leading-snug text-text">{a.tip}</p>}>
+            <Tip key={a.label} content={<p className="font-body text-sm leading-snug text-text">{a.tip}</p>}>
               <ActionChip label={a.label} disabled={disabled} onClick={() => act(a.text)} />
             </Tip>
           ))}
@@ -357,7 +357,7 @@ export function SheetPanel() {
         {/* Skill checks */}
         <ActionGroup label="Zkoušky" icon="compass">
           {(["perception", "insight", "persuasion"] as const).map((sk) => (
-            <Tip key={sk} content={<p className="font-body text-[12px] leading-snug text-text">{SKILL_TIP[sk]}</p>}>
+            <Tip key={sk} content={<p className="font-body text-sm leading-snug text-text">{SKILL_TIP[sk]}</p>}>
               <ActionChip label={csSkill(sk)} disabled={disabled}
                 onClick={() => act(`Udělám zkoušku dovednosti ${csSkill(sk)}.`)} />
             </Tip>
@@ -415,7 +415,7 @@ function ActionChip({ label, onClick, disabled, accent, title }: {
       onClick={onClick}
       disabled={disabled}
       title={title}
-      className={`rounded-sm border px-2 py-0.5 font-body text-[12px] transition-colors disabled:opacity-40 ${
+      className={`rounded-sm border px-2 py-0.5 font-body text-sm transition-colors disabled:opacity-40 ${
         accent
           ? "border-arcane/50 bg-arcane/10 text-arcane hover:bg-arcane/20"
           : "border-ink/25 bg-ink/5 text-ink/75 hover:border-ink/50 hover:text-ink"
