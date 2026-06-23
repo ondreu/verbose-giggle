@@ -325,8 +325,8 @@ export function CharacterCreate({ onClose }: { onClose: () => void }) {
           )}
         </div>
 
-        <footer className="flex items-center justify-end gap-2 border-t border-black px-4 py-2.5">
-          <button className="font-log text-sm text-subtext0 hover:text-gold" onClick={onClose}>
+        <footer className="flex items-center justify-end gap-3 border-t border-black px-4 py-3">
+          <button className="btn-link text-sm" onClick={onClose}>
             Zrušit
           </button>
           <button className="btn-gold px-5 py-2 text-sm" disabled={!canSubmit} onClick={() => void submit()}>

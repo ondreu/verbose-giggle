@@ -218,8 +218,8 @@ export function LevelUpModal({ actor, onClose }: { actor: Actor; onClose: () => 
         {error && <p className="font-log text-sm text-blood">{error}</p>}
       </div>
 
-      <div className="mt-4 flex justify-end gap-2">
-        <button className="font-log text-sm text-subtext0 hover:text-gold" onClick={onClose}>
+      <div className="mt-4 flex justify-end gap-3">
+        <button className="btn-link text-sm" onClick={onClose}>
           Zrušit
         </button>
         <button className="btn-gold px-5 py-2 text-sm" disabled={busy} onClick={() => void submit()}>
