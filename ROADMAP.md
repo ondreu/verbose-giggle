@@ -261,29 +261,18 @@ on old code and items **#15, #17, #18** are likely already resolved by updating.
 Travel currently feels mechanical and breaks immersion. Three gaps, from
 playtest (2026-06):
 
-- **#41a — Time does not pass while travelling (regression of #24).** Despite
-  #24, a `travel` to a connected location is not advancing the in-world clock.
-  Re-check the path: `OverworldMap` sends `sendCommand("travel", { to })` →
-  server travel handler → engine `travel`/`time_advance` (`packages/engine/src/
-  time.ts`, `tools.ts`). The journey duration authored on the location
-  connection (`connections[].travel.days/hours`) must be fed into `advanceTime`
-  and logged. Add an engine test that `travel` advances the clock by the edge
-  duration.
-- **#41b — Arrival is a bare log line; the DM says nothing.** On arriving the
-  log just prints "dorazil jsi sem" with no narration — the DM never sets the
-  scene. After a `travel` resolves, the DM loop should narrate the arrival:
-  describe the new location (from its note body/lore), the journey's passage of
-  time, and any first impressions, then hand back to the player. Wire an
-  arrival beat into `apps/server/src/session/loop.ts` (similar to the campaign
-  intro `runIntro`, #31) and a prompt instruction in `llm/prompt.ts`; the scene
-  snapshot already carries the location, so ground the narration in it.
-- **#41c — The "Střety zde" table is unimmersive.** The flat encounter list in
-  `apps/web/src/map/MapPanel.tsx` (`EncounterList`, "Střety zde") reads like a
-  debug panel. Re-present authored encounters diegetically — fold them into the
-  DM's arrival/scene narration as hooks (rumours, signs, threats) rather than a
-  bare table, and/or restyle the panel as an in-world cue (parchment notice,
-  subtle) that the DM still drives. Keep the deterministic `start_combat` path
-  intact; this is presentation, not mechanics.
+- **[x] #41a — Time does not pass while travelling (regression of #24).** Done.
+  The `/api/command` travel handler now looks up the edge duration from
+  `campaign.locations[current].connections` and injects `days` into the engine
+  call before dispatch, so `advanceTime` is always fed the authored travel time.
+- **[x] #41b — Arrival is a bare log line; the DM says nothing.** Done.
+  Added `ARRIVAL_BEAT` prompt constant and `runArrival()` in `loop.ts`
+  (mirrors `runIntro`). The `/api/command` travel handler calls `runArrival`
+  after a successful travel instead of `resolveAiTurns`, triggering 3–4 sentences
+  of atmospheric arrival narration grounded in the scene snapshot.
+- **[x] #41c — The "Střety zde" table is unimmersive.** Done. Restyled the
+  encounter launcher in `MapPanel.tsx` as an atmospheric "Hrozby v okolí"
+  notice with subtle blood/30 border and skull icons; bare debug table removed.
 
 ### #42 — Rich interactive SRD tooltips / hover cards (cluster)
 
@@ -293,22 +282,19 @@ The SRD dataset carries full descriptions and mechanics (see the sample
 `school`); surface them as interactive cards on hover/focus everywhere an id is
 shown, so the player never has to know the rules by heart.
 
-- **#42a — Spell hover card.** On hovering a spell (sheet, actions, pickers,
-  level-up) show a card with: level + school, casting time, range, components,
-  duration, concentration/ritual flags, the description, base damage/heal **and
-  the upcast scaling** ("+1d4 za každý slot nad 2."). The numbers come from
-  `damage_by_slot`/`heal_by_slot`; the upcast prose from the SRD `higher_level`.
-- **#42b — Carry the missing fields.** Extend `mapSpell` + `SrdSpell`
-  (`apps/server/src/srd/load.ts`, `packages/srd/src/types.ts`) to keep
-  `higher_level`, `casting_time`, `duration` and `components` (currently dropped)
-  so the card has real data; expose them via the creation/level-up/spell
-  endpoints.
-- **#42c — Same cards for feats, skills, features, conditions, items.** Reuse a
-  shared `<InfoCard>`/tooltip primitive for feats (`srd.feat`), class/racial
-  features (`srd.feature`/`srd.trait`), skills (ability + SRD skill desc),
-  damage types, weapon properties and magic items — wherever a chip/label is
-  rendered. Pairs with #21 (mine descriptive SRD data) and #34 (condition chips).
-- **#42d — Note:** spell/feature *names* stay English (per the localization
+- **[x] #42a — Spell hover card.** Done. `SpellCard` in `InfoCard.tsx` lazily
+  fetches `/api/srd/spell/:id`, caches per session, and shows a 300 ms-delayed
+  floating card with level, school, casting time, range, components, duration,
+  concentration/ritual flags, description, and `higher_level` upcast text.
+  Wired to spell chips in SheetPanel and the level-up spell picker.
+- **[x] #42b — Carry the missing fields.** Done. `mapSpell` and `SrdSpell`
+  extended with `higher_level`, `casting_time`, `duration`, `components`,
+  `concentration`, `ritual`, and `range_ft`; exposed via `/api/srd/spell/:id`.
+- **[~] #42c — Same cards for feats, skills, features, conditions, items.** Partial.
+  `FeatCard` added (lazy fetch `/api/srd/feat/:id`, hover tooltip with prereqs +
+  description). Used in SheetPanel feat chips and LevelUpModal. Skills, class
+  features, conditions, and items not yet covered.
+- **[N/A] #42d — Note:** spell/feature *names* stay English (per the localization
   decision); only the surrounding chrome/labels are Czech.
 
 ### #43 — Character sheet as the single action hub (cluster)
@@ -317,38 +303,35 @@ Today actions live in a separate "Akce — <jméno>" panel (`ActionsPanel.tsx`)
 *and* spells are duplicated on the parchment sheet. Collapse everything onto the
 sheet so the parchment is the one place you act from (BG3-style action surface).
 
-- **#43a — Remove the standalone "Akce" panel** and fold its groups (attacks,
-  general actions, spells, features, common checks) into `SheetPanel.tsx` under
-  the existing layout; drop it from `PlaySurface`'s rail.
-- **#43b — De-duplicate spells.** Spells currently render both at the top of the
-  sheet and again below; show them **once**, in the consolidated action area.
-- **#43c — Fix "Útoky" listing armor.** The attacks group lists every *equipped*
-  inventory item, so leather armor/shields appear as attacks. Filter to actual
-  weapons (item has `damage`, or SRD category weapon) — armor/shields never show
-  as an attack.
-- **#43d — Don't offer passive abilities as castable.** Passive/always-on
-  spells and features (no action to "use") must not appear as clickable cast/use
-  buttons. Gate by the spell's `casting_time`/`duration` (and feature type) so
-  only actually-usable actions are buttons; passives render as static info
-  (with a #42 tooltip).
-- **#43e — Keep determinism.** Every action still sends NL intent through the DM
-  loop → engine; this is a UI reorganization, not a rules change.
+- **[x] #43a — Remove the standalone "Akce" panel.** Done. `ActionsPanel.tsx`
+  removed from `PlaySurface`'s rail; attack, standard action, spell, and skill
+  check groups folded into the bottom of `SheetPanel.tsx` as "Akce".
+- **[x] #43b — De-duplicate spells.** Done. Old "Známá kouzla" cast-button
+  section removed from SheetPanel; spells shown once in the consolidated "Akce"
+  area with SpellCard wrappers.
+- **[x] #43c — Fix "Útoky" listing armor.** Done. Attack group now filters via
+  `ARMOR_RE` regex and `isWeaponId` helper; only items with a damage property
+  or a weapon SRD category appear in attacks.
+- **[x] #43d — Don't offer passive abilities as castable.** Done. Spells with
+  no action cost or passive duration are hidden from the castable list; only
+  spells with a real `casting_time` get action buttons.
+- **[N/A] #43e — Keep determinism.** Every action still sends NL intent through
+  the DM loop → engine; this cluster was a UI reorganization only.
 
 ### #44 — Full SRD subraces & subclasses + BG3-style level-up (cluster)
 
-- **#44a — Subraces from the SRD in creation.** Only one subrace shows (and in
-  Czech), so subrace data isn't reaching the picker even though the dataset is
-  mounted — verify `5e-SRD-Subraces.json` loads (`srdStats` should report a
-  subrace count; add it) and that `subracesFor` returns all subraces of the
-  chosen race with their ability bonuses + traits. Each subrace gets a #42 card.
-- **#44b — Subclasses.** None appear at creation — correct for most classes
-  (subclass is a later-level choice in 5e), **but** the choice must then exist in
-  the level-up flow at the right level. Confirm `5e-SRD-Subclasses.json` loads
-  and `choose_subclass` is offered when due.
-- **#44c — BG3-style level-up menu.** Rework `LevelUpModal.tsx` to mirror the
-  (improved) creation flow — a guided, sectioned surface for HP, ASI-or-feat,
-  subclass selection and new spells, with #42 cards throughout — instead of the
-  current compact modal.
+- **[~] #44a — Subraces from the SRD in creation.** Partial. SRD loader already
+  handles `5e-SRD-Subraces.json`; subrace verification and `srdStats` subrace
+  count not yet explicitly audited.
+- **[~] #44b — Subclasses.** Partial. `levelUpOptions` returns subclasses from
+  the SRD for the right level, and `LevelUpModal` shows the subclass picker when
+  `needsSubclass` is true. Creation-time subclass picker not added (correct for
+  most 5e classes where subclass is a level 3+ choice).
+- **[x] #44c — BG3-style level-up menu.** Done. `LevelUpModal.tsx` fully
+  rewritten: HP section (blood), new class features (gold, expandable), subclass
+  selection with inline description (arcane), ASI-or-feat with FeatCard link
+  (gold), spell picker (arcane). Server-side `levelUpOptions` now returns
+  `newFeatures` (class features gained at the next level).
 
 > **#1 (paladin/ranger free-text spell box) — fixed**, pending deploy: half
 > casters now show "získává kouzla od 2. úrovně" instead of the comma-separated
