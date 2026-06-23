@@ -2,7 +2,7 @@ import type { Actor, ActiveCondition, ConditionName, DamageType } from "@adm/sch
 import { roll, rollD20 } from "./dice.js";
 import { savingThrow } from "./checks.js";
 import { attackMods, combineAdv, type Advantage } from "./conditions.js";
-import { coverBetween, gridDistanceFt } from "./grid.js";
+import { approachStep, coverBetween, gridDistanceFt } from "./grid.js";
 import { removeFromCombat } from "./turns.js";
 import { csCondition, csDamage } from "@adm/schemas";
 import { abilityMod, actorAc, getActor, log, type GameState } from "./state.js";
@@ -225,7 +225,9 @@ export function attack(
       // Ranged weapon: hard block beyond weapon's normal range (long range not in schema).
       const maxRangeFt = weaponEq?.range_ft;
       if (maxRangeFt && distFt > maxRangeFt) {
-        const detail = `${attacker.name} je mimo dostřel — vzdálenost ${distFt} ft přesahuje dosah zbraně ${maxRangeFt} ft`;
+        const step = approachStep(state, { actor: args.attacker, target: args.target, reachFt: maxRangeFt });
+        const hint = step ? ` — nejdřív se přesuň na (${step.to.x},${step.to.y}), pak vystřel` : "";
+        const detail = `${attacker.name} je mimo dostřel — vzdálenost ${distFt} ft přesahuje dosah zbraně ${maxRangeFt} ft${hint}`;
         log(state, { kind: "attack", actor: args.attacker, target: args.target, detail, tool: "attack" });
         return { to_hit: 0, hit: false, crit: false, detail, noop: true };
       }
@@ -237,7 +239,11 @@ export function attack(
         : undefined;
       const reachFt = monsterAction?.reach_ft ?? (weaponEq?.properties?.includes("reach") ? 10 : 5);
       if (distFt > reachFt) {
-        const detail = `${attacker.name} je příliš daleko od ${target.name} pro útok nablízko — vzdálenost ${distFt} ft, dosah ${reachFt} ft`;
+        const step = approachStep(state, { actor: args.attacker, target: args.target, reachFt });
+        const hint = step
+          ? ` — přesuň se nejdřív na (${step.to.x},${step.to.y})${step.inReach ? " a zaútoč" : " (blíž, ale ještě ne na dosah)"}`
+          : "";
+        const detail = `${attacker.name} je příliš daleko od ${target.name} pro útok nablízko — vzdálenost ${distFt} ft, dosah ${reachFt} ft${hint}`;
         log(state, { kind: "attack", actor: args.attacker, target: args.target, detail, tool: "attack" });
         return { to_hit: 0, hit: false, crit: false, detail, noop: true };
       }

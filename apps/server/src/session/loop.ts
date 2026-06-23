@@ -1,4 +1,4 @@
-import { gridDistanceFt, toolSpecs, type GameState } from "@adm/engine";
+import { approachStep, gridDistanceFt, toolSpecs, type GameState } from "@adm/engine";
 import type { Llm, ChatMsg } from "../llm/client.js";
 import { aiTurnInstruction, ARRIVAL_BEAT, CAMPAIGN_START, type EnemyRange, RECAP_PROMPT, sceneSnapshot, type SceneConnection, type SceneQuest, SYSTEM_PROMPT, turnControlNote } from "../llm/prompt.js";
 import type { EventBus } from "./events.js";
@@ -105,7 +105,10 @@ function enemyRanges(gs: GameState, actorId: string, enemies: string[]): EnemyRa
     const to = c?.tokens[id] ?? gs.actors[id]?.position ?? null;
     const distFt =
       c && from && to ? gridDistanceFt(from, to, c.grid.cell_ft, c.grid.shape, gs.variant.diagonals) : null;
-    return { id, distFt };
+    // When out of melee reach, precompute the cell to step to so the AI moves
+    // straight there instead of swinging from range first (#combat AI).
+    const step = c && distFt !== null && distFt > 5 ? approachStep(gs, { actor: actorId, target: id }) : null;
+    return { id, distFt, approach: step?.to ?? null };
   });
 }
 

@@ -127,6 +127,8 @@ STYL:
 export interface EnemyRange {
   id: string;
   distFt: number | null;
+  /** Engine-computed cell to move to this turn to reach the enemy (#combat AI). */
+  approach?: { x: number; y: number } | null;
 }
 
 /**
@@ -165,15 +167,19 @@ export function aiTurnInstruction(
   movementFt?: number,
 ): string {
   const enemyList = enemies
-    .map((e) => (e.distFt != null ? `${e.id} (${e.distFt} ft)` : e.id))
+    .map((e) => {
+      const d = e.distFt != null ? `${e.distFt} ft` : "?";
+      const app = e.approach ? ` → přijď na (${e.approach.x},${e.approach.y})` : "";
+      return `${e.id} (${d}${app})`;
+    })
     .join(", ");
   const move = movementFt ?? actor.speed;
   return [
     `[AI-TAH] Je řada na postavě ${actor.name} (${actor.id}, frakce: ${actor.faction}).`,
     actor.ai_profile ? `Profil chování: ${actor.ai_profile}` : "",
     `Jako Pán jeskyně ovládni tuto postavu na jejím tahu pomocí nástrojů.`,
-    enemies.length ? `Vzdálenosti k nepřátelům: ${enemyList}. Tvůj pohyb tento tah: ${move} ft.` : "Žádní zjevní nepřátelé.",
-    `Útok nablízko má dosah 5 ft (zbraně s dosahem 10 ft). Je-li tvůj cíl dál, NEJDŘÍV se k němu přesuň nástrojem move (na sousední buňku), AŽ POTOM attack — v jednom tahu zvládneš pohyb i útok. Neútoč „naslepo" z dálky a pak se teprve nehýbej.`,
+    enemies.length ? `Nepřátelé (vzdálenost → kam se přesunout): ${enemyList}. Tvůj pohyb tento tah: ${move} ft.` : "Žádní zjevní nepřátelé.",
+    `Útok nablízko má dosah 5 ft (zbraně s dosahem 10 ft). Je-li tvůj cíl dál a je u něj uvedena buňka „přijď na (x,y)", NEJDŘÍV zavolej move na TU buňku, AŽ POTOM attack — v jednom tahu zvládneš pohyb i útok. Neútoč opakovaně z dálky.`,
     `Když attack přesto vrátí „mimo dosah / příliš daleko", akce se NEspotřebovala — přesuň se blíž a zaútoč znovu ve stejném tahu, neukončuj tah jen kvůli vzdálenosti.`,
     `Pohyb musí projít nástrojem move — nenarruj ho bez volání nástroje.`,
     `Po akci napiš 1–2 věty česky (např. „Shadowpaw vyklouzne ze stínu…").`,
