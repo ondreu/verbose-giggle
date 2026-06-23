@@ -76,9 +76,16 @@ export function spendEconomy(
   // An action or bonus action off-turn would let a wrong character act on another's turn.
   if (!onTurn) {
     if (kind !== "reaction") {
+      // Name the actor who IS on turn (with id) so the caller can self-correct:
+      // a hotseat mix-up (acting as the protagonist when a second PC is up) is
+      // fixed by re-issuing the tool with the active actor's id.
+      const activeName = (activeId && state.actors[activeId]?.name) || activeId || "—";
       return {
         ok: false,
-        error: `${name} není na tahu — mimo kolo lze provést jen reakci.`,
+        error:
+          `${name} není na tahu — na tahu je ${activeName} (${activeId ?? "—"}). ` +
+          `Jde-li o akci aktivního hráče, zopakuj nástroj s id „${activeId ?? ""}" ` +
+          `(attacker/caster/actor). Mimo své kolo lze provést jen reakci (reaction:true).`,
       };
     }
     if (!c.budget.reaction) {
