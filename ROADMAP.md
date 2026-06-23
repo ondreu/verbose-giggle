@@ -607,6 +607,22 @@ generace světa, jen infrastruktura pro jeho načtení a využití.
 
 ---
 
+## P1 — Deployment: vault data lost on redeploy
+
+- **[x] #50 — Kampaně se mažou při novém deploy.**  Příčina: `./vault` bind mount
+  závisí na pracovní složce hostitele — NAS Docker GUI (Ugreen, Synology) nebo
+  Watchtower může kontejner obnovit s jiným base path, bind mount selže tiše a
+  entrypoint zaseje prázdný vault. Oprava: `docker-compose.nas.yml` i
+  `docker-compose.yml` nyní používají **pojmenovaný Docker volume** `vault_data`
+  místo bind mountu. Pojmenovaný volume spravuje Docker Engine a přežije
+  `docker compose down`, aktualizaci image i restart NAS. Bind mount zůstává
+  jako komentovaná alternativa pro uživatele kteří chtějí přímý přístup k
+  souborům. `entrypoint.sh` má novou migrační logiku: nastaví-li se
+  `VAULT_LEGACY_PATH` na starý bind mount, data se při prvním startu
+  automaticky překopírují do named volume.
+
+---
+
 ## Deliverables the user can provide
 
 - **Showcase vault** — see `docs/SHOWCASE.md` for exactly what to author, the
