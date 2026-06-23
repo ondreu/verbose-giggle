@@ -80,13 +80,24 @@ export class SessionManager {
   }
 
   /** Record counts of the mounted SRD dataset, for a "is it loaded?" UI cue. */
-  srdStats(): { spells: number; monsters: number; classes: number; races: number; feats: number; total: number } {
+  srdStats(): {
+    spells: number;
+    monsters: number;
+    classes: number;
+    subclasses: number;
+    races: number;
+    subraces: number;
+    feats: number;
+    total: number;
+  } {
     const o = this.srdOverrides;
     const counts = {
       spells: Object.keys(o.spells).length,
       monsters: Object.keys(o.monsters).length,
       classes: Object.keys(o.classes).length,
+      subclasses: Object.keys(o.subclasses).length,
       races: Object.keys(o.races).length,
+      subraces: Object.keys(o.subraces).length,
       feats: Object.keys(o.feats).length,
     };
     const total = Object.values(o).reduce((sum, m) => sum + Object.keys(m).length, 0);
