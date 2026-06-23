@@ -3,7 +3,7 @@ import { csCondition, csConditionDesc, csAbility, csAbilityAbbr, csClass, csFeat
 import { useGame } from "../store/store";
 import { Icon } from "../components/Icon";
 import { LevelUpModal } from "../components/LevelUpModal";
-import { FeatCard, SpellCard, Tip } from "../components/InfoCard";
+import { FeatCard, SpellCard, Tip, ABILITY_TIP, SKILL_TIP } from "../components/InfoCard";
 import type { PickedTarget } from "../store/store";
 
 /** Turn a picked target into a Czech "na <cíl>" clause for the action sentence. */
@@ -23,15 +23,6 @@ const prettySpell = pretty;
 const ARMOR_RE = /(armor|shield|mail|plate|breastplate)/i;
 const isWeaponId = (id: string) => !ARMOR_RE.test(id);
 
-/** Czech ability descriptions shown in the tooltip. */
-const ABILITY_TIP: Record<string, string> = {
-  str: "Síla — fyzická zdatnost a atletika. Ovlivňuje útoky na blízko, hody na udržení a nošení těžkých věcí.",
-  dex: "Obratnost — hbitost a reflexy. Ovlivňuje iniciativu, útoky zbraněmi na dálku a lehké zbroje.",
-  con: "Odolnost — zdraví a výdrž. Určuje maximum životů a záchranné hody na výdrž.",
-  int: "Inteligence — paměť a analytické myšlení. Základ kouzelníka; ovlivňuje Mystiku, Historii a Přírodu.",
-  wis: "Moudrost — vnímavost a intuice. Základ klerika a druida; ovlivňuje Vnímání, Vhled a Přežití.",
-  cha: "Charisma — síla osobnosti a přesvědčivost. Základ barda a čaroděje; ovlivňuje Přesvědčování a Zastrašování.",
-};
 
 /** Standard D&D combat actions available to any creature. */
 const STANDARD_ACTIONS: { label: string; icon: string; text: string; tip: string }[] = [
@@ -43,11 +34,6 @@ const STANDARD_ACTIONS: { label: string; icon: string; text: string; tip: string
   { label: "Pátrání", icon: "compass", text: "Použiju akci Pátrání (Search) a pozorně se rozhlédnu.", tip: "Search — věnuješ se aktivnímu hledání; DM rozhodne, zda odhalíš skryté věci nebo tvory." },
 ];
 
-const SKILL_TIP: Record<string, string> = {
-  perception: "Vnímání (Moudrost) — zachytíš skryté tvory, neobvyklé předměty nebo hrozby ve svém okolí.",
-  insight: "Vhled (Moudrost) — odhadneš záměry a emoce druhé osoby; poznáš, zda lže.",
-  persuasion: "Přesvědčování (Charisma) — ovlivníš ostatní taktním přístupem a vhodně volenými argumenty.",
-};
 
 /** Cumulative XP to REACH each level (index 0 = level 1). SRD. */
 const XP_THRESHOLDS = [

@@ -52,7 +52,39 @@ async function fetchFeat(id: string): Promise<FeatData | null> {
   }
 }
 
-// ── Portal tooltip infrastructure ─────────────────────────────────────────────
+// ── Shared Czech label maps (ability + skill descriptions) ───────────────────
+
+export const ABILITY_TIP: Record<string, string> = {
+  str: "Síla — fyzická zdatnost a atletika. Ovlivňuje útoky na blízko, hody na udržení a nošení těžkých věcí.",
+  dex: "Obratnost — hbitost a reflexy. Ovlivňuje iniciativu, útoky zbraněmi na dálku a lehké zbroje.",
+  con: "Odolnost — zdraví a výdrž. Určuje maximum životů a záchranné hody na výdrž.",
+  int: "Inteligence — paměť a analytické myšlení. Základ kouzelníka; ovlivňuje Mystiku, Historii a Přírodu.",
+  wis: "Moudrost — vnímavost a intuice. Základ klerika a druida; ovlivňuje Vnímání, Vhled a Přežití.",
+  cha: "Charisma — síla osobnosti a přesvědčivost. Základ barda a čaroděje; ovlivňuje Přesvědčování a Zastrašování.",
+};
+
+export const SKILL_TIP: Record<string, string> = {
+  acrobatics: "Akrobacie (Obratnost) — udržíš rovnováhu, uděláš kotrmelec nebo se vyhneš pádu.",
+  "animal-handling": "Zacházení se zvířaty (Moudrost) — uklidníš zvíře, odhadneš jeho záměr nebo ho vycvičíš.",
+  arcana: "Mystika (Inteligence) — znáš kouzla, magické předměty, kouzelné tradice a jiné sféry.",
+  athletics: "Atletika (Síla) — šplháš, skáčeš, plaveš nebo překonáváš fyzické překážky.",
+  deception: "Klamání (Charisma) — přimíš někoho uvěřit lži nebo odvedeš jeho pozornost.",
+  history: "Historie (Inteligence) — vzpomínáš na historické události, osoby, války nebo starobylé civilizace.",
+  insight: "Vhled (Moudrost) — odhadneš záměry nebo emoce druhé osoby; poznáš, zda lže.",
+  intimidation: "Zastrašování (Charisma) — ovlivníš ostatní hrozbami, výslechem nebo agresivním přístupem.",
+  investigation: "Pátrání (Inteligence) — hledáš stopy, analyzuješ scény a rozluštíš záhady.",
+  medicine: "Medicína (Moudrost) — stabilizuješ umírajícího, diagnostikuješ nemoc nebo ošetříš zranění.",
+  nature: "Příroda (Inteligence) — znáš zvířata, rostliny, počasí, terén a přírodní cykly.",
+  perception: "Vnímání (Moudrost) — zachytíš skryté tvory, neobvyklé předměty nebo hrozby ve svém okolí.",
+  performance: "Vystupování (Charisma) — zahraješ, zazpíváš nebo jinak zaujmeš publikum.",
+  persuasion: "Přesvědčování (Charisma) — ovlivníš ostatní taktním přístupem a vhodně volenými argumenty.",
+  religion: "Náboženství (Inteligence) — znáš božstva, obřady, modlitby a posvátná písma.",
+  "sleight-of-hand": "Šikovné ruce (Obratnost) — kapesní krádež, schovávání předmětů nebo prestidigitace.",
+  stealth: "Nenápadnost (Obratnost) — pohybuješ se tiše a skrytě, aniž by si tě kdo všiml.",
+  survival: "Přežití (Moudrost) — stopuješ, lovíš, orientuješ se v divočině nebo předpovídáš počasí.",
+};
+
+
 // Renders into document.body so it's never clipped by overflow or hidden behind
 // the Leaflet map layer. Position is computed from the anchor element's viewport
 // rect; clamped to viewport edges; flips above/below based on available space.

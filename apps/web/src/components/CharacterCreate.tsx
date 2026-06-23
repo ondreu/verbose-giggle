@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { csAbility, csAbilityAbbr, csSkill } from "@adm/schemas";
 import { useGame } from "../store/store";
 import { Icon } from "./Icon";
-import { SpellCard } from "./InfoCard";
+import { SpellCard, Tip, ABILITY_TIP, SKILL_TIP } from "./InfoCard";
 
 type Ability = "str" | "dex" | "con" | "int" | "wis" | "cha";
 
@@ -283,24 +283,22 @@ export function CharacterCreate({ onClose }: { onClose: () => void }) {
                     const canInc = pb ? base < pb.max && ((pb.cost[base + 1] ?? 0) - (pb.cost[base] ?? 0)) <= remaining : false;
                     const canDec = pb ? base > pb.min : false;
                     return (
-                      <div
-                        key={k}
-                        className="flex items-center gap-2 rounded-sm border border-surface1 bg-bg-mantle/50 px-2 py-1.5"
-                        title={csAbility(k)}
-                      >
-                        <div className="flex-1">
-                          <div className="text-[10px] uppercase tracking-wider text-subtext0">{csAbilityAbbr(k)}</div>
-                          <div className="font-log text-[11px] text-gold">
-                            {finalAbilities[k]} ({fmt(mod(finalAbilities[k]))})
-                            {racial > 0 && <span className="ml-1 text-subtext0">·{base}+{racial}</span>}
+                      <Tip key={k} content={<p className="font-body text-[12px] leading-snug text-text">{ABILITY_TIP[k]}</p>}>
+                        <div className="flex items-center gap-2 rounded-sm border border-surface1 bg-bg-mantle/50 px-2 py-1.5">
+                          <div className="flex-1">
+                            <div className="text-[10px] uppercase tracking-wider text-subtext0">{csAbilityAbbr(k)}</div>
+                            <div className="font-log text-[11px] text-gold">
+                              {finalAbilities[k]} ({fmt(mod(finalAbilities[k]))})
+                              {racial > 0 && <span className="ml-1 text-subtext0">·{base}+{racial}</span>}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Stepper sign="−" disabled={!canDec} onClick={() => bumpAbility(k, -1)} />
+                            <span className="w-5 text-center font-display text-base text-text">{base}</span>
+                            <Stepper sign="+" disabled={!canInc} onClick={() => bumpAbility(k, 1)} />
                           </div>
                         </div>
-                        <div className="flex items-center gap-1">
-                          <Stepper sign="−" disabled={!canDec} onClick={() => bumpAbility(k, -1)} />
-                          <span className="w-5 text-center font-display text-base text-text">{base}</span>
-                          <Stepper sign="+" disabled={!canInc} onClick={() => bumpAbility(k, 1)} />
-                        </div>
-                      </div>
+                      </Tip>
                     );
                   })}
                 </div>
@@ -320,20 +318,21 @@ export function CharacterCreate({ onClose }: { onClose: () => void }) {
                       const on = skills.includes(s);
                       const full = !on && skills.length >= cls.skillCount;
                       return (
-                        <button
-                          key={s}
-                          onClick={() => toggleSkill(s)}
-                          disabled={full}
-                          className={`rounded-sm border px-2 py-0.5 font-log text-[11px] ${
-                            on
-                              ? "border-gold/60 bg-gold/10 text-gold"
-                              : full
-                                ? "border-surface1 text-subtext0/40"
-                                : "border-surface2 text-subtext1 hover:border-gold/40"
-                          }`}
-                        >
-                          {csSkill(s)}
-                        </button>
+                        <Tip key={s} content={<p className="font-body text-[12px] leading-snug text-text">{SKILL_TIP[s] ?? csSkill(s)}</p>}>
+                          <button
+                            onClick={() => toggleSkill(s)}
+                            disabled={full}
+                            className={`rounded-sm border px-2 py-0.5 font-log text-[11px] ${
+                              on
+                                ? "border-gold/60 bg-gold/10 text-gold"
+                                : full
+                                  ? "border-surface1 text-subtext0/40"
+                                  : "border-surface2 text-subtext1 hover:border-gold/40"
+                            }`}
+                          >
+                            {csSkill(s)}
+                          </button>
+                        </Tip>
                       );
                     })}
                   </div>
