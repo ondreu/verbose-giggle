@@ -41,11 +41,18 @@ interface ClassOpt {
   subclasses: { id: string; name: string }[];
   spellList?: SpellList;
 }
+interface PointBuy {
+  budget: number;
+  min: number;
+  max: number;
+  cost: Record<number, number>;
+}
 interface Options {
   races: RaceOpt[];
   classes: ClassOpt[];
   feats: { id: string; name: string }[];
   standardArray: number[];
+  pointBuy: PointBuy;
   abilityOrder: Ability[];
 }
 
@@ -66,12 +73,14 @@ export function CharacterCreate({ onClose }: { onClose: () => void }) {
   const [raceId, setRaceId] = useState("");
   const [subraceId, setSubraceId] = useState("");
   const [classId, setClassId] = useState("");
+  // Point-buy bases start at the floor; the player spends the budget up from 8.
   const [abilities, setAbilities] = useState<Record<Ability, number>>({
-    str: 15, dex: 14, con: 13, int: 12, wis: 10, cha: 8,
+    str: 8, dex: 8, con: 8, int: 8, wis: 8, cha: 8,
   });
   const [skills, setSkills] = useState<string[]>([]);
   const [picked, setPicked] = useState<string[]>([]); // SRD spell-list selections
   const [spells, setSpells] = useState(""); // free-text fallback
+  const [backstory, setBackstory] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -102,6 +111,27 @@ export function CharacterCreate({ onClose }: { onClose: () => void }) {
     if (subrace) for (const k of Object.keys(out) as Ability[]) out[k] = Math.min(20, out[k] + (subrace.bonuses[k] ?? 0));
     return out;
   }, [abilities, race, subrace]);
+
+  // Point-buy budget: sum the cost of every base score; remaining gates the +.
+  const pb = opts?.pointBuy;
+  const spent = useMemo(
+    () => (pb ? (Object.values(abilities) as number[]).reduce((s, v) => s + (pb.cost[v] ?? 0), 0) : 0),
+    [abilities, pb],
+  );
+  const remaining = pb ? pb.budget - spent : 0;
+
+  const bumpAbility = (k: Ability, dir: 1 | -1) => {
+    if (!pb) return;
+    setAbilities((a) => {
+      const cur = a[k];
+      const next = cur + dir;
+      if (next < pb.min || next > pb.max) return a;
+      const delta = (pb.cost[next] ?? 0) - (pb.cost[cur] ?? 0);
+      if (dir === 1 && delta > remaining) return a; // can't afford
+      return { ...a, [k]: next };
+    });
+  };
+  const resetAbilities = () => setAbilities({ str: 8, dex: 8, con: 8, int: 8, wis: 8, cha: 8 });
 
   const toggleSkill = (s: string) => {
     setSkills((cur) => {
@@ -140,6 +170,7 @@ export function CharacterCreate({ onClose }: { onClose: () => void }) {
       abilities,
       skills,
       spells: chosenSpells,
+      backstory: backstory.trim() || undefined,
     });
     if (!res.ok) {
       setError(res.error ?? "Nepodařilo se vytvořit postavu");
@@ -229,29 +260,52 @@ export function CharacterCreate({ onClose }: { onClose: () => void }) {
                 </div>
               </div>
 
-              {/* Ability scores */}
+              {/* Ability scores — point-buy from a shared pool (#14). */}
               <div>
-                <Label>Vlastnosti (standardní pole {opts.standardArray.join(", ")})</Label>
-                <div className="grid grid-cols-6 gap-1.5">
-                  {opts.abilityOrder.map((k) => (
-                    <div key={k} className="rounded-sm border border-surface1 bg-bg-mantle/50 px-1 py-1.5 text-center" title={csAbility(k)}>
-                      <div className="text-[10px] uppercase tracking-wider text-subtext0">{csAbilityAbbr(k)}</div>
-                      <input
-                        type="number"
-                        min={3}
-                        max={18}
-                        value={abilities[k]}
-                        onChange={(e) =>
-                          setAbilities((a) => ({ ...a, [k]: Math.max(3, Math.min(18, Number(e.target.value) || 0)) }))
-                        }
-                        className="w-full bg-transparent text-center font-display text-base text-text outline-none"
-                      />
-                      <div className="font-log text-[10px] text-gold">
-                        {finalAbilities[k]} ({fmt(mod(finalAbilities[k]))})
-                      </div>
-                    </div>
-                  ))}
+                <div className="mb-1 flex items-center justify-between">
+                  <Label>Vlastnosti — rozděl body</Label>
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`font-log text-[11px] ${remaining < 0 ? "text-blood" : remaining === 0 ? "text-subtext0" : "text-gold"}`}
+                    >
+                      Body: {remaining}/{pb?.budget ?? 27}
+                    </span>
+                    <button type="button" className="btn-link text-[11px]" onClick={resetAbilities}>
+                      vynulovat
+                    </button>
+                  </div>
                 </div>
+                <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
+                  {opts.abilityOrder.map((k) => {
+                    const base = abilities[k];
+                    const racial = finalAbilities[k] - base;
+                    const canInc = pb ? base < pb.max && ((pb.cost[base + 1] ?? 0) - (pb.cost[base] ?? 0)) <= remaining : false;
+                    const canDec = pb ? base > pb.min : false;
+                    return (
+                      <div
+                        key={k}
+                        className="flex items-center gap-2 rounded-sm border border-surface1 bg-bg-mantle/50 px-2 py-1.5"
+                        title={csAbility(k)}
+                      >
+                        <div className="flex-1">
+                          <div className="text-[10px] uppercase tracking-wider text-subtext0">{csAbilityAbbr(k)}</div>
+                          <div className="font-log text-[11px] text-gold">
+                            {finalAbilities[k]} ({fmt(mod(finalAbilities[k]))})
+                            {racial > 0 && <span className="ml-1 text-subtext0">·{base}+{racial}</span>}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Stepper sign="−" disabled={!canDec} onClick={() => bumpAbility(k, -1)} />
+                          <span className="w-5 text-center font-display text-base text-text">{base}</span>
+                          <Stepper sign="+" disabled={!canInc} onClick={() => bumpAbility(k, 1)} />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                <p className="mt-1 font-log text-[10px] text-subtext0">
+                  Základ {pb?.min ?? 8}–{pb?.max ?? 15}; rasové bonusy se přičtou navrch.
+                </p>
               </div>
 
               {/* Skills */}
@@ -320,6 +374,17 @@ export function CharacterCreate({ onClose }: { onClose: () => void }) {
                 </div>
               )}
 
+              {/* Backstory — free text; becomes narration grounding for the DM. */}
+              <div>
+                <Label>Příběh postavy (volitelné)</Label>
+                <textarea
+                  className="settings-input min-h-[5rem] resize-y bg-bg-crust text-text"
+                  value={backstory}
+                  onChange={(e) => setBackstory(e.target.value)}
+                  placeholder="Odkud přichází, co ji žene, koho ztratila… Pár vět stačí, vypravěč je použije."
+                />
+              </div>
+
               {error && <p className="font-log text-sm text-blood">{error}</p>}
             </div>
           )}
@@ -340,6 +405,21 @@ export function CharacterCreate({ onClose }: { onClose: () => void }) {
 
 function Label({ children }: { children: React.ReactNode }) {
   return <label className="mb-1 block font-log text-[11px] uppercase tracking-wider text-subtext0">{children}</label>;
+}
+
+/** Small round +/- control for point-buy ability steppers. */
+function Stepper({ sign, onClick, disabled }: { sign: "+" | "−"; onClick: () => void; disabled?: boolean }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={sign === "+" ? "Přidat" : "Ubrat"}
+      className="flex h-6 w-6 items-center justify-center rounded-sm border border-surface2 font-display text-base leading-none text-subtext1 transition-colors hover:border-gold/60 hover:text-gold disabled:cursor-not-allowed disabled:opacity-30"
+    >
+      {sign}
+    </button>
+  );
 }
 
 function SpellPicker({
