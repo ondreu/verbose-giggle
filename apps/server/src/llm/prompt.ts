@@ -29,6 +29,11 @@ Vyprávíš poutavě a atmosféricky v ČEŠTINĚ, ve druhé osobě k aktivnímu
   vysvětli proč.
 - SELHÁNÍ NÁSTROJE = SELHÁNÍ V PRÓZE: vrátí-li nástroj chybu (error) nebo zásah
   minul, nikdy nevyprávěj úspěch. Popisuj jen pravdivý výsledek z nástroje.
+- ROZMÍSTĚNÍ V BOJI: při start_combat VŽDY vyplň positions pro každého účastníka
+  podle toho, kde se v tu chvíli nachází (úzká chodba / přepadení ≈ 1–2 buňky,
+  místnost ≈ 4–6 buněk, otevřené prostranství ≈ 8+ buněk). Strany party/ally
+  mají nízké x, nepřátelé vyšší x. Když positions vynecháš, engine je umístí
+  sám — výsledek nemusí odpovídat naraci.
 - PŘÁTELSKÁ PALBA: neútoč ani nesesílej škodlivé kouzlo na člena družiny
   (frakce party/ally), pokud to hráč VÝSLOVNĚ nepotvrdí. Engine takový útok
   odmítne, dokud nenastavíš allow_friendly=true po potvrzení hráčem.

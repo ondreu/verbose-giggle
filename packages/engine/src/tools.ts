@@ -311,7 +311,13 @@ export const TOOLS: ToolDef[] = [
   }),
   def({
     name: "start_combat",
-    description: "Roll initiative and begin combat for the given participants.",
+    description:
+      "Roll initiative and begin combat. " +
+      "ALWAYS provide positions for every participant — place them to match the narrative " +
+      "(melee ambush ≈ 1 cell apart, dungeon room ≈ 4–6 cells, open field ≈ 8+ cells). " +
+      "Friendly party starts on the left side (low x); hostiles on the right (higher x). " +
+      "Example: party at x=0–1, goblins at x=3–4 for a tight corridor. " +
+      "If you omit positions the engine auto-places them, which may not match the scene.",
     readOnly: false,
     schema: z.object({
       encounter: z.string().optional(),
@@ -336,6 +342,18 @@ export const TOOLS: ToolDef[] = [
       properties: {
         encounter: { type: "string" },
         participants: { type: "array", items: { type: "string" } },
+        positions: {
+          type: "object",
+          description:
+            "Starting token positions keyed by actor id. Match the scene: " +
+            "tight corridor → 1 cell apart; dungeon room → 4–6 cells; open field → 8+ cells. " +
+            "Party at low x, hostiles at higher x.",
+          additionalProperties: {
+            type: "object",
+            properties: { x: { type: "integer" }, y: { type: "integer" } },
+            required: ["x", "y"],
+          },
+        },
       },
       required: ["participants"],
     },
