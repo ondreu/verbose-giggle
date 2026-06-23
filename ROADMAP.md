@@ -296,8 +296,13 @@ on old code and items **#15, #17, #18** are likely already resolved by updating.
   carry the extra maps and the `SessionManager` threads them into
   `createSrdIndex`. Tolerant by design: missing files are fine, so the 3-file
   minimal setup still works (covered by `apps/server/test/srd.test.ts`). The
-  data is loaded but not yet wired into creation (#14)/leveling (#13) — that
-  deepening is the follow-up. Originally:
+  data is now **consumed**, not just loaded: creation (#14) and leveling (#13)
+  use races/subraces/classes/subclasses/spell-lists/feats; spells map full
+  mechanics (damage scaling by slot/level, attack type, save effect, healing);
+  class starting equipment is granted and AC is derived from armor; monster
+  statblocks carry special/legendary/reaction + save-based actions; magic items
+  resolve as loot; and the `lookup` tool exposes every category to the DM.
+  Originally:
   - **Races / Subraces** (`5e-SRD-Races.json`, `5e-SRD-Subraces.json`) — ability
     bonuses, speed, traits; feeds character creation (#14).
   - **Classes / Subclasses / Features / Traits** (`5e-SRD-Classes.json`,
