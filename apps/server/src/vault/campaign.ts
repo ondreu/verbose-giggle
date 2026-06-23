@@ -7,12 +7,14 @@ import {
   EncounterSchema,
   ItemSchema,
   LocationSchema,
+  QuestSchema,
   SessionState,
   type Actor,
   type Campaign,
   type Encounter,
   type Item,
   type Location,
+  type Quest,
 } from "@adm/schemas";
 import { listNotes, readNote, writeNote, type Note } from "./notes.js";
 
@@ -25,6 +27,8 @@ export interface LoadedCampaign {
   locations: Record<string, Location>;
   encounters: Record<string, Encounter>;
   items: Record<string, Item>;
+  /** Authored quest templates (`quests/*.md`, #19); live progress is in session. */
+  quests: Record<string, Quest>;
   /** Free lore notes (factions, quests) for narration grounding (§6). */
   lore: Record<string, { id: string; name: string; body: string }>;
 }
@@ -82,6 +86,14 @@ export async function loadCampaign(campaignDir: string): Promise<LoadedCampaign>
     else console.warn(`[vault] skipping invalid item ${file}: ${parsed.error.message}`);
   }
 
+  const quests: Record<string, Quest> = {};
+  for (const file of await listNotes(path.join(campaignDir, "quests"))) {
+    const note = await readNote(file);
+    const parsed = QuestSchema.safeParse({ type: "quest", ...(note.data as object) });
+    if (parsed.success) quests[parsed.data.id] = parsed.data;
+    else console.warn(`[vault] skipping invalid quest ${file}: ${parsed.error.message}`);
+  }
+
   const lore: LoadedCampaign["lore"] = {};
   for (const file of await listNotes(path.join(campaignDir, "lore"))) {
     const note = await readNote<{ id?: string; name?: string }>(file);
@@ -89,7 +101,7 @@ export async function loadCampaign(campaignDir: string): Promise<LoadedCampaign>
     lore[id] = { id, name: note.data.name ?? id, body: note.body };
   }
 
-  return { dir: campaignDir, config, actors, actorFiles, locations, encounters, items, lore };
+  return { dir: campaignDir, config, actors, actorFiles, locations, encounters, items, quests, lore };
 }
 
 const sessionPath = (dir: string) => path.join(dir, "state", "session.json");
@@ -110,6 +122,7 @@ export async function loadSession(c: LoadedCampaign): Promise<SessionState> {
       combat: null,
       log: [],
       chat: [],
+      quests: {},
       ending: null,
     };
     return SessionState.parse(seeded);

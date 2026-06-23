@@ -3,6 +3,7 @@ import { useGame } from "../store/store";
 import { Icon } from "../components/Icon";
 import { Markdown } from "../components/Markdown";
 import { DiaryModal } from "./DiaryModal";
+import { QuestLogModal } from "./QuestLogModal";
 
 
 export function ChatPanel() {
@@ -22,8 +23,12 @@ export function ChatPanel() {
   const undoTurn = useGame((s) => s.undoTurn);
   const generateImage = useGame((s) => s.generateImage);
   const imageLoading = useGame((s) => s.imageLoading);
+  const activeQuests = useGame(
+    (s) => Object.values(s.session?.quests ?? {}).filter((q) => q.status === "active").length,
+  );
   const [input, setInput] = useState("");
   const [diaryOpen, setDiaryOpen] = useState(false);
+  const [questsOpen, setQuestsOpen] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -60,6 +65,17 @@ export function ChatPanel() {
           >
             <Icon name="document" size={12} />
             shrnutí
+          </button>
+          <button
+            className="flex items-center gap-1 font-log text-[11px] normal-case text-subtext0 hover:text-gold"
+            onClick={() => setQuestsOpen(true)}
+            title="Otevřít deník úkolů"
+          >
+            <Icon name="quest" size={12} />
+            úkoly
+            {activeQuests > 0 && (
+              <span className="rounded-full bg-gold/20 px-1 text-[9px] font-semibold text-gold">{activeQuests}</span>
+            )}
           </button>
           <button
             className="flex items-center gap-1 font-log text-[11px] normal-case text-subtext0 hover:text-gold"
@@ -114,6 +130,7 @@ export function ChatPanel() {
         </div>
       </header>
       {diaryOpen && <DiaryModal onClose={() => setDiaryOpen(false)} />}
+      {questsOpen && <QuestLogModal onClose={() => setQuestsOpen(false)} />}
 
       <div className="flex-1 overflow-y-auto px-4 py-3">
         {narration.length === 0 && (

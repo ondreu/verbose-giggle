@@ -358,29 +358,29 @@ sheet so the parchment is the one place you act from (BG3-style action surface).
 
 ## New features
 
-- **#19 — Automatic quest tracking.** Track quest state without the player
-  managing it by hand, and without the LLM inventing progress.
-  - **Data:** add a `quest` entity — authored as `quests/*.md` notes
-    (frontmatter = id, title, giver, status `active|completed|failed`,
-    `objectives: [{ id, text, done }]`; body = flavour) and add a schema in
-    `packages/schemas` (alongside Location/Encounter/etc.). Live progress lives
-    in session state so it persists per playthrough.
-  - **Mutation through the engine (determinism):** the LLM never edits quest
-    state as free text. Add engine tools — e.g. `quest_start`, `quest_advance`
-    (tick an objective), `quest_complete`/`quest_fail` — validated with `zod`
-    and appended to the visible log like every other mutation
-    (`packages/engine/src/tools.ts`, `apps/server/src/session/*`). The DM loop
-    calls them when narration implies a state change, so the log shows e.g.
-    *"Quest 'Goblins of the Mill' → objective 'Find the boss' complete."*
-  - **Auto-detection:** prompt the DM to recognise quest triggers (accept,
-    progress, resolve) from player actions and authored hooks (a location's
-    `encounter_table`, lore notes) and call the tools — surfaced for audit in
-    the dice/event log, never silently.
-  - **UI:** a quest log panel/modal (active vs completed, objective checklist),
-    plus a subtle "new/updated quest" cue in chat. New panel under
-    `apps/web/src/panels/`, wired to session state via the store.
-  - Pairs with the start-up menu (#2) and the showcase vault (#5 — author a few
-    quests so it demos).
+- **[x] #19 — Automatic quest tracking.** Done. Quest state is tracked without
+  the player managing it by hand, and the LLM never invents progress.
+  - **Data:** new `quest` entity (`QuestSchema`/`QuestRuntime` in
+    `packages/schemas/src/quest.ts`) — authored as `quests/*.md` notes
+    (frontmatter = id, title, giver, status, `objectives: [{ id, text, done }]`;
+    body = flavour), loaded by `loadCampaign`. Live progress lives in
+    `SessionState.quests` so it persists per playthrough.
+  - **Mutation through the engine (determinism):** new pure helpers in
+    `packages/engine/src/quests.ts` + tools `quest_start` / `quest_advance` /
+    `quest_complete` / `quest_fail` (zod-validated), each appended to the
+    visible dice log (`kind: "quest"`). The DM loop calls them when narration
+    implies a state change; `SessionManager.applyTool` enriches `quest_start`
+    from the authored note so the model need only pass the quest id.
+  - **Auto-detection:** the DM system prompt gained a "ÚKOLY" section
+    instructing the model to recognise accept/progress/resolve triggers and call
+    the tools; the scene snapshot lists active quests (with open objectives) and
+    authored quests available to start, so the model uses real ids.
+  - **UI:** a `QuestLogModal` (active vs completed/failed with an objective
+    checklist), opened from a "úkoly" toolbar button (with an active-count
+    badge) and wired to `session.quests` via the store; quest changes also get
+    a gold cue in the dice log.
+  - Example quest authored in the showcase vault (`velen-roads/quests/
+    goblini-z-mlyna.md`). Covered by engine + server tests.
 
 - **[x] #20 — Consume the rest of the SRD dataset.** Done. The loader
   (`apps/server/src/srd/load.ts`) now maps Races/Subraces, Classes/Subclasses/

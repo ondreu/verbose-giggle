@@ -223,3 +223,13 @@ export function csSpellSchool(id?: string): string {
   if (!id) return "";
   return SPELL_SCHOOL_CS[id] ?? id;
 }
+
+/** Quest lifecycle status → Czech (#19). */
+const QUEST_STATUS_CS: Record<string, string> = {
+  active: "Aktivní",
+  completed: "Splněno",
+  failed: "Nezdařeno",
+};
+export function csQuestStatus(status: string): string {
+  return QUEST_STATUS_CS[status] ?? status;
+}

@@ -34,6 +34,9 @@ const PATHS: Record<string, string> = {
   // Lined document for "summary / recap" (#25), distinct from the scroll/diary.
   document:
     "M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z",
+  // Clipboard with a check, for the quest log (#19).
+  quest:
+    "M9 2h6a1 1 0 0 1 1 1h2a2 2 0 0 1 2 2v15a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h2a1 1 0 0 1 1-1Zm0 2v1h6V4H9Zm-2 3v13h10V7H7Zm3.4 9.4-2.1-2.1 1.1-1.1 1 1 2.9-2.9 1.1 1.1-4 4Z",
 };
 
 export function Icon({
