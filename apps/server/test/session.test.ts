@@ -114,6 +114,50 @@ describe("LLM turn loop (mocked model)", () => {
     expect(events).toContain("narration");
   });
 
+  it("streams the final answer token-by-token and discards tool-round preamble (#32)", async () => {
+    const mgr = await SessionManager.open(await freshCampaign());
+
+    // Round 1: emits a preamble token, then requests a tool (preamble must be
+    // discarded). Round 2: streams the real narration in two chunks.
+    let call = 0;
+    const llm = {
+      async chat(_m: unknown, _t: unknown, onDelta?: (d: string) => void) {
+        call++;
+        if (call === 1) {
+          onDelta?.("Přemýšlím…");
+          return {
+            content: "Přemýšlím…",
+            toolCalls: [{ id: "t1", name: "roll", args: { expr: "1d20" } }],
+          };
+        }
+        onDelta?.("Kostka ");
+        onDelta?.("padla.");
+        return { content: "Kostka padla.", toolCalls: [] };
+      },
+    } as unknown as LlmClient;
+
+    const events: { type: string; text?: string }[] = [];
+    const bus = {
+      emit: (e: { type: string; text?: string }) => events.push(e),
+      subscribe: () => () => undefined,
+    } as unknown as EventBus;
+
+    const { narration } = await runTurn({ manager: mgr, llm, bus, input: "Hodím kostkou." });
+
+    expect(narration).toBe("Kostka padla.");
+    const types = events.map((e) => e.type);
+    // Preamble streamed, then discarded when the round turned out to be a tool call.
+    expect(types).toContain("narration_delta");
+    expect(types).toContain("narration_discard");
+    // The discard precedes the final narration finalizer.
+    expect(types.indexOf("narration_discard")).toBeLessThan(types.lastIndexOf("narration"));
+    // The real answer streamed in chunks before being finalized.
+    const deltaTexts = events.filter((e) => e.type === "narration_delta").map((e) => e.text);
+    expect(deltaTexts).toContain("Kostka ");
+    expect(deltaTexts).toContain("padla.");
+    expect(types).toContain("narration");
+  });
+
   it("runIntro narrates an opening scene and records it once (#31)", async () => {
     const { MockLlmClient } = await import("../src/llm/mock.js");
     const { runIntro } = await import("../src/session/loop.js");

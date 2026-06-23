@@ -3,6 +3,12 @@ import type { LogEntry, SessionState } from "@adm/schemas";
 
 export type GameEvent =
   | { type: "narration"; text: string }
+  // Progressive narration streaming (#32): `narration_delta` carries an
+  // incremental chunk of the DM's final answer; `narration_discard` cancels a
+  // partial stream that turned out to be a tool-call round (preamble, not the
+  // final answer). A trailing `narration` event finalizes the streamed line.
+  | { type: "narration_delta"; text: string }
+  | { type: "narration_discard" }
   | { type: "log"; entry: LogEntry }
   | { type: "state"; state: SessionState }
   | { type: "thinking"; tool: string }

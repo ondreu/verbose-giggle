@@ -5,6 +5,7 @@ import { Markdown } from "../components/Markdown";
 import { DiaryModal } from "./DiaryModal";
 import { QuestLogModal } from "./QuestLogModal";
 import { ReferenceModal } from "./ReferenceModal";
+import { DiceLogPanel } from "./DiceLogPanel";
 
 
 export function ChatPanel() {
@@ -32,10 +33,13 @@ export function ChatPanel() {
   const [questsOpen, setQuestsOpen] = useState(false);
   const [refOpen, setRefOpen] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
+  // Follow streaming text: the last line grows without changing array length,
+  // so key the scroll on its text length too (#32).
+  const lastLen = narration[narration.length - 1]?.text.length ?? 0;
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [narration.length, thinking, aiActing]);
+  }, [narration.length, lastLen, thinking, aiActing]);
 
   const submit = () => {
     const text = input.trim();
@@ -149,31 +153,27 @@ export function ChatPanel() {
             Svíce zaprská. Pán jeskyně čeká na tvůj první krok…
           </p>
         )}
-        {narration.map((line) =>
-          line.role === "roll" ? (
-            <RollLine key={line.id} kind={line.kind} text={line.text} />
-          ) : (
-            <div
-              key={line.id}
-              className={
-                line.role === "dm"
-                  ? "mb-4 font-body text-[1.12rem] font-medium leading-relaxed text-text"
-                  : "mb-4 border-l-2 border-gold/40 pl-3 font-body italic text-subtext1"
-              }
-            >
-              {line.role === "dm" ? (
-                <Markdown text={line.text} />
-              ) : (
-                <p>
-                  <span className="mr-1 font-display text-xs uppercase tracking-wider text-gold">
-                    {line.actor ?? "Hráč"} ·{" "}
-                  </span>
-                  {line.text}
-                </p>
-              )}
-            </div>
-          ),
-        )}
+        {narration.map((line) => (
+          <div
+            key={line.id}
+            className={
+              line.role === "dm"
+                ? "mb-4 font-body text-[1.12rem] font-medium leading-relaxed text-text"
+                : "mb-4 border-l-2 border-gold/40 pl-3 font-body italic text-subtext1"
+            }
+          >
+            {line.role === "dm" ? (
+              <Markdown text={line.text} />
+            ) : (
+              <p>
+                <span className="mr-1 font-display text-xs uppercase tracking-wider text-gold">
+                  {line.actor ?? "Hráč"} ·{" "}
+                </span>
+                {line.text}
+              </p>
+            )}
+          </div>
+        ))}
         {aiActing && (
           <p className="mb-2 flex items-center gap-1.5 font-display text-sm tracking-wide text-arcane">
             <Icon name="d20" size={14} className="animate-pulse" />
@@ -195,6 +195,8 @@ export function ChatPanel() {
         </div>
       )}
 
+      <DiceLogPanel />
+
       <div className="flex gap-2 border-t border-black/60 bg-bg-mantle/60 p-2">
         <textarea
           className="min-h-[2.6rem] flex-1 resize-none rounded-sm border border-surface1 bg-bg-crust px-3 py-2 font-body text-text outline-none focus:border-gold/60"
@@ -214,47 +216,5 @@ export function ChatPanel() {
         </button>
       </div>
     </section>
-  );
-}
-
-// Per-kind accent for inline roll cards (#33): border, text, and a soft tint.
-const ROLL_STYLE: Record<string, { border: string; text: string; bg: string }> = {
-  attack: { border: "border-gold/60", text: "text-gold", bg: "bg-gold/10" },
-  damage: { border: "border-blood/60", text: "text-blood", bg: "bg-blood/10" },
-  spell: { border: "border-arcane/60", text: "text-arcane", bg: "bg-arcane/10" },
-  save: { border: "border-steel/60", text: "text-steel", bg: "bg-steel/10" },
-  check: { border: "border-arcane/50", text: "text-arcane", bg: "bg-arcane/10" },
-  "death-save": { border: "border-blood/60", text: "text-blood", bg: "bg-blood/10" },
-  initiative: { border: "border-bone/50", text: "text-bone", bg: "bg-bone/10" },
-};
-
-/** Highlight the headline number/outcome so a roll reads at a glance. */
-function emphasize(text: string) {
-  const m = text.match(/(KRIT|krit|zásah|úspěch|minutí|neúspěch)/);
-  if (!m) return text;
-  const i = text.lastIndexOf(m[0]);
-  return (
-    <>
-      {text.slice(0, i)}
-      <span className="font-display font-semibold">{text.slice(i)}</span>
-    </>
-  );
-}
-
-/** A prominent animated dice-roll card shown inline in the narration (#33). */
-function RollLine({ kind, text }: { kind?: string; text: string }) {
-  const style =
-    (kind && ROLL_STYLE[kind]) || { border: "border-surface2", text: "text-subtext1", bg: "bg-bg-mantle/50" };
-  return (
-    <div
-      className={`log-enter mb-3 flex items-center gap-3 rounded-md border-2 ${style.border} ${style.bg} px-3 py-2.5 shadow-sm`}
-    >
-      <span
-        className={`grid h-9 w-9 shrink-0 place-items-center rounded-full border ${style.border} ${style.bg}`}
-      >
-        <Icon name="d20" size={24} className={`dice-rolling ${style.text}`} />
-      </span>
-      <span className={`font-log text-sm font-medium leading-snug ${style.text}`}>{emphasize(text)}</span>
-    </div>
   );
 }

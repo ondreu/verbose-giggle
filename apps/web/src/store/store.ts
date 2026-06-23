@@ -3,16 +3,14 @@ import type { Actor, Campaign, Encounter, Location, LogEntry, SessionState } fro
 
 interface NarrationLine {
   id: number;
-  role: "dm" | "player" | "roll";
+  role: "dm" | "player";
   text: string;
   /** Display name of the acting character (player lines only); falls back in UI. */
   actor?: string;
-  /** Log kind for roll lines (attack/check/save/…), used for styling. */
-  kind?: string;
 }
 
-/** Dice-bearing log kinds surfaced inline in the chat as animated roll cards. */
-const ROLL_KINDS = new Set([
+/** Dice-bearing log kinds rendered as animated roll cards in the dice log (#33/#51). */
+export const ROLL_KINDS = new Set([
   "roll", "check", "save", "attack", "damage", "spell", "death-save", "initiative",
 ]);
 
@@ -48,9 +46,11 @@ const PREFS_KEY = "adm.prefs";
 interface Prefs {
   ttsEnabled: boolean;
   ttsProvider: TtsProvider;
+  /** Whether the collapsible dice-log panel is expanded (#51). */
+  diceLogOpen: boolean;
 }
 
-const DEFAULT_PREFS: Prefs = { ttsEnabled: false, ttsProvider: "auto" };
+const DEFAULT_PREFS: Prefs = { ttsEnabled: false, ttsProvider: "auto", diceLogOpen: false };
 
 function loadPrefs(): Prefs {
   try {
@@ -63,6 +63,8 @@ function loadPrefs(): Prefs {
         parsed.ttsProvider === "azure" || parsed.ttsProvider === "piper" || parsed.ttsProvider === "auto"
           ? parsed.ttsProvider
           : DEFAULT_PREFS.ttsProvider,
+      diceLogOpen:
+        typeof parsed.diceLogOpen === "boolean" ? parsed.diceLogOpen : DEFAULT_PREFS.diceLogOpen,
     };
   } catch {
     return { ...DEFAULT_PREFS };
@@ -108,6 +110,8 @@ interface GameStore {
   narration: NarrationLine[];
   ttsEnabled: boolean;
   ttsProvider: TtsProvider;
+  /** Whether the collapsible dice-log panel is expanded (#51). */
+  diceLogOpen: boolean;
   /** True while narration audio is actively playing (drives the stop button). */
   speaking: boolean;
   reachable: Cell[];
@@ -145,6 +149,8 @@ interface GameStore {
   fetchLog: () => Promise<string>;
   toggleTts: () => void;
   setTtsProvider: (provider: TtsProvider) => void;
+  /** Expand/collapse the dice-log panel (#51). */
+  toggleDiceLog: () => void;
   /** Stop any narration audio currently playing (#30). */
   stopSpeech: () => void;
   generateImage: (subject: ImageSubject, id?: string, label?: string) => Promise<void>;
@@ -179,6 +185,10 @@ interface GameStore {
 }
 
 let lineSeq = 0;
+// The DM line currently being streamed token-by-token (#32), or null when no
+// stream is in flight. Deltas append to it; `narration` finalizes it; a
+// `narration_discard` (tool-call round) removes it.
+let streamingLineId: number | null = null;
 // Guards the one-shot campaign intro against concurrent re-entry (#31).
 let introInFlight = false;
 // Pending resolver for an in-flight target request (#38).
@@ -201,6 +211,7 @@ export const useGame = create<GameStore>((set, get) => ({
   narration: [],
   ttsEnabled: initialPrefs.ttsEnabled,
   ttsProvider: initialPrefs.ttsProvider,
+  diceLogOpen: initialPrefs.diceLogOpen,
   speaking: false,
   reachable: [],
   aoeCells: [],
@@ -255,9 +266,41 @@ export const useGame = create<GameStore>((set, get) => ({
   connect: () => {
     const source = new EventSource("/api/events");
     source.addEventListener("ready", () => set({ connected: true }));
+    // A streamed chunk of the DM's answer (#32): start a fresh DM line on the
+    // first chunk, then append to it as more arrive.
+    source.addEventListener("narration_delta", (e) => {
+      const { text } = JSON.parse((e as MessageEvent).data) as { text: string };
+      set((s) => {
+        if (streamingLineId === null) {
+          streamingLineId = lineSeq++;
+          return { narration: [...s.narration, { id: streamingLineId, role: "dm", text }] };
+        }
+        const id = streamingLineId;
+        return {
+          narration: s.narration.map((l) => (l.id === id ? { ...l, text: l.text + text } : l)),
+        };
+      });
+    });
+    // The partial stream was a tool-call round's preamble, not the final answer:
+    // drop the line so only real narration remains (#32).
+    source.addEventListener("narration_discard", () => {
+      if (streamingLineId === null) return;
+      const id = streamingLineId;
+      streamingLineId = null;
+      set((s) => ({ narration: s.narration.filter((l) => l.id !== id) }));
+    });
     source.addEventListener("narration", (e) => {
       const { text } = JSON.parse((e as MessageEvent).data);
-      set((s) => ({ narration: [...s.narration, { id: lineSeq++, role: "dm", text }] }));
+      set((s) => {
+        // Finalize the in-flight streamed line with the authoritative text…
+        if (streamingLineId !== null) {
+          const id = streamingLineId;
+          streamingLineId = null;
+          return { narration: s.narration.map((l) => (l.id === id ? { ...l, text } : l)) };
+        }
+        // …or append a fresh line when nothing was streamed (recap, mock).
+        return { narration: [...s.narration, { id: lineSeq++, role: "dm", text }] };
+      });
       if (get().ttsEnabled) {
         void speak(text, get().ttsProvider, () => set({ speaking: false }));
         set({ speaking: true });
@@ -265,19 +308,11 @@ export const useGame = create<GameStore>((set, get) => ({
     });
     source.addEventListener("log", (e) => {
       const { entry } = JSON.parse((e as MessageEvent).data) as { entry: LogEntry };
-      set((s) => {
-        const next: Partial<GameStore> = s.session
-          ? { session: { ...s.session, log: [...s.session.log, entry] } }
-          : {};
-        // Surface dice rolls inline in the chat (animated), not just in the log.
-        if (ROLL_KINDS.has(entry.kind)) {
-          next.narration = [
-            ...s.narration,
-            { id: lineSeq++, role: "roll", text: entry.detail, kind: entry.kind },
-          ];
-        }
-        return next;
-      });
+      // Dice rolls live in the collapsible dice-log panel (#51), sourced from
+      // session.log — no longer interleaved into the narrative chat.
+      set((s) =>
+        s.session ? { session: { ...s.session, log: [...s.session.log, entry] } } : {},
+      );
     });
     source.addEventListener("state", (e) => {
       const { state } = JSON.parse((e as MessageEvent).data) as { state: SessionState };
@@ -296,6 +331,7 @@ export const useGame = create<GameStore>((set, get) => ({
     });
     // The campaign was hot-swapped or rolled back server-side: re-pull everything.
     source.addEventListener("reload", () => {
+      streamingLineId = null;
       set({ narration: [] });
       void get().hydrate();
       void get().listCampaigns();
@@ -438,7 +474,7 @@ export const useGame = create<GameStore>((set, get) => ({
   toggleTts: () =>
     set((s) => {
       const ttsEnabled = !s.ttsEnabled;
-      savePrefs({ ttsEnabled, ttsProvider: s.ttsProvider });
+      savePrefs({ ttsEnabled, ttsProvider: s.ttsProvider, diceLogOpen: s.diceLogOpen });
       // Turning narration off should silence anything already playing (#30).
       if (!ttsEnabled) stopAudio();
       return { ttsEnabled, speaking: ttsEnabled ? s.speaking : false };
@@ -446,8 +482,15 @@ export const useGame = create<GameStore>((set, get) => ({
 
   setTtsProvider: (provider) =>
     set((s) => {
-      savePrefs({ ttsEnabled: s.ttsEnabled, ttsProvider: provider });
+      savePrefs({ ttsEnabled: s.ttsEnabled, ttsProvider: provider, diceLogOpen: s.diceLogOpen });
       return { ttsProvider: provider };
+    }),
+
+  toggleDiceLog: () =>
+    set((s) => {
+      const diceLogOpen = !s.diceLogOpen;
+      savePrefs({ ttsEnabled: s.ttsEnabled, ttsProvider: s.ttsProvider, diceLogOpen });
+      return { diceLogOpen };
     }),
 
   stopSpeech: () => {

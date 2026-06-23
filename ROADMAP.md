@@ -185,12 +185,14 @@ on old code and items **#15, #17, #18** are likely already resolved by updating.
   for their own sake; keep the dark-fantasy intent in `theme/tokens.css`).
 - **#7 — Font legibility.** The display font is pretty but hard to read; bump
   weight/size a touch for body text and lean on Markdown (#1) for structure.
-- **#51 — Deník kostek schovat jako vedlejší panel.** Deník kostek (dice log)
-  je bonusový doplněk, ne primární obsah — ale automatické scrollování na nový
-  záznam neustále přerušuje čtení narativního chatu. Přesunout ho do skryté /
-  sbalitelné sekce (tab vedle chatu, drawer, kolapsibilní panel apod.) tak aby
-  byl dostupný pro ty kdo ho chtějí sledovat, ale standardně nepřekážel.
-  `apps/web/src/panels/ChatPanel.tsx` nebo nový `DiceLogPanel.tsx`.
+- **[x] #51 — Deník kostek schovat jako vedlejší panel.** Done. Hody už nejsou
+  vplétány do narativního chatu (zdroj přerušujícího auto-scrollu) — žijí v novém
+  sbalitelném `DiceLogPanel.tsx` zakotveném nad vstupním polem v `ChatPanel`.
+  Panel čte `session.log` (takže historie hodů přežije reload, ne jen živé SSE),
+  filtruje na `ROLL_KINDS`, a má vlastní izolovaný auto-scroll, který nikdy
+  netahá za čtení příběhu. Standardně sbalený s počtem hodů v odznaku; stav
+  rozbalení se ukládá do `localStorage` (`Prefs.diceLogOpen`). Animovaná karta
+  hodu (#33) se přesunula do `DiceLogPanel` a animuje jen nejnovější záznam.
 - **#47 — UI layout adjustments per user sketches.** Visual and layout changes
   per wireframes supplied by the user. Awaiting delivery of sketches.
   - **#47a — Layout implementation.** Adjust panel layout, navigation and visual
@@ -232,12 +234,20 @@ on old code and items **#15, #17, #18** are likely already resolved by updating.
   the `/api/intro` endpoint fires it once (no-op if any chat history exists), and
   the web app calls it on entering play with empty narration. The offline mock
   narrator has a matching opening-scene branch. Covered by a server test.
-- **#32 — Streaming / lazy-loading of AI text.** AI narration currently appears
-  all at once after the full response arrives. Stream tokens to the client as
-  they are generated (server-sent events or WebSocket stream) so text appears
-  progressively. This also makes long responses feel faster. Server: switch the
-  Claude call to streaming mode; client: append tokens to the chat line as they
-  arrive. `apps/server/src/llm/`, `apps/web/src/store/store.ts`.
+- **[x] #32 — Streaming / lazy-loading of AI text.** Done. The DM's narration now
+  appears progressively. Server: `LlmClient.chat` gained an optional `onDelta`
+  callback driving an OpenAI `stream:true` path (content tokens stream out; the
+  fragmented tool-call deltas are accumulated by index into whole calls), so the
+  turn loop stays agnostic to which path ran. `executeToolLoop` streams each
+  final-answer token over the existing SSE bus as `narration_delta`; because a
+  round may turn out to be a tool call rather than the final answer, any streamed
+  preamble is retracted with `narration_discard`, and the trailing `narration`
+  event finalizes the line with the authoritative text (and triggers TTS once).
+  `runIntro` opts out of streaming (it returns over HTTP to dodge a first-load
+  SSE race). Client (`store.ts`): a `narration_delta` starts/extends a live DM
+  line, `narration_discard` drops it, `narration` finalizes (or appends a fresh
+  line for non-streamed paths like recap/mock); chat auto-scroll follows the
+  growing text. Covered by a server test.
 - **[x] #33 — Ability-check chips in chat: larger and with dice animation.**
   Done. The inline roll cards (`RollLine` in `apps/web/src/panels/ChatPanel.tsx`)
   are now bigger and bolder — a 2px faction-coloured border with a soft tint, a

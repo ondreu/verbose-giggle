@@ -36,14 +36,28 @@ async function executeToolLoop(opts: {
   bus: EventBus;
   gs: GameState;
   messages: ChatMsg[];
+  /** Stream the final answer token-by-token to the client (#32). Default true. */
+  stream?: boolean;
 }): Promise<string> {
-  const { manager, llm, bus, gs, messages } = opts;
+  const { manager, llm, bus, gs, messages, stream = true } = opts;
   const specs = toolSpecs();
 
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
-    const resp = await llm.chat(messages, specs);
+    // Stream content tokens as they arrive. We don't yet know whether this
+    // round is the final answer or a tool-call round, so any streamed text from
+    // a tool-call round is retracted with `narration_discard` below.
+    let streamed = false;
+    const onDelta = stream
+      ? (delta: string) => {
+          streamed = true;
+          bus.emit({ type: "narration_delta", text: delta });
+        }
+      : undefined;
+    const resp = await llm.chat(messages, specs, onDelta);
 
     if (resp.toolCalls.length > 0) {
+      // The streamed text (if any) was preamble, not the final answer: drop it.
+      if (streamed) bus.emit({ type: "narration_discard" });
       messages.push({
         role: "assistant",
         content: resp.content,
@@ -196,7 +210,10 @@ export async function runIntro(opts: {
     { role: "system", content: sceneSnapshot(manager.session, gs.actors, sceneConnections(manager), availableQuests(manager)) },
     { role: "user", content: CAMPAIGN_START },
   ];
-  const intro = await executeToolLoop({ manager, llm, bus, gs, messages });
+  // No streaming: the intro is returned over HTTP and appended by the client
+  // directly (avoiding an SSE race on first load), so streamed deltas would
+  // duplicate it.
+  const intro = await executeToolLoop({ manager, llm, bus, gs, messages, stream: false });
   if (intro) {
     manager.session.chat.push({ role: "assistant", content: intro });
     await manager.log(`\n**DM (úvod):** ${intro}`);
