@@ -80,7 +80,6 @@ export function CharacterCreate({ onClose }: { onClose: () => void }) {
   });
   const [skills, setSkills] = useState<string[]>([]);
   const [picked, setPicked] = useState<string[]>([]); // SRD spell-list selections
-  const [spells, setSpells] = useState(""); // free-text fallback
   const [backstory, setBackstory] = useState("");
   const [error, setError] = useState<string | null>(null);
 
@@ -161,8 +160,8 @@ export function CharacterCreate({ onClose }: { onClose: () => void }) {
   const submit = async () => {
     if (!race || !cls) return;
     setError(null);
-    // Prefer the SRD spell picks; fall back to the free-text field otherwise.
-    const chosenSpells = spellList ? picked : spells.split(",").map((s) => s.trim()).filter(Boolean);
+    // Spells come only from the validated SRD picker (no free-text entry).
+    const chosenSpells = spellList ? picked : [];
     const res = await createCharacter({
       name: name.trim(),
       race: race.id,
@@ -365,13 +364,17 @@ export function CharacterCreate({ onClose }: { onClose: () => void }) {
               )}
               {cls && cls.caster !== "none" && !spellList && (
                 <div>
-                  <Label>Počáteční kouzla (id oddělená čárkou, volitelné)</Label>
-                  <input
-                    className="settings-input bg-bg-crust text-text"
-                    value={spells}
-                    onChange={(e) => setSpells(e.target.value)}
-                    placeholder="fire-bolt, cure-wounds"
-                  />
+                  <Label>Kouzla</Label>
+                  {cls.caster === "half" ? (
+                    <p className="font-body text-sm italic text-subtext0">
+                      {cls.name} získává kouzla až od 2. úrovně — na 1. úrovni žádná nevybíráš.
+                    </p>
+                  ) : (
+                    <p className="font-body text-sm italic text-blood/90">
+                      Seznam kouzel nelze načíst — není namountovaný SRD dataset. Nastav cestu v
+                      Nastavení → „Cesta k SRD" (a ulož); pak se kouzla načtou z databáze.
+                    </p>
+                  )}
                 </div>
               )}
 

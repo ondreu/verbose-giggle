@@ -256,6 +256,35 @@ on old code and items **#15, #17, #18** are likely already resolved by updating.
   optional: missing image config or an upstream failure surfaces an error and
   leaves the campaign untouched.
 
+### #41 — Livelier travel & arrivals (cluster)
+
+Travel currently feels mechanical and breaks immersion. Three gaps, from
+playtest (2026-06):
+
+- **#41a — Time does not pass while travelling (regression of #24).** Despite
+  #24, a `travel` to a connected location is not advancing the in-world clock.
+  Re-check the path: `OverworldMap` sends `sendCommand("travel", { to })` →
+  server travel handler → engine `travel`/`time_advance` (`packages/engine/src/
+  time.ts`, `tools.ts`). The journey duration authored on the location
+  connection (`connections[].travel.days/hours`) must be fed into `advanceTime`
+  and logged. Add an engine test that `travel` advances the clock by the edge
+  duration.
+- **#41b — Arrival is a bare log line; the DM says nothing.** On arriving the
+  log just prints "dorazil jsi sem" with no narration — the DM never sets the
+  scene. After a `travel` resolves, the DM loop should narrate the arrival:
+  describe the new location (from its note body/lore), the journey's passage of
+  time, and any first impressions, then hand back to the player. Wire an
+  arrival beat into `apps/server/src/session/loop.ts` (similar to the campaign
+  intro `runIntro`, #31) and a prompt instruction in `llm/prompt.ts`; the scene
+  snapshot already carries the location, so ground the narration in it.
+- **#41c — The "Střety zde" table is unimmersive.** The flat encounter list in
+  `apps/web/src/map/MapPanel.tsx` (`EncounterList`, "Střety zde") reads like a
+  debug panel. Re-present authored encounters diegetically — fold them into the
+  DM's arrival/scene narration as hooks (rumours, signs, threats) rather than a
+  bare table, and/or restyle the panel as an in-world cue (parchment notice,
+  subtle) that the DM still drives. Keep the deterministic `start_combat` path
+  intact; this is presentation, not mechanics.
+
 ---
 
 ## New features
