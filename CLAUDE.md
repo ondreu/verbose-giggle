@@ -75,54 +75,29 @@ hydrated/flushed by `SessionManager`). The forge picker lists worlds via
 `GET /api/worlds` and passes `world` + `world_shared` to `forgeCampaign`.
 
 ## Git
-Develop on branch **`claude/upbeat-gauss-05q0pf`**. Commit per logical change;
-keep the ROADMAP checkboxes in sync (`[x]` done, `[~]` partial, `[N/A]`).
+Develop on the branch assigned for the session (set per task). Commit per logical
+change; keep the ROADMAP checkboxes in sync (`[x]` done, `[~]` partial, `[N/A]`).
 
 ---
 
-## NEXT SESSION: consume the SRD dataset (#20 → #21 → #19)
+## Current focus
 
-Goal: load more of the 5e-bits/5e-database dataset so character creation (#14)
-and leveling (#13) can draw on real races/classes/feats/spells, then mine
-descriptive data for tooltips/localization, then build quest tracking.
+The SRD/content/world milestones are **done** (#13/#14/#19/#20/#21/#49 and the
+rest of the changelog). The open direction is the accounts/credits/multi-tenant
+push (#55–58), i18n (#48), and the #45 bundling/translation partials. See
+`ROADMAP.md` → "Open work" for the prioritized list and current checkbox state.
 
-### Where the SRD loader lives
-- `apps/server/src/srd/load.ts` — `loadSrdDataset(dir)` recursively finds JSON
-  by exact `5e-SRD-<Category>.json` name and maps records. **As of #20 it loads
-  monsters, spells, equipment, races, subraces, classes, subclasses, features,
-  traits, feats, magic-items, proficiencies and languages** (tolerant of missing
-  files). Mappers mirror the 5e-bits/5e-database field names → our minimal types
-  in `packages/srd/src/types.ts`.
+### SRD loader (reference)
+- `apps/server/src/srd/load.ts` — `loadSrdDataset(dir)` recursively finds JSON by
+  exact `5e-SRD-<Category>.json` name and maps records. Loads monsters, spells,
+  equipment, races, subraces, classes, subclasses, features, traits, feats,
+  magic-items, proficiencies and languages (tolerant of missing files). Mappers
+  mirror 5e-bits/5e-database field names → our minimal types in
+  `packages/srd/src/types.ts`.
 - `packages/srd/src/index.ts` exposes `createSrdIndex(overrides)` with per-id
-  accessors (`monster`/`spell`/`race`/`class`/`feat`/…) plus a `list.*()` for
-  enumerating each category. New categories need new types + accessors here.
-- The dataset source + which files to mount: `docs/SHOWCASE.md` §3 (repo
-  <https://github.com/5e-bits/5e-database>, files under `src/2014/en/`, this
-  project targets **SRD 5.1 / 2014**, not 2024).
-
-### #20 — load the rest (the actual next task)
-Add typed accessors in `@adm/srd` + mappers in the loader for: Races/Subraces,
-Classes/Subclasses/Features/Traits, Feats, Magic-Items, Proficiencies/Languages.
-Gotchas (from the roadmap):
-- Be **tolerant of missing files** — the 3-file minimal setup must still work.
-- Keep filename matching **specific** to avoid lookalikes: `*spell*` also matches
-  `Spellcasting`, `*equipment*` also matches `Equipment-Categories`. Match exact
-  names (e.g. `5e-SRD-Races.json`) rather than broad `/race/i` where ambiguous.
-- Gate loading behind the features that use it so cost is only paid when needed.
-- Then deepen #14 (creation) and #13 (leveling) to use it (subrace/subclass/
-  feats/spell lists).
-
-### #21 — mine descriptive/reference data
-Damage types, conditions, weapon properties, magic schools, alignments, ability
-scores, rules sections, skills/levels → feed Czech labels in
-`packages/schemas/src/labels.ts` (prefer build-time extraction over runtime) and
-tooltips/rules-reference UI. Supports #4 and the condition tooltips already in
-the sheet (`CONDITION_DESC_CS`).
-
-### #19 — automatic quest tracking (after SRD)
-New `quest` entity (`quests/*.md` + schema in `@adm/schemas`), engine tools
-`quest_start`/`quest_advance`/`quest_complete`/`quest_fail` (validated, logged),
-DM prompt auto-detects triggers, and a quest-log UI panel. Live progress in
-session state.
-
-See `ROADMAP.md` for the full list and current checkbox state.
+  accessors (`monster`/`spell`/`race`/`class`/`feat`/…) plus a `list.*()` per
+  category. New categories need new types + accessors here.
+- Dataset source + which files to mount: `docs/SHOWCASE.md` §3 (repo
+  <https://github.com/5e-bits/5e-database>, files under `src/2014/en/`; this
+  project targets **SRD 5.1 / 2014**, not 2024). Keep filename matching specific
+  to avoid lookalikes (`Spells`≠`Spellcasting`, `Equipment`≠`Equipment-Categories`).
