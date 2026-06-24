@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { csSpellSchool } from "@adm/schemas";
+import { csSpellSchool, SKILL_DESC_CS } from "@adm/schemas";
 
 interface SpellData {
   id: string;
   name: string;
+  /** Player-facing Czech name where translated, else English (#45b). */
+  nameCs?: string;
   level: number;
   school?: string;
   casting_time?: string;
@@ -36,6 +38,8 @@ interface FeatureData {
 interface ItemData {
   id: string;
   name: string;
+  /** Player-facing Czech name where translated, else English (#45b). */
+  nameCs?: string;
   category?: string;
   rarity?: string;
   magic: boolean;
@@ -115,26 +119,10 @@ export const ABILITY_TIP: Record<string, string> = {
   cha: "Charisma — síla osobnosti a přesvědčivost. Základ barda a čaroděje; ovlivňuje Přesvědčování a Zastrašování.",
 };
 
-export const SKILL_TIP: Record<string, string> = {
-  acrobatics: "Akrobacie (Obratnost) — udržíš rovnováhu, uděláš kotrmelec nebo se vyhneš pádu.",
-  "animal-handling": "Zacházení se zvířaty (Moudrost) — uklidníš zvíře, odhadneš jeho záměr nebo ho vycvičíš.",
-  arcana: "Mystika (Inteligence) — znáš kouzla, magické předměty, kouzelné tradice a jiné sféry.",
-  athletics: "Atletika (Síla) — šplháš, skáčeš, plaveš nebo překonáváš fyzické překážky.",
-  deception: "Klamání (Charisma) — přimíš někoho uvěřit lži nebo odvedeš jeho pozornost.",
-  history: "Historie (Inteligence) — vzpomínáš na historické události, osoby, války nebo starobylé civilizace.",
-  insight: "Vhled (Moudrost) — odhadneš záměry nebo emoce druhé osoby; poznáš, zda lže.",
-  intimidation: "Zastrašování (Charisma) — ovlivníš ostatní hrozbami, výslechem nebo agresivním přístupem.",
-  investigation: "Pátrání (Inteligence) — hledáš stopy, analyzuješ scény a rozluštíš záhady.",
-  medicine: "Medicína (Moudrost) — stabilizuješ umírajícího, diagnostikuješ nemoc nebo ošetříš zranění.",
-  nature: "Příroda (Inteligence) — znáš zvířata, rostliny, počasí, terén a přírodní cykly.",
-  perception: "Vnímání (Moudrost) — zachytíš skryté tvory, neobvyklé předměty nebo hrozby ve svém okolí.",
-  performance: "Vystupování (Charisma) — zahraješ, zazpíváš nebo jinak zaujmeš publikum.",
-  persuasion: "Přesvědčování (Charisma) — ovlivníš ostatní taktním přístupem a vhodně volenými argumenty.",
-  religion: "Náboženství (Inteligence) — znáš božstva, obřady, modlitby a posvátná písma.",
-  "sleight-of-hand": "Šikovné ruce (Obratnost) — kapesní krádež, schovávání předmětů nebo prestidigitace.",
-  stealth: "Nenápadnost (Obratnost) — pohybuješ se tiše a skrytě, aniž by si tě kdo všiml.",
-  survival: "Přežití (Moudrost) — stopuješ, lovíš, orientuješ se v divočině nebo předpovídáš počasí.",
-};
+// Skill descriptions now live in the build-time schemas label map (#45c), so
+// they're a single source shared with the rules reference. Re-exported here
+// under the historical name to keep call sites unchanged.
+export const SKILL_TIP: Record<string, string> = SKILL_DESC_CS;
 
 
 // Renders into document.body so it's never clipped by overflow or hidden behind
@@ -240,7 +228,7 @@ function SpellBody({ spell }: { spell: SpellData }) {
   const flags = [spell.concentration && "soustředění", spell.ritual && "rituál"].filter(Boolean).join(", ");
   return (
     <>
-      <p className="mb-0.5 font-display text-base text-text">{spell.name}</p>
+      <p className="mb-0.5 font-display text-base text-text">{spell.nameCs ?? spell.name}</p>
       <p className="mb-1.5 font-log text-xs text-subtext0">
         {levelLabel}{schoolLabel ? ` · ${schoolLabel}` : ""}{flags ? ` · ${flags}` : ""}
       </p>
@@ -343,7 +331,7 @@ export function ItemCard({ id, children }: { id: string; children: React.ReactNo
         <TipPortal pos={pos}>
           {item ? (
             <>
-              <p className="mb-0.5 font-display text-base text-text">{item.name}</p>
+              <p className="mb-0.5 font-display text-base text-text">{item.nameCs ?? item.name}</p>
               <p className="mb-1.5 font-log text-xs text-subtext0">
                 {[item.magic ? "magický předmět" : "vybavení", item.rarity, item.category].filter(Boolean).join(" · ")}
               </p>

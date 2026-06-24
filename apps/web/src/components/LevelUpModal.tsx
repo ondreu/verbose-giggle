@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { csAbility, csFeat, type Actor } from "@adm/schemas";
+import { csAbility, csFeat, csSpellName, type Actor } from "@adm/schemas";
 import { useGame } from "../store/store";
 import { Icon } from "./Icon";
 import { FeatCard, SpellCard, Tip, ABILITY_TIP } from "./InfoCard";
@@ -248,7 +248,7 @@ export function LevelUpModal({ actor, onClose }: { actor: Actor; onClose: () => 
                         on ? "border-arcane/60 bg-arcane/15 text-arcane" : "border-surface2 text-subtext1 hover:border-arcane/40 hover:text-subtext2"
                       }`}
                     >
-                      {s.name}
+                      {csSpellName(s.id, s.name)}
                       <span className="ml-1 text-subtext0">{s.level === 0 ? "trik" : s.level}</span>
                     </button>
                   </SpellCard>

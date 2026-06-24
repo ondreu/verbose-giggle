@@ -8,6 +8,7 @@ import {
   DAMAGE_DESC_CS,
   SKILL_CS,
   SPELL_SCHOOL_CS,
+  SPELL_SCHOOL_DESC_CS,
   WEAPON_PROPERTY_CS,
   WEAPON_PROPERTY_DESC_CS,
   csAbility,
@@ -65,7 +66,7 @@ function buildSections(): RefSection[] {
       icon: "compass",
       entries: fromMap(SKILL_CS, SKILL_TIP),
     },
-    { title: "Školy magie", icon: "flask", entries: fromMap(SPELL_SCHOOL_CS) },
+    { title: "Školy magie", icon: "flask", entries: fromMap(SPELL_SCHOOL_CS, SPELL_SCHOOL_DESC_CS) },
   ];
 }
 

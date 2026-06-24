@@ -6,6 +6,8 @@ import { ItemCard, primeItemCache, Tip } from "../components/InfoCard";
 
 interface ResolvedItem {
   name: string;
+  /** Player-facing Czech name where translated, else English (#45b). */
+  nameCs?: string;
   category?: string;
   rarity?: string;
   magic: boolean;
@@ -65,7 +67,7 @@ export function InventoryPanel() {
         )}
         {actor.inventory.map((item) => {
           const info = resolved[item.id];
-          const name = info?.name ?? humanize(item.id);
+          const name = info?.nameCs ?? info?.name ?? humanize(item.id);
           const props = info?.properties ?? [];
           return (
             <li key={item.id} className="min-w-0 py-1">

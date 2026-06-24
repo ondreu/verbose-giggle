@@ -126,6 +126,9 @@ interface GameStore {
   /** Out-of-combat speaker mode (#47): false = act as the active character,
    *  true = address the whole party. Ignored in combat (initiative speaks). */
   partyVoice: boolean;
+  /** The DM's current model + configured alternates, for the "Jiným modelem"
+   *  re-roll picker (#54). Populated on hydrate from /api/state. */
+  models: { current: string; alts: string[] };
 
   setView: (v: View) => void;
   /** Select which party member the rail (sheet/inventory) displays (#47). */
@@ -153,6 +156,9 @@ interface GameStore {
   /** Fetch the DM's opening scene for a fresh campaign (#31), once. */
   intro: () => Promise<void>;
   undoTurn: () => Promise<void>;
+  /** Re-roll the last DM turn (#54). With `model`, re-rolls using that model
+   *  for this single call ("Jiným modelem"); otherwise the configured model. */
+  regenerate: (model?: string) => Promise<void>;
   fetchLog: () => Promise<string>;
   toggleTts: () => void;
   setTtsProvider: (provider: TtsProvider) => void;
@@ -234,6 +240,7 @@ export const useGame = create<GameStore>((set, get) => ({
   targetRequest: null,
   viewedPlayer: null,
   partyVoice: false,
+  models: { current: "", alts: [] },
 
   setView: (v) => set({ view: v }),
 
@@ -269,6 +276,7 @@ export const useGame = create<GameStore>((set, get) => ({
       actors: data.actors,
       locations: data.locations ?? {},
       encounters: data.encounters ?? {},
+      models: data.models ?? { current: "", alts: [] },
       ttsEnabled: data.campaign?.tts?.enabled ?? false,
       narration: (data.session?.chat ?? [])
         .filter((m: { role: string }) => m.role === "user" || m.role === "assistant")
@@ -492,6 +500,36 @@ export const useGame = create<GameStore>((set, get) => ({
       // The server emits `reload`, which re-hydrates the rewound state.
     } finally {
       set({ busy: false });
+    }
+  },
+
+  regenerate: async (model) => {
+    if (get().busy) return;
+    // Optimistically drop the last turn's output (DM line + any roll cards),
+    // keeping the player action that prompted it. The server rewinds to the same
+    // point and re-runs that action, streaming a fresh narration in its place;
+    // on failure we restore the trimmed lines. (#54)
+    const prev = get().narration;
+    let cut = prev.length;
+    for (let i = prev.length - 1; i >= 0; i--) {
+      if (prev[i]!.role === "player") break;
+      cut = i;
+    }
+    set({ busy: true, error: null, narration: prev.slice(0, cut) });
+    try {
+      const res = await fetch("/api/regenerate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        set({ error: body.error ?? `Chyba ${res.status}`, narration: prev });
+      }
+    } catch (err) {
+      set({ error: err instanceof Error ? err.message : String(err), narration: prev });
+    } finally {
+      set({ busy: false, thinking: null });
     }
   },
 

@@ -39,13 +39,26 @@ function spellSaveDc(state: GameState, casterId: string): number {
 }
 
 /** Pick the value from a numeric-keyed scaling map for level `n` (highest key ≤ n). */
+/**
+ * Strip the SRD dataset's `MOD` placeholder from a dice string. The 5e-database
+ * encodes healing as e.g. `"1d8 + MOD"`, where MOD is the spellcasting modifier;
+ * the engine adds that modifier itself, so the literal token must be removed or
+ * the dice expression is invalid (`"1d8 + MOD+3"`). Returns undefined if nothing
+ * dice-like remains.
+ */
+function cleanDice(expr: string | undefined): string | undefined {
+  if (!expr) return undefined;
+  const out = expr.replace(/\s*[+-]\s*MOD\b/gi, "").trim();
+  return out || undefined;
+}
+
 function scaledDice(map: Record<string, string> | undefined, n: number): string | undefined {
   if (!map) return undefined;
   const keys = Object.keys(map)
     .map((k) => Number(k))
     .filter((k) => Number.isFinite(k) && k <= n)
     .sort((a, b) => b - a);
-  return keys.length ? map[String(keys[0])] : undefined;
+  return keys.length ? cleanDice(map[String(keys[0])]) : undefined;
 }
 
 /**
@@ -54,8 +67,8 @@ function scaledDice(map: Record<string, string> | undefined, n: number): string 
  * the scaling maps (#20); the bundled subset just has `damage`.
  */
 function spellDamageDice(spell: SrdSpell, caster: Actor, slotLevel: number): string | undefined {
-  if (spell.level === 0) return scaledDice(spell.damage_by_level, caster.level) ?? spell.damage;
-  return scaledDice(spell.damage_by_slot, Math.max(slotLevel, spell.level)) ?? spell.damage;
+  if (spell.level === 0) return scaledDice(spell.damage_by_level, caster.level) ?? cleanDice(spell.damage);
+  return scaledDice(spell.damage_by_slot, Math.max(slotLevel, spell.level)) ?? cleanDice(spell.damage);
 }
 
 /**
@@ -154,8 +167,8 @@ export function castSpell(
       result.saves.push({ target: t, success: save.success, damage: dmg });
     }
   } else if (healDice || (spell.damage && spell.damage_type === "radiant" && spell.id.includes("cure"))) {
-    // Healing spell — SRD heal_by_slot, or the bundled cure-* heuristic.
-    const dice = healDice ?? spell.damage!;
+    // Healing spell — SRD heal_by_slot, or a radiant cure-* heuristic fallback.
+    const dice = healDice ?? cleanDice(spell.damage)!;
     result.healed = [];
     for (const t of targets) {
       const r = roll(`${dice}+${mod}`, state.rng);

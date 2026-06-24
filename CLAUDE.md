@@ -7,8 +7,11 @@ TypeScript everywhere, Czech player-facing UI.
 - `packages/schemas` (`@adm/schemas`) — zod schemas + Czech label maps
   (`src/labels.ts`). The single source of truth for shapes and player-facing
   strings.
-- `packages/srd` (`@adm/srd`) — minimal SRD types + a tiny built-in dataset
-  (`src/data.ts`) used when no external SRD is mounted.
+- `packages/srd` (`@adm/srd`) — minimal SRD types + pure typed accessors
+  (`createSrdIndex`). Ships **no** bundled data: the dataset is loaded from the
+  in-repo JSON under `packages/srd/data` (the server's `loadSrdDataset`, #45a) or
+  an external mount; the engine's own tests pass an inline fixture subset
+  (`packages/engine/test/srd-fixtures.ts`).
 - `packages/engine` (`@adm/engine`) — the deterministic rules engine. **Pure**:
   no IO/network/LLM. `(GameState, tool, args) → mutated state + log entries`.
   All randomness goes through `rng`. Tools are defined in `src/tools.ts`

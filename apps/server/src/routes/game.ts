@@ -25,6 +25,7 @@ import {
 } from "../vault/snapshots.js";
 import { applySettings, loadConfig, type Config } from "../config.js";
 import { loadSettings, saveSettings, type Settings } from "../settings.js";
+import { csSpellName, csItemName } from "@adm/schemas";
 
 export interface GameContext {
   manager: SessionManager;
@@ -63,9 +64,9 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
    * when no API key is configured (or provider is forced to "mock"), so the
    * full loop + UI run without secrets.
    */
-  function makeLlm(): Llm {
+  function makeLlm(modelOverride?: string): Llm {
     const useMock = !config.llm.apiKey || config.llm.provider === "mock";
-    if (!useMock) return new LlmClient(config);
+    if (!useMock) return new LlmClient(config, modelOverride);
     return new MockLlmClient(() => {
       const actors = ctx.manager.campaign.actors;
       const alive = (id: string) => (ctx.manager.session.actors[id]?.hp?.current ?? 1) > 0;
@@ -121,6 +122,8 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
         model: config.llm.model,
         provider: config.llm.provider,
         apiKeySet: Boolean(config.llm.apiKey),
+        // Alternate models the player can re-roll a turn with (#54).
+        altModels: stored.llm?.altModels ?? [],
       },
       image: {
         enabled: config.image != null,
@@ -168,6 +171,10 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
       if (patch.llm.model !== undefined) clean.llm.model = patch.llm.model;
       if (patch.llm.provider === "auto" || patch.llm.provider === "mock")
         clean.llm.provider = patch.llm.provider;
+      if (Array.isArray(patch.llm.altModels))
+        clean.llm.altModels = patch.llm.altModels
+          .map((m) => String(m).trim())
+          .filter(Boolean);
     }
     if (patch.image) {
       clean.image = {};
@@ -654,15 +661,16 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
   app.get<{ Querystring: { ids?: string } }>("/api/srd/items", async (req) => {
     const srd = ctx.manager.srd();
     const ids = (req.query?.ids ?? "").split(",").map((s) => s.trim()).filter(Boolean);
-    const out: Record<string, { name: string; category?: string; rarity?: string; magic: boolean; description?: string; properties?: string[] }> = {};
+    const out: Record<string, { name: string; nameCs: string; category?: string; rarity?: string; magic: boolean; description?: string; properties?: string[] }> = {};
     for (const id of ids) {
       const eq = srd.equipment(id);
       if (eq) {
-        out[id] = { name: eq.name, category: eq.category, magic: false, properties: eq.properties };
+        // nameCs: Czech where translated, else the SRD's English name (#45b).
+        out[id] = { name: eq.name, nameCs: csItemName(id, eq.name), category: eq.category, magic: false, properties: eq.properties };
         continue;
       }
       const mi = srd.magicItem(id);
-      if (mi) out[id] = { name: mi.name, category: mi.category, rarity: mi.rarity, magic: true, description: mi.description };
+      if (mi) out[id] = { name: mi.name, nameCs: csItemName(id, mi.name), category: mi.category, rarity: mi.rarity, magic: true, description: mi.description };
     }
     return out;
   });
@@ -673,7 +681,8 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
    *  or the spell is unknown; the client falls back to showing the raw id. */
   app.get<{ Params: { id: string } }>("/api/srd/spell/:id", (req) => {
     const spell = ctx.manager.srd().spell(req.params.id);
-    return spell ?? {};
+    // Attach the player-facing Czech name (#45b); ids/name stay English.
+    return spell ? { ...spell, nameCs: csSpellName(spell.id, spell.name) } : {};
   });
 
   /** Batch spell lookup by comma-separated ids (for sheet/picker tooltips). */
@@ -683,7 +692,7 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
     const srd = ctx.manager.srd();
     for (const id of ids) {
       const s = srd.spell(id);
-      if (s) out[id] = s;
+      if (s) out[id] = { ...s, nameCs: csSpellName(s.id, s.name) };
     }
     return out;
   });
@@ -782,18 +791,24 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
   );
 
   /** Full scene + state snapshot for initial client hydration. */
-  app.get("/api/state", async () => ({
-    campaign: ctx.manager.campaign.config,
-    session: ctx.manager.session,
-    actors: ctx.manager.campaign.actors,
-    locations: ctx.manager.campaign.locations,
-    encounters: ctx.manager.campaign.encounters,
-    items: ctx.manager.campaign.items,
-    lore: ctx.manager.campaign.lore,
-    factions: ctx.manager.campaign.factions,
-    npcs: ctx.manager.campaign.npcs,
-    worldEvents: ctx.manager.campaign.worldEvents,
-  }));
+  app.get("/api/state", async () => {
+    // The current model + any alternates, so the chat's "Jiným modelem" re-roll
+    // (#54) can offer a picker without a separate round-trip.
+    const stored = await loadSettings(config.vaultPath);
+    return {
+      campaign: ctx.manager.campaign.config,
+      session: ctx.manager.session,
+      actors: ctx.manager.campaign.actors,
+      locations: ctx.manager.campaign.locations,
+      encounters: ctx.manager.campaign.encounters,
+      items: ctx.manager.campaign.items,
+      lore: ctx.manager.campaign.lore,
+      factions: ctx.manager.campaign.factions,
+      npcs: ctx.manager.campaign.npcs,
+      worldEvents: ctx.manager.campaign.worldEvents,
+      models: { current: config.llm.model, alts: stored.llm?.altModels ?? [] },
+    };
+  });
 
   /** Instantiate an authored encounter into live combat, then auto-resolve AI. */
   app.post<{ Params: { id: string } }>("/api/encounter/:id", async (req, reply) => {
@@ -894,6 +909,39 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
       await checkpointTurn(ctx.manager.campaign.dir, `Před: „${input.slice(0, 40)}“`);
       const partyVoice = req.body?.as === "party";
       const { narration } = await runTurn({ manager: ctx.manager, llm, bus: ctx.bus, input, partyVoice });
+      return { narration };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      ctx.bus.emit({ type: "error", message });
+      return reply.code(500).send({ error: message });
+    }
+  });
+
+  /**
+   * Re-roll the last DM turn (#54). Drops the most recent turn (undo restores
+   * the pre-turn checkpoint) and re-runs the player's prior action through the
+   * DM loop, so a fresh narration is produced. `model` requests a one-off model
+   * override for this single re-roll ("Jiným modelem") — same provider/key, only
+   * the model name differs; it reuses the streaming tool-loop so determinism
+   * (#12) is unaffected.
+   */
+  app.post<{ Body: { model?: string } }>("/api/regenerate", async (req, reply) => {
+    // The player's last stated action — captured before the rewind wipes it.
+    const lastUser = [...ctx.manager.session.chat].reverse().find((m) => m.role === "user");
+    if (!lastUser?.content) return reply.code(400).send({ error: "Není co přegenerovat — žádný předchozí tah." });
+    const input = lastUser.content;
+    const dir = ctx.manager.campaign.dir;
+    try {
+      // Rewind to before the last turn (also clears an ending it may have caused),
+      // re-open the manager on the rewound state, then re-checkpoint so the
+      // regenerated turn can itself be undone.
+      const undone = await undoLastTurn(dir);
+      if (!undone) return reply.code(400).send({ error: "Není co přegenerovat — žádný předchozí tah." });
+      await reopenManager();
+      await checkpointTurn(dir, `Před: „${input.slice(0, 40)}“`);
+      const model = req.body?.model?.trim();
+      const turnLlm = model ? makeLlm(model) : llm;
+      const { narration } = await runTurn({ manager: ctx.manager, llm: turnLlm, bus: ctx.bus, input });
       return { narration };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);

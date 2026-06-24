@@ -42,6 +42,41 @@ describe("cast_spell sheet validation (#29)", () => {
     expect(ally.hp.current).toBeGreaterThan(5); // healed, HP written to state
   });
 
+  it("sanitizes the SRD 'MOD' placeholder in healing dice (real dataset shape)", () => {
+    const cleric = makeActor({
+      id: "c",
+      name: "Sora",
+      class: "cleric",
+      abilities: { str: 10, dex: 10, con: 10, int: 10, wis: 16, cha: 10 }, // +3 mod
+      spells_known: ["cure-wounds"],
+      spell_slots: { "1": { max: 2, used: 0 } },
+    });
+    const ally = makeActor({ id: "a", name: "Druh", hp: { max: 30, current: 5, temp: 0 } });
+    // The 5e-database encodes healing as "1d8 + MOD"; the engine must strip the
+    // literal MOD (it adds the modifier itself) or the dice expression is invalid.
+    const state = makeState([cleric, ally], "mod-heal", {
+      spells: {
+        "cure-wounds": {
+          id: "cure-wounds",
+          name: "Cure Wounds",
+          level: 1,
+          school: "evocation",
+          range_ft: 5,
+          concentration: false,
+          ritual: false,
+          attack: "none",
+          heal_by_slot: { "1": "1d8 + MOD" },
+          classes: ["cleric"],
+        },
+      },
+    });
+
+    const r = castSpell(state, { caster: "c", spell: "cure-wounds", slot_level: 1, targets: ["a"] });
+    expect(r.error).toBeUndefined();
+    // 1d8 (1–8) + 3 → at least 4, never the "invalid dice" failure.
+    expect(ally.hp.current).toBeGreaterThanOrEqual(5 + 4);
+  });
+
   it("scales SRD damage by slot and halves on a save (#20)", () => {
     // A mounted SRD-style leveled save spell with slot scaling.
     const srd = {

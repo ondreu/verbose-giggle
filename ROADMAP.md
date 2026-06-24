@@ -529,14 +529,33 @@ kopii dat a přeložit ji do češtiny.
   `/data/srd` (`docker/Dockerfile`), takže běží bez mountu. Override přes
   `SRD_PATH` / in-app *Cesta k SRD* / Compose bind mount zůstává zachován.
   Soubory pojmenovat `5e-SRD-<Category>.json` (loader je tolerantní k chybějícím).
-- **#45b — Český překlad názvů.** Přeložit jména kouzel, schopností (feats),
-  dovedností (skills), ras, povolání, itemů a dalších SRD entit do češtiny.
-  Překlad ukládat jako vrstvu nad SRD daty (`packages/srd/src/cs/`) — SRD IDs
-  zůstanou anglické (determinismus), přeloženy jsou pouze player-facing labely.
-  Napojit na stávající label mapy v `packages/schemas/src/labels.ts`.
-- **#45c — Build-time extrakce popisů.** Vytěžit popisy podmínek, vlastností
-  zbraní, magických škol a dovedností do statických Czech label map (rozšíření
-  #21), aby tooltips (#42) měly česky text bez runtime dotazů.
+- **[~] #45b — Český překlad názvů.** Infrastruktura hotová + kurátorský starter
+  překlad; zbývá doplnit dlouhý ocas (kouzla 2.+ úrovně, magické předměty).
+  Překladová vrstva žije v **`packages/schemas/src/labels.ts`** vedle už
+  existujících `csClass`/`csRace`/`csSubrace`/`csFeat` (to jsou rovněž SRD-id
+  překlady jmen) — to je „stávající label mapy", na které měl být překlad
+  napojen, a zároveň jediný balík, na který dosáhne web (importuje jen
+  `@adm/schemas`, ne `@adm/srd`). SRD IDs zůstávají anglické (determinismus),
+  přeložené jsou jen player-facing labely. Přidáno:
+  - `SPELL_NAME_CS` + `csSpellName(id, fallback?)` — **všechny SRD triky a kouzla
+    1. úrovně** (73 — to, co začínající sesílatel vidí a vybírá; creation picker
+    je stejně omezený na 1. úroveň). Vyšší úrovně padají na prettified anglický
+    název.
+  - `ITEM_NAME_CS` + `csItemName(id, fallback?)` — **všechny zbraně (37) a zbroje
+    (13)** + běžná dobrodružná výbava a balíčky ze startovních setů.
+  - Napojení: server přidává `nameCs` do SRD payloadů (`/api/srd/spell/:id`,
+    `/api/srd/spells`, `/api/srd/items`); web preferuje `nameCs` v `SpellCard`/
+    `ItemCard`, `InventoryPanel`, na listu postavy (`prettySpell` → `csSpellName`)
+    a v obou spell pickerech (creation + level-up). Kryto testy v
+    `packages/schemas/test/labels.test.ts`.
+- **[~] #45c — Build-time extrakce popisů.** Podmínky, typy zranění, vlastnosti
+  zbraní a vlastnosti měly popisy už z #21. Doplněno to, co chybělo, do statických
+  Czech label map v `labels.ts`: **`SPELL_SCHOOL_DESC_CS`** (8 škol magie) +
+  `csSpellSchoolDesc`, a **`SKILL_DESC_CS`** (18 dovedností) + `csSkillDesc` —
+  dovednostní popisy se přesunuly z web-only `SKILL_TIP` do build-time schémat
+  (web teď `SKILL_TIP` jen re-exportuje), takže jsou sdílené a dostupné i mimo
+  web. Školy magie nově nesou popis v rules-reference panelu. Kryto completeness
+  testy.
 
 ---
 
@@ -757,13 +776,20 @@ kampaně v něm:
   exploration-first opening, and the DM prompt switches to open-ended mode (offer
   opportunities, no railroad). The world (locations, NPCs, factions, roaming
   encounters) is still generated.
-- **#54 — Per-message "Regenerovat" / "Jiným modelem".** The chat message-action
-  menu (#47) already shows both buttons; they need backend wiring. *Regenerovat*
-  = drop the last DM turn and re-run it (undo + resend the prior player action
-  through the DM loop). *Jiným modelem* = same, but with a one-off model override
-  for that single call (the UI should let the player pick the model — needs an
-  `/api/action` model param threaded into `LlmClient.chat`). Both should reuse
-  the existing tool-loop/streaming path so determinism (#12) is unaffected.
+- **[x] #54 — Per-message "Regenerovat" / "Jiným modelem".** Done. New
+  `POST /api/regenerate` drops the last DM turn (rewinds via `undoLastTurn` to the
+  pre-turn checkpoint, re-opens the manager on the rewound state, re-checkpoints)
+  and re-runs the player's prior action through the existing `runTurn` tool-loop
+  — so streaming (#32) and determinism (#12) are unaffected. *Regenerovat* uses
+  the configured model; *Jiným modelem* passes an optional `model` that builds a
+  one-off `LlmClient(config, modelOverride)` (same base URL / key, only the model
+  name differs). The alternates are authored in Settings → AI DM (`llm.altModels`,
+  one per line), surfaced to the chat via `/api/state` `models`, and offered as a
+  submenu under the DM message's "Jiným modelem" action (the menu's re-roll items
+  only show on the latest DM line). The client `regenerate(model?)` store action
+  optimistically trims the last turn's output (keeping the player line) and
+  restores it on failure; the fresh narration streams in over SSE. Covered by a
+  server test (`session.test.ts` → "regenerates the last turn").
 
 ---
 

@@ -27,6 +27,8 @@ export function ChatPanel() {
   const actors = useGame((s) => s.actors);
   const partyVoice = useGame((s) => s.partyVoice);
   const setPartyVoice = useGame((s) => s.setPartyVoice);
+  const regenerate = useGame((s) => s.regenerate);
+  const models = useGame((s) => s.models);
   const activeQuests = useGame(
     (s) => Object.values(s.session?.quests ?? {}).filter((q) => q.status === "active").length,
   );
@@ -126,12 +128,9 @@ export function ChatPanel() {
               onSpeak={() => speakLine(line.text)}
               onUndo={() => void undoTurn()}
               onVisualize={() => void generateImage("scene", undefined, "Atmosféra scény")}
-              onRegenerate={() => {
-                /* #54: backend not wired yet. */
-              }}
-              onSwapModel={() => {
-                /* #54: backend not wired yet. */
-              }}
+              onRegenerate={(model) => void regenerate(model)}
+              altModels={models.alts}
+              currentModel={models.current}
             />
           );
         })}
@@ -255,7 +254,8 @@ function DmMessage({
   onUndo,
   onVisualize,
   onRegenerate,
-  onSwapModel,
+  altModels,
+  currentModel,
 }: {
   text: string;
   isLast: boolean;
@@ -264,14 +264,25 @@ function DmMessage({
   onSpeak: () => void;
   onUndo: () => void;
   onVisualize: () => void;
-  onRegenerate: () => void;
-  onSwapModel: () => void;
+  /** Re-roll this (last) turn; `model` overrides the model for the one call. */
+  onRegenerate: (model?: string) => void;
+  /** Alternate model ids the player can re-roll with (#54). */
+  altModels: string[];
+  /** The DM's currently configured model (shown as the default re-roll). */
+  currentModel: string;
 }) {
   const [open, setOpen] = useState(false);
+  const [swapOpen, setSwapOpen] = useState(false);
+  const close = () => {
+    setOpen(false);
+    setSwapOpen(false);
+  };
   const run = (fn: () => void) => () => {
     fn();
-    setOpen(false);
+    close();
   };
+  // Re-roll actions only make sense for the latest DM line — the server always
+  // re-rolls the most recent turn (#54).
   return (
     <div className="mb-4 flex items-start gap-2">
       <div className="min-w-0 flex-1 font-body text-[1.12rem] font-medium leading-relaxed text-text">
@@ -283,7 +294,7 @@ function DmMessage({
           className={`mt-1 grid h-7 w-7 place-items-center rounded-sm border transition-colors ${
             open ? "border-gold/50 bg-gold/10 text-gold" : "border-transparent text-subtext0 hover:border-gold/40 hover:bg-gold/10 hover:text-gold"
           }`}
-          onClick={() => setOpen((o) => !o)}
+          onClick={() => (open ? close() : setOpen(true))}
           aria-haspopup="menu"
           aria-expanded={open}
           title="Akce zprávy"
@@ -293,7 +304,7 @@ function DmMessage({
         {open && (
           <>
             {/* Click-away backdrop. */}
-            <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+            <div className="fixed inset-0 z-40" onClick={close} />
             <div
               role="menu"
               className="panel absolute right-0 z-50 mt-1 flex w-52 flex-col py-1"
@@ -301,9 +312,42 @@ function DmMessage({
               <MenuItem icon="speaker" label="Předčíst zprávu" onClick={run(onSpeak)} />
               {isLast && <MenuItem icon="undo" label="Vrátit tah" onClick={run(onUndo)} disabled={busy} />}
               <MenuItem icon="camera" label="Vizualizovat scénu" onClick={run(onVisualize)} disabled={busy || imageLoading} />
-              <div className="my-1 border-t border-surface1" />
-              <MenuItem icon="refresh" label="Regenerovat" onClick={run(onRegenerate)} />
-              <MenuItem icon="swap" label="Jiným modelem" onClick={run(onSwapModel)} />
+              {/* Re-roll the latest turn. Only the most recent DM line drives it. */}
+              {isLast && (
+                <>
+                  <div className="my-1 border-t border-surface1" />
+                  <MenuItem icon="refresh" label="Regenerovat" onClick={run(() => onRegenerate())} disabled={busy} />
+                  <MenuItem
+                    icon="swap"
+                    label="Jiným modelem"
+                    onClick={() => setSwapOpen((o) => !o)}
+                    disabled={busy}
+                  />
+                  {swapOpen && (
+                    <div className="mt-0.5 flex flex-col border-t border-surface1 pt-0.5">
+                      {altModels.length === 0 ? (
+                        <p className="px-3 py-1.5 font-log text-[11px] italic leading-snug text-subtext0">
+                          Přidej modely v Nastavení → AI DM.
+                        </p>
+                      ) : (
+                        altModels.map((m) => (
+                          <button
+                            key={m}
+                            role="menuitem"
+                            className="flex items-center gap-2.5 px-3 py-1.5 pl-7 text-left font-body text-[13px] text-subtext1 transition-colors hover:bg-gold/10 hover:text-gold disabled:opacity-40"
+                            onClick={run(() => onRegenerate(m))}
+                            disabled={busy || m === currentModel}
+                            title={m === currentModel ? "Aktuální model" : `Přegenerovat modelem ${m}`}
+                          >
+                            <Icon name="d20" size={13} />
+                            <span className="truncate">{m}</span>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
             </div>
           </>
         )}
