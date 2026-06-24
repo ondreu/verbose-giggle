@@ -49,6 +49,9 @@ export function makeState(
     log: [],
     chat: [],
     quests: {},
+    factions: {},
+    world_events: {},
+    location_danger: {},
     ending: null,
   };
   return {

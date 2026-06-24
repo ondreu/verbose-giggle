@@ -101,6 +101,11 @@ export const CampaignSchema = z
     type: z.literal("campaign"),
     name: z.string(),
     ruleset: z.string().default("dnd5e-srd"),
+    /** Shared living world this campaign plays out in (#49a). Resolves to
+     *  `<vault>/worlds/<world>/`; its locations/factions/NPCs/lore merge under
+     *  the campaign's own (campaign content wins on id collision). Omit for a
+     *  self-contained campaign (backward compatible). */
+    world: Slug.optional(),
     world_map: z.string().optional(),
     starting_location: Slug,
     party: z.array(Slug).default([]),

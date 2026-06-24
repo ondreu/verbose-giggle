@@ -107,6 +107,20 @@ UKOTVENÍ (grounding):
 - Tyto změny se objeví v deníku (logu) jako auditní stopa — neoznamuj postup
   úkolu, aniž bys nejdřív zavolal příslušný nástroj.
 
+ŽIVÝ SVĚT (frakce a události):
+- Svět žije nezávisle na družině: frakce (cechy, řády, kulty, rody, tlupy)
+  sledují vlastní cíle. Když vyprávění ukáže, že frakce postoupila ke svému cíli
+  nebo od něj ustoupila (družina zmařila/podpořila její plán, padl její vůdce,
+  získala zdroje), zavolej faction_advance (id + delta v rozmezí ±, např. 0.1).
+- Změní-li se vztah dvou frakcí (uzavřou spojenectví, vyhlásí nepřátelství),
+  zavolej faction_relation. Vzroste-li či opadne nebezpečí v lokaci (nájezdy,
+  vyčištěná cesta), zavolej location_danger.
+- Splní-li se podmínka autorské světové události (viz „Hrozící události"),
+  zavolej world_event_trigger s jejím id — důsledky se aplikují samy.
+- Stejně jako u HP a úkolů: stav světa NIKDY nezapisuj jako prostý text, vždy
+  přes nástroj, ať je v logu. Frakce nemění stav každou větou — jen při
+  skutečném zlomu.
+
 POSTUP A VOLBY POSTAVY:
 - Postup na úroveň, volba podtřídy, učení kouzel i braní vlastností (feats)
   jdou jen přes nástroje (level_up, choose_subclass, learn_spell, grant_feat,
@@ -230,12 +244,21 @@ export interface SceneQuest {
   title: string;
 }
 
+/** Authored faction goals + offerable world events, for grounding world tools (#49). */
+export interface SceneWorld {
+  factionGoals: Record<string, string>;
+  events: { id: string; name: string; trigger?: string }[];
+}
+
+const RESOURCE_LABEL: Record<string, string> = { low: "nízké", medium: "střední", high: "vysoké" };
+
 /** A compact scene snapshot fed alongside the system prompt each turn. */
 export function sceneSnapshot(
   state: SessionState,
   actors: Record<string, Actor>,
   connections?: SceneConnection[],
   availableQuests?: SceneQuest[],
+  world?: SceneWorld,
 ): string {
   const lines: string[] = [];
   lines.push(`Lokace: ${state.current_location}. Čas: den ${state.time.day}, ${state.time.hour}:00.`);
@@ -267,6 +290,31 @@ export function sceneSnapshot(
       return `${c.to} (${dur})`;
     };
     lines.push(`Cesty odsud: ${connections.map(fmt).join(", ")}.`);
+  }
+  // Runtime danger override for the current location (set by world events, #49).
+  const danger = state.location_danger?.[state.current_location];
+  if (danger) lines.push(`Nebezpečí zde: ${RESOURCE_LABEL[danger] ?? danger}.`);
+  // Living-world factions: live progress (session) + authored goal (param).
+  const factions = Object.values(state.factions ?? {});
+  if (factions.length > 0) {
+    lines.push("Frakce ve světě:");
+    for (const f of factions) {
+      const goal = world?.factionGoals[f.id];
+      lines.push(
+        `- ${f.id} (${f.name}): postup ${Math.round(f.progress * 100)} %, zdroje ${
+          RESOURCE_LABEL[f.resources] ?? f.resources
+        }${goal ? ` — cíl: ${goal}` : ""}`,
+      );
+    }
+  }
+  // Authored world events whose trigger the DM should watch for (not yet fired).
+  const firedIds = new Set(Object.keys(state.world_events ?? {}));
+  const pending = (world?.events ?? []).filter((e) => !firedIds.has(e.id));
+  if (pending.length > 0) {
+    lines.push("Hrozící události (zavolej world_event_trigger, když nastane podmínka):");
+    for (const e of pending) {
+      lines.push(`- ${e.id} (${e.name})${e.trigger ? ` — spouštěč: ${e.trigger}` : ""}`);
+    }
   }
   if (state.combat) {
     const c = state.combat;

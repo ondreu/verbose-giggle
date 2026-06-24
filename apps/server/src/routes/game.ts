@@ -602,6 +602,9 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
     encounters: ctx.manager.campaign.encounters,
     items: ctx.manager.campaign.items,
     lore: ctx.manager.campaign.lore,
+    factions: ctx.manager.campaign.factions,
+    npcs: ctx.manager.campaign.npcs,
+    worldEvents: ctx.manager.campaign.worldEvents,
   }));
 
   /** Instantiate an authored encounter into live combat, then auto-resolve AI. */

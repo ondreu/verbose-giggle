@@ -51,6 +51,19 @@ TypeScript everywhere, Czech player-facing UI.
 reference SRD via `srd_ref:`. Quest notes (`quests/*.md`, #19) are authored
 templates; live progress lives in `session.quests`.
 
+## Shared world layer (`<vault>/worlds/<name>/`, #49)
+A **world** exists independently of campaigns; a campaign opts in via
+`campaign.yaml` → `world: <name>`. `loadWorld` (`apps/server/src/vault/world.ts`)
+loads `locations/`, `factions/`, `npcs/`, `lore/` (+ `lore/events/`), and
+`loadCampaign` merges it **under** the campaign (campaign wins on id collision;
+no `world:` = unchanged). Entities: `FactionSchema`/`WorldEventSchema`/`NpcSchema`
+in `@adm/schemas`. Live faction progress/relationships, triggered world events,
+and location danger live in the session overlay (`session.factions` /
+`world_events` / `location_danger`), seeded from the authored notes and mutated
+ONLY through engine tools `faction_advance` / `faction_relation` /
+`world_event_trigger` / `location_danger` (same determinism contract as #12/#19).
+The example world is `data/vault.example/worlds/marka-havrani/`.
+
 ## Git
 Develop on branch **`claude/upbeat-gauss-05q0pf`**. Commit per logical change;
 keep the ROADMAP checkboxes in sync (`[x]` done, `[~]` partial, `[N/A]`).

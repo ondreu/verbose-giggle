@@ -8,6 +8,7 @@ import {
   loadCampaign,
   loadSession,
   saveSession,
+  seedFactions,
   type LoadedCampaign,
 } from "../vault/campaign.js";
 
@@ -44,6 +45,13 @@ export class SessionManager {
         ac: item.ac,
       };
       dataset.equipment[item.id] = eq;
+    }
+    // Backfill live faction state for any authored faction not yet in the session
+    // (a fresh world, or factions added after the session was first created, #49).
+    const seeded = seedFactions(campaign);
+    if (!session.factions) session.factions = {};
+    for (const [id, runtime] of Object.entries(seeded)) {
+      if (!session.factions[id]) session.factions[id] = runtime;
     }
     return new SessionManager(campaign, session, dataset);
   }
@@ -122,6 +130,23 @@ export class SessionManager {
     };
   }
 
+  /** Fill a `world_event_trigger` call from the authored world event note (#49). */
+  private enrichWorldEvent(args: unknown): unknown {
+    if (!args || typeof args !== "object") return args;
+    const a = args as { id?: unknown; name?: unknown; consequences?: unknown };
+    if (typeof a.id !== "string") return args;
+    const authored = this.campaign.worldEvents[a.id];
+    if (!authored) return args;
+    return {
+      ...a,
+      name: typeof a.name === "string" && a.name ? a.name : authored.name,
+      consequences:
+        Array.isArray(a.consequences) && a.consequences.length > 0
+          ? a.consequences
+          : authored.consequences,
+    };
+  }
+
   /** Capture mutable actor state back into the session overlay after engine work. */
   private syncOverlay(gs: GameState): void {
     for (const [id, actor] of Object.entries(gs.actors)) {
@@ -141,6 +166,7 @@ export class SessionManager {
     // objectives from the vault note so the model need only reference the id
     // (#19). Explicit args from the model still win.
     if (name === "quest_start") args = this.enrichQuestStart(args);
+    if (name === "world_event_trigger") args = this.enrichWorldEvent(args);
     const result = dispatch(gs, name, args);
     // A solo hero's death ends the campaign; the roster lives in the config,
     // so the engine can't decide this on its own (#23).
