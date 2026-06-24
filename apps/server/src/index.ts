@@ -10,6 +10,7 @@ import { EventBus } from "./session/events.js";
 import { SessionManager } from "./session/manager.js";
 import { registerGameRoutes } from "./routes/game.js";
 import { registerAuthRoutes } from "./routes/auth.js";
+import { registerAdminRoutes } from "./routes/admin.js";
 import { openDatabase } from "./db/database.js";
 import { UserStore } from "./auth/users.js";
 import { SessionStore } from "./auth/sessions.js";
@@ -69,7 +70,11 @@ async function main(): Promise<void> {
   const authService = new AuthService(users, sessions, emailSender, {
     secret,
     publicUrl: config.auth.publicUrl,
+    adminEmail: config.auth.adminEmail,
   });
+  // Promote the designated operator to admin if they already registered (#57).
+  const admin = authService.ensureAdmin();
+  if (admin) app.log.info(`Admin role ensured for ${admin.email}`);
   // Resolve req.user from the session and gate protected routes (#55f part 1).
   registerAuthGuard(app, { service: authService, allowAnonymous: config.auth.allowAnonymous });
   await registerAuthRoutes(app, {
@@ -80,6 +85,7 @@ async function main(): Promise<void> {
       registrationEnabled: config.auth.registrationEnabled,
     },
   });
+  await registerAdminRoutes(app, { users });
 
   const campaignDir = await findCampaignDir(config.vaultPath, settings.campaign);
   app.log.info(`Loading campaign from ${campaignDir}`);

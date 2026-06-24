@@ -330,3 +330,40 @@ describe("account settings (#58a)", () => {
     expect(service.currentUser(session.id)).toBeNull();
   });
 });
+
+describe("admin role (#57)", () => {
+  function adminService(email = new FakeEmailSender()) {
+    const db = openInMemoryDatabase();
+    const users = new UserStore(db);
+    const sessions = new SessionStore(db);
+    const service = new AuthService(users, sessions, email, {
+      secret: "s",
+      publicUrl: "http://localhost",
+      adminEmail: "boss@example.com",
+    });
+    return { users, service, email };
+  }
+
+  it("registers the configured admin email with the admin role", async () => {
+    const { service } = adminService();
+    const admin = await service.register("Boss@Example.com", "Abcd1234");
+    expect(admin.role).toBe("admin");
+    const normal = await service.register("hero@example.com", "Abcd1234");
+    expect(normal.role).toBe("user");
+  });
+
+  it("ensureAdmin promotes a pre-existing user", async () => {
+    const { service, users } = adminService();
+    // Registered as a plain user before the admin email was configured…
+    const u = users.create({ email: "boss@example.com", passwordHash: "h" });
+    expect(u.role).toBe("user");
+    const promoted = service.ensureAdmin();
+    expect(promoted?.role).toBe("admin");
+    expect(users.findById(u.id)!.role).toBe("admin");
+  });
+
+  it("ensureAdmin is a no-op without a matching user", () => {
+    const { service } = adminService();
+    expect(service.ensureAdmin()).toBeNull();
+  });
+});

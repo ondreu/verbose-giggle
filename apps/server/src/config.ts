@@ -68,6 +68,11 @@ export interface Config {
     allowAnonymous: boolean;
     /** Whether self-service registration is open. */
     registrationEnabled: boolean;
+    /**
+     * Email that should hold the admin role (#57). Promoted on startup and at
+     * registration. Null = no designated admin (pure single-tenant).
+     */
+    adminEmail: string | null;
   };
 }
 
@@ -140,6 +145,7 @@ export function loadConfig(): Config {
       smtp,
       allowAnonymous: process.env.AUTH_ALLOW_ANONYMOUS !== "false",
       registrationEnabled: process.env.AUTH_REGISTRATION !== "false",
+      adminEmail: process.env.ADMIN_EMAIL?.trim().toLowerCase() || null,
     },
   };
 }

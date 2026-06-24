@@ -127,11 +127,16 @@ ne „nice to have".
 
 ### #57 — Dev / admin panel
 
-- **#57a — Role + ochrana.** `role: admin`; admin endpointy za zvláštní
-  autorizací — bezpečnostně nejcitlivější část.
-- **#57b — Rozsah.** Seznam uživatelů (verifikace/ban/reset), **ruční úprava
-  kreditů**, přehled spotřeby/nákladů, globální server settings, správa
-  kampaní/vaultů, logy, health.
+- **[x] #57a — Role + ochrana.** Role `admin` na uživateli; prefix `/api/admin`
+  hlídá auth guard (401 bez session, 403 bez admin role) nezávisle na
+  `allowAnonymous`. Admin se bootstrapuje z `ADMIN_EMAIL` — registrace s tímto
+  e-mailem rovnou dostane roli admin a `ensureAdmin()` při startu povýší už
+  existující účet. `routes/admin.ts`, `auth/middleware.ts`. Testy v
+  `auth-guard.test.ts` + `auth.test.ts`.
+- **[~] #57b — Rozsah.** Hotovo: `GET /api/admin/users` (seznam) + `GET
+  /api/admin/overview` (počty). Zbývá: mutace (změna role/verify/ban/reset),
+  ruční úprava kreditů (#56), přehled spotřeby/nákladů, globální settings,
+  správa kampaní/vaultů, logy, health.
 - **#57c — Audit log.** Každá admin akce (grant, ban, změna settings) append-only.
 - **#57d — UI.** Samostatná `/admin` routa (gated rolí) — čistší než rozšiřovat
   `SettingsModal`.

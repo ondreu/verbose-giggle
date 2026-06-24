@@ -45,6 +45,15 @@ export function registerAuthGuard(app: FastifyInstance, opts: AuthGuardOptions):
 
   app.addHook("onRequest", async (req: FastifyRequest, reply) => {
     req.user = opts.service.currentUser(req.cookies?.[SESSION_COOKIE]);
+
+    const path = req.url.split("?", 1)[0]!;
+    // Admin area (#57): always requires the admin role, regardless of the
+    // anonymous-access setting.
+    if (path.startsWith("/api/admin")) {
+      if (!req.user) return reply.code(401).send({ error: "Vyžadováno přihlášení." });
+      if (req.user.role !== "admin") return reply.code(403).send({ error: "Přístup jen pro administrátory." });
+      return;
+    }
     if (!opts.allowAnonymous && !req.user && !isPublicPath(req.url)) {
       return reply.code(401).send({ error: "Vyžadováno přihlášení." });
     }

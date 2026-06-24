@@ -8,7 +8,7 @@ import { hashPassword, verifyPassword } from "./password.js";
 import { createToken, verifyToken } from "./tokens.js";
 import { validateEmail, validatePassword } from "./validation.js";
 import { passwordResetEmail, verificationEmail, type EmailSender } from "./email.js";
-import { DuplicateEmailError, type User, type UserStore } from "./users.js";
+import { DuplicateEmailError, normalizeEmail, type User, type UserStore } from "./users.js";
 import type { Session, SessionStore } from "./sessions.js";
 
 export interface AuthServiceOptions {
@@ -24,6 +24,8 @@ export interface AuthServiceOptions {
   sessionTtlMs?: number;
   /** Require a verified email before login is allowed. Defaults to true. */
   requireVerifiedEmail?: boolean;
+  /** Email granted the admin role on registration / bootstrap (#57). */
+  adminEmail?: string | null;
 }
 
 /** A client-facing failure with an HTTP status and a Czech message. */
@@ -93,9 +95,11 @@ export class AuthService {
     if (!pwCheck.ok) throw new AuthError(400, pwCheck.error!);
 
     const passwordHash = await hashPassword(password);
+    const isAdmin =
+      this.opts.adminEmail != null && normalizeEmail(emailInput) === this.opts.adminEmail;
     let user: User;
     try {
-      user = this.users.create({ email: emailInput, passwordHash });
+      user = this.users.create({ email: emailInput, passwordHash, role: isAdmin ? "admin" : "user" });
     } catch (err) {
       if (err instanceof DuplicateEmailError) {
         throw new AuthError(409, "Účet s tímto e-mailem už existuje.");
@@ -280,5 +284,20 @@ export class AuthService {
   /** Open a fresh session for a user (used after a password change). */
   openSession(userId: string) {
     return this.sessions.create(userId, this.sessionTtlMs);
+  }
+
+  // --- Admin (#57) ----------------------------------------------------------
+
+  /**
+   * Promote the configured admin email to the admin role if that user exists.
+   * Called at startup so a designated operator becomes admin even if they
+   * registered before the email was configured. Returns the user, or null.
+   */
+  ensureAdmin(): User | null {
+    if (!this.opts.adminEmail) return null;
+    const user = this.users.findByEmail(this.opts.adminEmail);
+    if (!user) return null;
+    if (user.role !== "admin") this.users.setRole(user.id, "admin");
+    return { ...user, role: "admin" };
   }
 }
