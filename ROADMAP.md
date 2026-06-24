@@ -116,13 +116,17 @@ ne „nice to have".
   (`grant`/`charge`/`balance`/`history`). Zůstatek = `SUM(delta)`; delty jsou
   celá čísla v nejmenší jednotce (bez floatů). `credits/ledger.ts`, test
   `test/credits.test.ts`.
-- **#56b — Měření spotřeby.** Strhávat **per reálná spotřeba tokenů** (LLM/
-  obrázek/TTS) = cost + markup; usage brát z odpovědi poskytovatele, ne odhad.
-  **Pozor na determinismus (#12):** strhávání je vedlejší efekt mimo engine.
-  Ošetřit selhání (nestrhávat za chybu) a streaming (#32 — účtovat po dokončení
-  tahu). **BYO-key (self-hosted):** metering se přeskakuje; hosted BYO nepovolí.
-- **#56c — Vynucení limitu.** Před drahou operací zkontrolovat zůstatek; při 0
-  vrátit čistý 402 do UI (ne pád). Rozhodnout: tvrdý stop vs. mock narrator.
+- **[~] #56b — Měření spotřeby.** Hotovo pro **LLM**: `MeteredLlm` obalí
+  vypravěče a sečte `usage` z odpovědí poskytovatele přes všechna kola tool-loopu
+  (stream i ne-stream; u streamu `stream_options.include_usage`); cena =
+  tokeny/1000 × sazba (input/output) zaokrouhleno nahoru. Strhává se **až po
+  úspěšném tahu** (chyba = nestrhne se) → mimo engine, determinismus (#12)
+  nedotčen. Gated `CREDITS_ENABLED` (default off) → self-hosted/BYO se nemetruje.
+  Zbývá: měření **obrázků a TTS**. `credits/metering.ts`, `llm/client.ts`.
+- **[x] #56c — Vynucení limitu.** Před tahem (`/api/action`, `/api/regenerate`,
+  intro, recap) se kontroluje zůstatek; při ≤0 čistý **402** do UI. Následné
+  LLM (arrival/AI tahy po engine příkazu) se metrují bez tvrdého stopu —
+  enforcement je na hranici hráčova tahu. Tvrdý stop (ne mock).
 - **[x] #56d — Dobíjení.** Admin grant: `POST /api/admin/users/:id/credits`
   (kladně přidá, záporně odečte; audit). Zůstatek je vidět v admin seznamu
   uživatelů. Platební brána (Stripe) až později.

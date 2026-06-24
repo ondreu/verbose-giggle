@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import { openInMemoryDatabase } from "../src/db/database.js";
 import { UserStore } from "../src/auth/users.js";
 import { CreditStore } from "../src/credits/ledger.js";
+import { MeteredLlm, creditsForUsage, type CreditPricing } from "../src/credits/metering.js";
+import type { Llm, LlmResponse } from "../src/llm/client.js";
 
 function setup() {
   const db = openInMemoryDatabase();
@@ -57,5 +59,32 @@ describe("credit ledger (#56a)", () => {
     users.delete(user.id);
     expect(credits.balance(user.id)).toBe(0);
     expect(credits.history(user.id)).toHaveLength(0);
+  });
+});
+
+const PRICING: CreditPricing = { perThousandPromptTokens: 1, perThousandCompletionTokens: 3 };
+
+describe("metering (#56b)", () => {
+  it("costs usage at price × markup, rounding up", () => {
+    expect(creditsForUsage(PRICING, { promptTokens: 1000, completionTokens: 1000 })).toBe(4);
+    // 500 prompt → 0.5, 100 completion → 0.3 → ceil(0.8) = 1
+    expect(creditsForUsage(PRICING, { promptTokens: 500, completionTokens: 100 })).toBe(1);
+    expect(creditsForUsage(PRICING, { promptTokens: 0, completionTokens: 0 })).toBe(0);
+  });
+
+  it("MeteredLlm accumulates usage across calls and forwards the response", async () => {
+    const responses: LlmResponse[] = [
+      { content: "a", toolCalls: [], usage: { promptTokens: 1000, completionTokens: 500 } },
+      { content: "b", toolCalls: [], usage: { promptTokens: 2000, completionTokens: 0 } },
+      { content: "c", toolCalls: [] }, // no usage reported — ignored
+    ];
+    let i = 0;
+    const inner: Llm = { chat: async () => responses[i++]! };
+    const metered = new MeteredLlm(inner);
+
+    for (let n = 0; n < 3; n++) await metered.chat([], []);
+    expect(metered.usage).toEqual({ promptTokens: 3000, completionTokens: 500 });
+    // 3000 prompt → 3, 500 completion → 1.5 → ceil(4.5) = 5
+    expect(metered.cost(PRICING)).toBe(5);
   });
 });

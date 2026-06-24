@@ -18,9 +18,16 @@ export interface ToolSpec {
   function: { name: string; description: string; parameters: Record<string, unknown> };
 }
 
+export interface TokenUsage {
+  promptTokens: number;
+  completionTokens: number;
+}
+
 export interface LlmResponse {
   content: string | null;
   toolCalls: { id: string; name: string; args: unknown }[];
+  /** Provider-reported token usage, when available (#56b metering). */
+  usage?: TokenUsage;
 }
 
 /** The narrator contract the turn loop depends on (real or mock). */
@@ -84,7 +91,7 @@ export class LlmClient implements Llm {
       name: tc.function.name,
       args: parseArgs(tc.function.arguments),
     }));
-    return { content: choice?.content ?? null, toolCalls };
+    return { content: choice?.content ?? null, toolCalls, usage: mapUsage(resp.usage) };
   }
 
   /**
@@ -105,11 +112,15 @@ export class LlmClient implements Llm {
       tool_choice: "auto",
       temperature: 0.7,
       stream: true,
+      // Ask for a final usage chunk so streamed turns can be metered (#56b).
+      stream_options: { include_usage: true },
     });
 
     let content = "";
+    let usage: TokenUsage | undefined;
     const acc: Record<number, { id: string; name: string; args: string }> = {};
     for await (const chunk of stream) {
+      if (chunk.usage) usage = mapUsage(chunk.usage);
       const delta = chunk.choices[0]?.delta;
       if (!delta) continue;
       if (delta.content) {
@@ -129,6 +140,12 @@ export class LlmClient implements Llm {
       name: t.name,
       args: parseArgs(t.args),
     }));
-    return { content: content || null, toolCalls };
+    return { content: content || null, toolCalls, usage };
   }
+}
+
+/** Map an OpenAI-shaped usage object to our minimal {@link TokenUsage}. */
+function mapUsage(u: { prompt_tokens?: number; completion_tokens?: number } | undefined): TokenUsage | undefined {
+  if (!u) return undefined;
+  return { promptTokens: u.prompt_tokens ?? 0, completionTokens: u.completion_tokens ?? 0 };
 }

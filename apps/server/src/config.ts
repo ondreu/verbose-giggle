@@ -3,6 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Settings } from "./settings.js";
 import type { SmtpConfig } from "./auth/email.js";
+import type { CreditPricing } from "./credits/metering.js";
 
 /**
  * Bundled SRD dataset shipped in-repo (#45a) under `packages/srd/data`, so the
@@ -73,6 +74,15 @@ export interface Config {
      * registration. Null = no designated admin (pure single-tenant).
      */
     adminEmail: string | null;
+  };
+  /** Credits / metering (#56). */
+  credits: {
+    /**
+     * Charge real token usage against user credits (hosted edition). Off by
+     * default so self-hosted / BYO-key runs are never metered.
+     */
+    enabled: boolean;
+    pricing: CreditPricing;
   };
 }
 
@@ -146,6 +156,13 @@ export function loadConfig(): Config {
       allowAnonymous: process.env.AUTH_ALLOW_ANONYMOUS !== "false",
       registrationEnabled: process.env.AUTH_REGISTRATION !== "false",
       adminEmail: process.env.ADMIN_EMAIL?.trim().toLowerCase() || null,
+    },
+    credits: {
+      enabled: process.env.CREDITS_ENABLED === "true",
+      pricing: {
+        perThousandPromptTokens: Number(process.env.CREDITS_PER_1K_PROMPT ?? 1),
+        perThousandCompletionTokens: Number(process.env.CREDITS_PER_1K_COMPLETION ?? 3),
+      },
     },
   };
 }

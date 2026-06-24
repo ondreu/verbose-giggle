@@ -98,7 +98,7 @@ async function main(): Promise<void> {
   const manager = await SessionManager.open(campaignDir, { srdDir: config.srdPath });
   const bus = new EventBus();
 
-  await registerGameRoutes(app, { manager, bus, config });
+  await registerGameRoutes(app, { manager, bus, config, credits });
 
   app.get("/api/health", async () => ({ ok: true, campaign: manager.campaign.config.name }));
 
