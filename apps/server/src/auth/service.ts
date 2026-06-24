@@ -4,11 +4,12 @@
  * unit-tested with a fake email sender; the HTTP layer (`routes/auth.ts`) is a
  * thin wrapper. Login/session (#55c) and reset (#55d) extend this service.
  */
-import { hashPassword } from "./password.js";
+import { hashPassword, verifyPassword } from "./password.js";
 import { createToken, verifyToken } from "./tokens.js";
 import { validateEmail, validatePassword } from "./validation.js";
 import { verificationEmail, type EmailSender } from "./email.js";
 import { DuplicateEmailError, type User, type UserStore } from "./users.js";
+import type { Session, SessionStore } from "./sessions.js";
 
 export interface AuthServiceOptions {
   /** HMAC secret for signed tokens. */
@@ -17,6 +18,10 @@ export interface AuthServiceOptions {
   publicUrl: string;
   /** Verification-link lifetime. Defaults to 24h. */
   verifyTtlMs?: number;
+  /** Login session lifetime. Defaults to 30 days. */
+  sessionTtlMs?: number;
+  /** Require a verified email before login is allowed. Defaults to true. */
+  requireVerifiedEmail?: boolean;
 }
 
 /** A client-facing failure with an HTTP status and a Czech message. */
@@ -32,15 +37,30 @@ export class AuthError extends Error {
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+export interface LoginResult {
+  user: User;
+  session: Session;
+}
+
 export class AuthService {
   private readonly verifyTtlMs: number;
+  private readonly sessionTtlMs: number;
+  private readonly requireVerifiedEmail: boolean;
 
   constructor(
     private readonly users: UserStore,
+    private readonly sessions: SessionStore,
     private readonly email: EmailSender,
     private readonly opts: AuthServiceOptions,
   ) {
     this.verifyTtlMs = opts.verifyTtlMs ?? DAY_MS;
+    this.sessionTtlMs = opts.sessionTtlMs ?? 30 * DAY_MS;
+    this.requireVerifiedEmail = opts.requireVerifiedEmail ?? true;
+  }
+
+  /** Session lifetime in ms (the cookie route mirrors this as Max-Age). */
+  get sessionMaxAgeMs(): number {
+    return this.sessionTtlMs;
   }
 
   private verifyLink(token: string): string {
@@ -103,5 +123,44 @@ export class AuthService {
     if (!user) throw new AuthError(400, "Účet nenalezen.");
     if (!user.emailVerified) this.users.setEmailVerified(user.id, true);
     return { ...user, emailVerified: true };
+  }
+
+  /**
+   * Verify credentials and open a session. Uses a uniform error for unknown
+   * email and wrong password so the response can't distinguish them. Throws
+   * {@link AuthError} 403 when the email isn't verified yet.
+   */
+  async login(emailInput: string, password: string): Promise<LoginResult> {
+    const invalid = new AuthError(401, "Nesprávný e-mail nebo heslo.");
+    if (typeof emailInput !== "string" || typeof password !== "string") throw invalid;
+
+    const user = this.users.findByEmail(emailInput);
+    if (!user) {
+      // Still run a hash to keep timing roughly uniform against enumeration.
+      await verifyPassword(password, "scrypt$1$1$1$00$00");
+      throw invalid;
+    }
+    const hash = this.users.getPasswordHash(user.id);
+    if (!hash || !(await verifyPassword(password, hash))) throw invalid;
+
+    if (this.requireVerifiedEmail && !user.emailVerified) {
+      throw new AuthError(403, "Než se přihlásíš, ověř svůj e-mail.");
+    }
+
+    const session = this.sessions.create(user.id, this.sessionTtlMs);
+    return { user, session };
+  }
+
+  /** Invalidate a session id (logout). No-op if it doesn't exist. */
+  logout(sessionId: string): void {
+    this.sessions.delete(sessionId);
+  }
+
+  /** Resolve the user behind a session id, or null if missing/expired. */
+  currentUser(sessionId: string | undefined): User | null {
+    if (!sessionId) return null;
+    const session = this.sessions.get(sessionId);
+    if (!session) return null;
+    return this.users.findById(session.userId);
   }
 }

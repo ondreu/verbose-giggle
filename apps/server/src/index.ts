@@ -3,6 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import Fastify from "fastify";
 import fastifyStatic from "@fastify/static";
+import fastifyCookie from "@fastify/cookie";
 import { applySettings, loadConfig } from "./config.js";
 import { loadSettings } from "./settings.js";
 import { EventBus } from "./session/events.js";
@@ -11,6 +12,7 @@ import { registerGameRoutes } from "./routes/game.js";
 import { registerAuthRoutes } from "./routes/auth.js";
 import { openDatabase } from "./db/database.js";
 import { UserStore } from "./auth/users.js";
+import { SessionStore } from "./auth/sessions.js";
 import { loadOrCreateSecret } from "./auth/tokens.js";
 import { LogEmailSender, SmtpEmailSender, type EmailSender } from "./auth/email.js";
 import { AuthService } from "./auth/service.js";
@@ -54,17 +56,23 @@ async function main(): Promise<void> {
   }
 
   // Accounts (#55): app DB + auth service. File-first SQLite in the vault.
+  await app.register(fastifyCookie);
   const db = openDatabase(config.vaultPath);
   const users = new UserStore(db);
+  const sessions = new SessionStore(db);
+  sessions.pruneExpired();
   const secret = loadOrCreateSecret(config.vaultPath);
   const emailSender: EmailSender = config.auth.smtp
     ? new SmtpEmailSender(config.auth.smtp)
     : new LogEmailSender(app.log);
-  const authService = new AuthService(users, emailSender, {
+  const authService = new AuthService(users, sessions, emailSender, {
     secret,
     publicUrl: config.auth.publicUrl,
   });
-  await registerAuthRoutes(app, { service: authService });
+  await registerAuthRoutes(app, {
+    service: authService,
+    cookieSecure: config.auth.publicUrl.startsWith("https://"),
+  });
 
   const campaignDir = await findCampaignDir(config.vaultPath, settings.campaign);
   app.log.info(`Loading campaign from ${campaignDir}`);

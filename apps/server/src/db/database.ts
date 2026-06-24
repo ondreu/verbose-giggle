@@ -49,6 +49,19 @@ const MIGRATIONS: ReadonlyArray<(db: SqliteDatabase) => void> = [
     // to lowercase on write so a plain UNIQUE index is enough; the index above
     // (via UNIQUE) already covers lookups by email.
   },
+  // v2 — sessions (#55c). Server-side so logout/admin-revoke actually
+  // invalidate; the cookie carries only the opaque high-entropy id.
+  (db) => {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS sessions (
+        id         TEXT PRIMARY KEY,
+        user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        created_at TEXT NOT NULL,
+        expires_at TEXT NOT NULL
+      ) STRICT;
+    `);
+    db.exec("CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);");
+  },
 ];
 
 function migrate(db: SqliteDatabase): void {

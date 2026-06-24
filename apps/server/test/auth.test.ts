@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { openInMemoryDatabase } from "../src/db/database.js";
 import { UserStore } from "../src/auth/users.js";
+import { SessionStore } from "../src/auth/sessions.js";
 import { AuthError, AuthService } from "../src/auth/service.js";
 import { createToken, loadOrCreateSecret, verifyToken } from "../src/auth/tokens.js";
 import { validateEmail, validatePassword } from "../src/auth/validation.js";
@@ -21,13 +22,19 @@ class FakeEmailSender implements EmailSender {
   }
 }
 
-function freshService(email = new FakeEmailSender()) {
-  const users = new UserStore(openInMemoryDatabase());
-  const service = new AuthService(users, email, {
+function freshService(
+  email = new FakeEmailSender(),
+  opts: { requireVerifiedEmail?: boolean } = {},
+) {
+  const db = openInMemoryDatabase();
+  const users = new UserStore(db);
+  const sessions = new SessionStore(db);
+  const service = new AuthService(users, sessions, email, {
     secret: "test-secret",
     publicUrl: "https://dm.example",
+    requireVerifiedEmail: opts.requireVerifiedEmail ?? true,
   });
-  return { users, service, email };
+  return { users, sessions, service, email };
 }
 
 describe("signed tokens", () => {
@@ -126,5 +133,69 @@ describe("AuthService", () => {
     email.sent = [];
     await service.resendVerification("hero@example.com");
     expect(email.sent).toHaveLength(0);
+  });
+});
+
+describe("login + sessions (#55c)", () => {
+  async function registerVerified(service: AuthService, email: FakeEmailSender) {
+    const user = await service.register("hero@example.com", "Abcd1234");
+    service.verifyEmail(email.lastToken());
+    return user;
+  }
+
+  it("logs in with valid credentials and resolves the session", async () => {
+    const { service, email } = freshService();
+    const user = await registerVerified(service, email);
+    const { session, user: who } = await service.login("Hero@Example.com", "Abcd1234");
+    expect(who.id).toBe(user.id);
+    expect(service.currentUser(session.id)?.id).toBe(user.id);
+  });
+
+  it("rejects a wrong password and an unknown email with 401", async () => {
+    const { service, email } = freshService();
+    await registerVerified(service, email);
+    await expect(service.login("hero@example.com", "wrongpass1A")).rejects.toMatchObject({
+      statusCode: 401,
+    });
+    await expect(service.login("nobody@example.com", "Abcd1234")).rejects.toMatchObject({
+      statusCode: 401,
+    });
+  });
+
+  it("refuses login for an unverified email with 403", async () => {
+    const { service } = freshService();
+    await service.register("hero@example.com", "Abcd1234");
+    await expect(service.login("hero@example.com", "Abcd1234")).rejects.toMatchObject({
+      statusCode: 403,
+    });
+  });
+
+  it("allows unverified login when requireVerifiedEmail is off", async () => {
+    const { service } = freshService(new FakeEmailSender(), { requireVerifiedEmail: false });
+    await service.register("hero@example.com", "Abcd1234");
+    const { session } = await service.login("hero@example.com", "Abcd1234");
+    expect(service.currentUser(session.id)).not.toBeNull();
+  });
+
+  it("invalidates the session on logout", async () => {
+    const { service, email } = freshService();
+    await registerVerified(service, email);
+    const { session } = await service.login("hero@example.com", "Abcd1234");
+    expect(service.currentUser(session.id)).not.toBeNull();
+    service.logout(session.id);
+    expect(service.currentUser(session.id)).toBeNull();
+  });
+
+  it("treats expired sessions as gone", async () => {
+    const { users, sessions } = freshService();
+    const u = users.create({ email: "x@y.z", passwordHash: "h" });
+    const expired = sessions.create(u.id, -1);
+    expect(sessions.get(expired.id)).toBeNull();
+  });
+
+  it("returns null for missing/empty session ids", () => {
+    const { service } = freshService();
+    expect(service.currentUser(undefined)).toBeNull();
+    expect(service.currentUser("nope")).toBeNull();
   });
 });

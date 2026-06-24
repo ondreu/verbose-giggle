@@ -76,9 +76,14 @@ ne „nice to have".
   `EmailSender` — default loguje odkaz, SMTP přes `nodemailer` (lazy) když je
   `SMTP_HOST` nastaven. `apps/server/src/auth/{service,tokens,validation,email}.ts`,
   `routes/auth.ts`, test `test/auth.test.ts`.
-- **#55c — Login + session.** `POST /api/auth/login` → **httpOnly cookie**
-  (bezpečnější default proti XSS než JWT). `config.basicAuth` zůstane jako
-  „op-only" zámek pro self-hosted.
+- **[x] #55c — Login + session.** `POST /api/auth/login` ověří heslo
+  (timing-uniform proti enumeraci), vyžaduje ověřený e-mail (vypínatelné
+  `requireVerifiedEmail`) a otevře **server-side session** (tabulka `sessions`,
+  v2 migrace) → opaque id v **httpOnly** cookie (`adm_session`, SameSite=Lax,
+  Secure dle HTTPS). `POST /api/auth/logout` (invaliduje session), `GET
+  /api/auth/me`. Server-side úložiště = reálný logout/revokace (vs. JWT).
+  `auth/sessions.ts`, `@fastify/cookie`. `config.basicAuth` zůstává op-only
+  zámek. Testy v `test/auth.test.ts`.
 - **#55d — Reset hesla.** `POST /api/auth/forgot` + `/reset` přes emailový token
   (sdílí infra s #55b).
 - **#55e — Napojit `LoginScreen`.** Vyměnit `onContinue()` stub za reálná volání
