@@ -214,7 +214,15 @@ on old code and items **#15, #17, #18** are likely already resolved by updating.
     (middle column) and the right rail now pins the party controls at the top
     with the character sheet (+ its actions) and the inventory each scrolling
     independently, so the rail as a whole never scrolls. Nav collapses to
-    horizontal tabs below `lg`; splitters/persisted widths (#11) preserved.
+    horizontal tabs below `lg`; splitters/persisted widths (#11) preserved. The
+    chat column (`ChatPanel.tsx`) was reworked to the sketch: the flat 9-button
+    toolbar is now a clean top row (Shrnutí · Deník · Úkoly · Pravidla + the
+    global hlas toggle); player turns render as a distinct labelled block
+    ("Hráčova zpráva") and each DM line carries an always-visible **menu button**
+    (kebab) that opens an attached popover of message actions — **Předčíst** (read
+    this line aloud, new `speakLine` store action), **Vrátit tah** (latest line),
+    **Vizualizovat**, plus **Regenerovat** and **Jiným modelem** (buttons present,
+    backend pending — see #54).
   - **[x] #47b — Design consistency.** All new chrome reuses the existing tokens
     (`panel`/`panel-title`/`btn-gold`/`btn-ghost`/`settings-input`, the
     gold/blood/arcane accents, the parchment Settings surface) and the original
@@ -733,6 +741,13 @@ kampaně v něm:
   exploration-first opening, and the DM prompt switches to open-ended mode (offer
   opportunities, no railroad). The world (locations, NPCs, factions, roaming
   encounters) is still generated.
+- **#54 — Per-message "Regenerovat" / "Jiným modelem".** The chat message-action
+  menu (#47) already shows both buttons; they need backend wiring. *Regenerovat*
+  = drop the last DM turn and re-run it (undo + resend the prior player action
+  through the DM loop). *Jiným modelem* = same, but with a one-off model override
+  for that single call (the UI should let the player pick the model — needs an
+  `/api/action` model param threaded into `LlmClient.chat`). Both should reuse
+  the existing tool-loop/streaming path so determinism (#12) is unaffected.
 
 ---
 

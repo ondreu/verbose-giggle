@@ -51,6 +51,15 @@ const PATHS: Record<string, string> = {
     "M11 4 6 8H3v8h3l5 4V4Zm4.6 3.4a5 5 0 0 1 0 9.2l-1-1.8a3 3 0 0 0 0-5.6l1-1.8Z",
   upload:
     "M12 3 7 8h3v7h4V8h3l-5-5ZM5 18h14v2H5v-2Z",
+  // Circular arrow — regenerate / retry a turn (#47, stubbed).
+  refresh:
+    "M17.65 6.35A8 8 0 1 0 19.74 14h-2.08A6 6 0 1 1 12 6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35Z",
+  // Two opposed arrows — swap to a different model (#47, stubbed).
+  swap:
+    "M7 7h11l-3-3 1.4-1.4L21.8 8l-5.4 5.4L15 12l3-3H7V7Zm10 10H6l3 3-1.4 1.4L2.2 16l5.4-5.4L9 12l-3 3h11v2Z",
+  // Vertical ellipsis — per-message action menu (#47).
+  dots:
+    "M12 4a2 2 0 1 0 0 4 2 2 0 0 0 0-4Zm0 6a2 2 0 1 0 0 4 2 2 0 0 0 0-4Zm0 6a2 2 0 1 0 0 4 2 2 0 0 0 0-4Z",
 };
 
 export function Icon({

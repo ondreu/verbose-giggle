@@ -147,6 +147,8 @@ interface GameStore {
   setTtsProvider: (provider: TtsProvider) => void;
   /** Stop any narration audio currently playing (#30). */
   stopSpeech: () => void;
+  /** Read a specific narration line aloud on demand (per-message control, #47). */
+  speakLine: (text: string) => void;
   generateImage: (subject: ImageSubject, id?: string, label?: string) => Promise<void>;
   closeImage: () => void;
 
@@ -490,6 +492,12 @@ export const useGame = create<GameStore>((set, get) => ({
   stopSpeech: () => {
     stopAudio();
     set({ speaking: false });
+  },
+
+  speakLine: (text) => {
+    if (!text.trim()) return;
+    set({ speaking: true });
+    void speak(text, get().ttsProvider, () => set({ speaking: false }));
   },
 
   generateImage: async (subject, id, label) => {
