@@ -6,7 +6,7 @@
   "license": "AGPL-3.0-or-later",
   "packageManager": "pnpm@10.33.0",
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "scripts": {
     "build": "pnpm -r build",
@@ -16,10 +16,13 @@
     "dev:web": "pnpm --filter @adm/web dev"
   },
   "devDependencies": {
+    "@types/node": "^22.20.0",
     "typescript": "^5.5.4",
     "vitest": "^2.0.5"
   },
   "pnpm": {
-    "onlyBuiltDependencies": ["esbuild"]
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
   }
 }

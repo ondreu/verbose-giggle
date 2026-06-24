@@ -59,9 +59,14 @@ ne „nice to have".
 
 ### #55 — Email registrace + autentizace
 
-- **#55a — Datová vrstva uživatelů.** Lehká DB (SQLite ve vaultu — žádná nová
-  infra, drží „file-first") s tabulkou `users` (id, email, `password_hash`
-  argon2/bcrypt, `email_verified`, `created_at`, role).
+- **[x] #55a — Datová vrstva uživatelů.** SQLite ve vaultu (`<vault>/db/app.db`)
+  přes vestavěný `node:sqlite` (Node 22+, žádná nativní závislost); idempotentní
+  migrace dle `user_version`. Tabulka `users` (id, email, `password_hash`,
+  `display_name`, `email_verified`, role, `created_at`) + `UserStore`
+  (create/find/update/list/delete) a hashování hesla přes `crypto.scrypt`
+  (self-describing formát, snadná migrace na argon2). `apps/server/src/db/`,
+  `apps/server/src/auth/{users,password}.ts`, test `test/users.test.ts`. Pozn.:
+  baseline Node zvednut 20→22.
 - **#55b — Registrace + ověření emailu.** `POST /api/auth/register` (validace
   síly hesla, hash), ověřovací odkaz podepsaným tokenem s expirací. Vyžaduje
   **odesílání emailů** (SMTP — nová závislost).
