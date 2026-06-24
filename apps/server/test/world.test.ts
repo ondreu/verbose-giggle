@@ -63,3 +63,52 @@ describe("living world layer (#49)", () => {
     expect(mgr.session.location_danger["velen"]).toBe("low");
   });
 });
+
+describe("shared vs isolated world state (#49)", () => {
+  async function freshVault(): Promise<string> {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "adm-share-"));
+    await fs.cp(VAULT, path.join(root, "vault"), { recursive: true });
+    tmpDirs.push(root);
+    return path.join(root, "vault");
+  }
+  const campDir = (vault: string, c: string) => path.join(vault, "campaigns", c);
+  const enableSharing = (vault: string, c: string) =>
+    fs.appendFile(path.join(campDir(vault, c), "campaign.yaml"), "\nworld_shared: true\n");
+  const worldStateFile = (vault: string) =>
+    path.join(vault, "worlds", "marka-havrani", "state", "world.json");
+
+  it("carries faction progress across campaigns when world_shared is on", async () => {
+    const vault = await freshVault();
+    await enableSharing(vault, "konvoj-do-vresoviste");
+    await enableSharing(vault, "stiny-vraniho-hradu");
+
+    // Campaign A advances the cult and persists → writes the shared world.json.
+    const a = await SessionManager.open(campDir(vault, "konvoj-do-vresoviste"));
+    expect(a.sharesWorld()).toBe(true);
+    const gs = a.buildGameState();
+    await a.applyTool(gs, "faction_advance", { id: "kult-marakathe", delta: 0.2 });
+    await a.persist();
+    const ws = JSON.parse(await fs.readFile(worldStateFile(vault), "utf8"));
+    expect(ws.factions["kult-marakathe"].progress).toBeCloseTo(0.65);
+
+    // Campaign B (also shared) inherits the change despite a fresh session.
+    const b = await SessionManager.open(campDir(vault, "stiny-vraniho-hradu"));
+    expect(b.session.factions["kult-marakathe"]?.progress).toBeCloseTo(0.65);
+  });
+
+  it("keeps faction state isolated by default (no shared world.json)", async () => {
+    const vault = await freshVault();
+    // konvoj-do-vresoviste has no world_shared → isolated.
+    const a = await SessionManager.open(campDir(vault, "konvoj-do-vresoviste"));
+    expect(a.sharesWorld()).toBe(false);
+    const gs = a.buildGameState();
+    await a.applyTool(gs, "faction_advance", { id: "kult-marakathe", delta: 0.2 });
+    await a.persist();
+    // No shared world.json is written for an isolated campaign.
+    await expect(fs.access(worldStateFile(vault))).rejects.toBeDefined();
+
+    // A second campaign in the same world still seeds from the authored note.
+    const b = await SessionManager.open(campDir(vault, "stiny-vraniho-hradu"));
+    expect(b.session.factions["kult-marakathe"]?.progress).toBeCloseTo(0.45);
+  });
+});

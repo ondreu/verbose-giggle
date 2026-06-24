@@ -64,6 +64,13 @@ ONLY through engine tools `faction_advance` / `faction_relation` /
 `world_event_trigger` / `location_danger` (same determinism contract as #12/#19).
 The example world is `data/vault.example/worlds/marka-havrani/`.
 
+Per-campaign toggle `world_shared` (default false): when **false** each campaign
+keeps its OWN isolated world-state copy in its session; when **true** the campaign
+reads/writes the SHARED `worlds/<name>/state/world.json` so faction progress and
+events carry across campaigns in the same world (`apps/server/src/vault/world-state.ts`,
+hydrated/flushed by `SessionManager`). The forge picker lists worlds via
+`GET /api/worlds` and passes `world` + `world_shared` to `forgeCampaign`.
+
 ## Git
 Develop on branch **`claude/upbeat-gauss-05q0pf`**. Commit per logical change;
 keep the ROADMAP checkboxes in sync (`[x]` done, `[~]` partial, `[N/A]`).

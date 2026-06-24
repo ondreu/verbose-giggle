@@ -142,9 +142,21 @@ function ForgeCampaign() {
   const [premise, setPremise] = useState("");
   const [length, setLength] = useState<"short" | "medium" | "long">("medium");
   const [detail, setDetail] = useState<"sparse" | "normal" | "rich">("normal");
+  const [worlds, setWorlds] = useState<{ id: string; name: string }[]>([]);
+  const [world, setWorld] = useState("");
+  const [worldShared, setWorldShared] = useState(false);
   const [working, setWorking] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState<{ phase: string; msg: string }[]>([]);
+
+  // Load the vault's shared worlds the first time the wizard opens (#49).
+  useEffect(() => {
+    if (!open || worlds.length > 0) return;
+    void fetch("/api/worlds")
+      .then((r) => (r.ok ? r.json() : { worlds: [] }))
+      .then((d) => setWorlds(Array.isArray(d.worlds) ? d.worlds : []))
+      .catch(() => setWorlds([]));
+  }, [open, worlds.length]);
 
   const submit = async () => {
     if (!name.trim() || working) return;
@@ -157,7 +169,15 @@ function ForgeCampaign() {
       res = await fetch("/api/campaigns/forge/stream", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, premise: premise || undefined, length, detail, select: true }),
+        body: JSON.stringify({
+          name,
+          premise: premise || undefined,
+          length,
+          detail,
+          world: world || undefined,
+          world_shared: world ? worldShared : undefined,
+          select: true,
+        }),
       });
     } catch {
       setError("Připojení k serveru selhalo");
@@ -272,6 +292,42 @@ function ForgeCampaign() {
               </select>
             </div>
           </div>
+
+          {/* Shared-world picker (#49): build the campaign inside an existing world. */}
+          {worlds.length > 0 && (
+            <div>
+              <label className="font-log text-[10px] uppercase tracking-wider text-subtext0">Svět</label>
+              <select
+                className="settings-input bg-bg-crust text-text"
+                value={world}
+                onChange={(e) => setWorld(e.target.value)}
+                disabled={working}
+              >
+                <option value="">— samostatná kampaň (vlastní svět) —</option>
+                {worlds.map((w) => (
+                  <option key={w.id} value={w.id}>
+                    {w.name}
+                  </option>
+                ))}
+              </select>
+              {world && (
+                <label className="mt-1.5 flex items-start gap-2 font-body text-xs text-subtext0">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5"
+                    checked={worldShared}
+                    onChange={(e) => setWorldShared(e.target.checked)}
+                    disabled={working}
+                  />
+                  <span>
+                    Sdílet stav světa s ostatními kampaněmi — co tahle družina ve
+                    světě změní (postup frakcí, události), pocítí i další kampaně ve
+                    stejném světě. Vypnuto = tahle kampaň má vlastní izolovanou kopii.
+                  </span>
+                </label>
+              )}
+            </div>
+          )}
 
           {/* Streaming progress log */}
           {progress.length > 0 && (

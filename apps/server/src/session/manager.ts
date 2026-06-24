@@ -11,6 +11,7 @@ import {
   seedFactions,
   type LoadedCampaign,
 } from "../vault/campaign.js";
+import { loadWorldState, saveWorldState, worldStateFromSession } from "../vault/world-state.js";
 
 function clone<T>(v: T): T {
   return JSON.parse(JSON.stringify(v));
@@ -53,7 +54,24 @@ export class SessionManager {
     for (const [id, runtime] of Object.entries(seeded)) {
       if (!session.factions[id]) session.factions[id] = runtime;
     }
-    return new SessionManager(campaign, session, dataset);
+    const mgr = new SessionManager(campaign, session, dataset);
+    // When this campaign shares the world's living state (#49), overlay the
+    // common world.json on top of the seeded session so faction progress /
+    // events / danger carry over from other campaigns in the same world.
+    if (mgr.sharesWorld()) {
+      const shared = await loadWorldState(campaign.world!.dir);
+      if (shared) {
+        Object.assign(session.factions, shared.factions);
+        session.world_events = { ...session.world_events, ...shared.world_events };
+        session.location_danger = { ...session.location_danger, ...shared.location_danger };
+      }
+    }
+    return mgr;
+  }
+
+  /** True when this campaign reads/writes the world's SHARED live state (#49). */
+  sharesWorld(): boolean {
+    return this.campaign.config.world_shared === true && this.campaign.world != null;
   }
 
   /** Build a fresh engine GameState with actors resolved from base + overlay. */
@@ -177,6 +195,11 @@ export class SessionManager {
 
   async persist(): Promise<void> {
     await saveSession(this.campaign, this.session);
+    // Mirror the living-world slice back to the shared world.json so other
+    // campaigns in the same world inherit the changes (#49).
+    if (this.sharesWorld()) {
+      await saveWorldState(this.campaign.world!.dir, worldStateFromSession(this.session));
+    }
   }
 
   /**

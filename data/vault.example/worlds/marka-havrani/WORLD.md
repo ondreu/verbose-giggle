@@ -47,6 +47,20 @@ Tento svět používají dvě ukázkové kampaně:
   kampaň (3–5 sezení) o kultu Marakáthé, která vrcholí u pečeti pod Vraním
   hradem a jejíž rozuzlení mění stav světa.
 
-Obě sdílejí stejný svět: frakci, kterou jedna družina oslabí, začne druhá
-kampaň slabší. Háček z krátké kampaně (placka kultu u goblinů) vede přímo do
-té delší.
+Obě sdílejí stejný svět: háček z krátké kampaně (placka kultu u goblinů) vede
+přímo do té delší.
+
+## Sdílený, nebo izolovaný stav světa (přepínač na kampaň)
+
+Každá kampaň si v `campaign.yaml` volí `world_shared`:
+
+- **`world_shared: false`** (výchozí) — kampaň má **vlastní izolovanou kopii**
+  živého stavu světa (postup frakcí, události, nebezpečí) ve své `session`.
+  Naseje se z autorských poznámek a nikoho jiného neovlivní.
+- **`world_shared: true`** — kampaň **čte i zapisuje SDÍLENÝ** stav světa
+  (`worlds/<name>/state/world.json`). Co jedna družina ve světě změní, zdědí
+  další kampaně, které mají sdílení také zapnuté — jedna kampaň tak může ovlivnit
+  druhou. Frakce, kterou jedna oslabí, začne další slabší.
+
+Obě ukázkové kampaně jsou ve výchozím stavu **izolované**; sdílení zapni, až
+budeš chtít, aby na sebe kampaně navazovaly důsledky.

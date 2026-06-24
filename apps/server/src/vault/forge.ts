@@ -28,6 +28,8 @@ export interface ForgeInput {
    * re-authored into the campaign folder.
    */
   world?: string;
+  /** When building in a world, share its live state across campaigns (#49). */
+  world_shared?: boolean;
 }
 
 /** Called after each generation phase so callers can stream progress. */
@@ -97,6 +99,8 @@ interface WorldBible {
   opening: string;
   /** Shared world this campaign is built inside (#49d), written to campaign.yaml. */
   world?: string;
+  /** Whether the campaign shares the world's live state across campaigns (#49). */
+  worldShared?: boolean;
   /** Location/NPC ids that come from the world and must NOT be re-authored. */
   externalLocations: Set<string>;
   externalNpcs: Set<string>;
@@ -729,7 +733,7 @@ async function writeBibleToVault(dir: string, bible: WorldBible): Promise<void> 
   const config: Record<string, unknown> = {
     name: bible.name,
     ruleset: "dnd5e-srd",
-    ...(bible.world ? { world: bible.world } : {}),
+    ...(bible.world ? { world: bible.world, world_shared: bible.worldShared === true } : {}),
     starting_location: bible.locations[0]?.id ?? "start",
     party: [] as string[],
     companions: [] as string[],
@@ -789,6 +793,7 @@ export async function forgeCampaign(
     try {
       worldCtx = await loadWorld(worldDir(vaultPath, input.world), input.world);
       seedFromWorld(bible, worldCtx);
+      bible.worldShared = input.world_shared === true;
       notify(
         "Svět",
         `Stavím na světě „${input.world}" — ${bible.locations.length} lokací, ` +
