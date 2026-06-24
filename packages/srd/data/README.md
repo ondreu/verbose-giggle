@@ -41,8 +41,10 @@ Filename matching is intentionally specific to avoid lookalike traps
 (`Spells` ≠ `Spellcasting`, `Equipment` ≠ `Equipment-Categories`,
 `Feats` ≠ `Features`, `Races` ≠ `Subraces`).
 
-## License
+## License & attribution
 
-The 5e-bits/5e-database content is released under the OGL / Creative Commons
-terms stated in that repository. Keep its attribution/license when redistributing
-this copy; record it in the repo's `LICENSES.md`.
+The files dropped here are redistributed SRD content and carry **two** licenses:
+the rules content is SRD 5.1 under **CC-BY-4.0** and the JSON compilation is from
+`5e-bits/5e-database` under **MIT**. The required attribution + MIT notice live in
+**[`NOTICE.md`](./NOTICE.md)** (and a summary in the repo's `LICENSES.md`); keep
+`NOTICE.md` alongside the data so attribution travels with it.

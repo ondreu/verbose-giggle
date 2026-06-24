@@ -27,6 +27,21 @@ under the **Creative Commons Attribution 4.0 International License (CC-BY-4.0)**
   derived from the SRD. (Alternative: the Open5e API/dataset.) Pin the chosen
   source and decide bundle-in-image vs mounted volume (spec §18.3).
 
+### Bundled SRD copy (`packages/srd/data/`, #45a)
+
+A subset of this SRD dataset is **redistributed in-repo** under
+`packages/srd/data/` so the app runs without an external mount. Because the
+project now *distributes* the content (rather than the user mounting their own),
+both attributions below travel with it — see also `packages/srd/data/NOTICE.md`:
+
+- **Rules content (CC-BY-4.0):** the SRD 5.1 attribution quoted above applies.
+  The bundled files are a **subset, reformatted** for this project (filtered/
+  restructured by `apps/server/src/srd/load.ts`) — i.e. modifications were made.
+- **Compiled dataset (MIT):** the JSON compilation is from `5e-bits/5e-database`,
+  © 2018–2020 Adrian Padua, Christopher Ward, used under the MIT License (full
+  text in `packages/srd/data/NOTICE.md`). The upstream README cites the SRD as
+  OGL 1.0a; this project relies on the **CC-BY-4.0** dual-release instead.
+
 ## Maps & adventures
 
 Self-generated or CC/OGL-licensed assets are preferred (e.g. Azgaar's Fantasy
