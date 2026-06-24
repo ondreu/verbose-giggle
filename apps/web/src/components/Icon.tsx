@@ -37,6 +37,20 @@ const PATHS: Record<string, string> = {
   // Clipboard with a check, for the quest log (#19).
   quest:
     "M9 2h6a1 1 0 0 1 1 1h2a2 2 0 0 1 2 2v15a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h2a1 1 0 0 1 1-1Zm0 2v1h6V4H9Zm-2 3v13h10V7H7Zm3.4 9.4-2.1-2.1 1.1-1.1 1 1 2.9-2.9 1.1 1.1-4 4Z",
+  // Menu/navigation glyphs (#47 home restructure).
+  plus: "M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6V5Z",
+  archive:
+    "M3 4h18v5H3V4Zm2 7h14v9a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1v-9Zm4 2v2h6v-2H9Z",
+  user: "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm0 2c-4.4 0-8 2.2-8 5v1h16v-1c0-2.8-3.6-5-8-5Z",
+  coins:
+    "M12 3c-4 0-7 1.3-7 3v3c0 1.7 3 3 7 3s7-1.3 7-3V6c0-1.7-3-3-7-3Zm-7 9v3c0 1.7 3 3 7 3s7-1.3 7-3v-3c0 1.7-3 3-7 3s-7-1.3-7-3Z",
+  info: "M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm0 2.5A7.5 7.5 0 1 1 4.5 12 7.5 7.5 0 0 1 12 4.5ZM11 10h2v7h-2v-7Zm1-3.4a1.3 1.3 0 1 1 0 2.6 1.3 1.3 0 0 1 0-2.6Z",
+  server:
+    "M4 4h16a1 1 0 0 1 1 1v5a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Zm2 3v1h2V7H6Zm-2 6h16a1 1 0 0 1 1 1v5a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-5a1 1 0 0 1 1-1Zm2 3v1h2v-1H6Z",
+  speaker:
+    "M11 4 6 8H3v8h3l5 4V4Zm4.6 3.4a5 5 0 0 1 0 9.2l-1-1.8a3 3 0 0 0 0-5.6l1-1.8Z",
+  upload:
+    "M12 3 7 8h3v7h4V8h3l-5-5ZM5 18h14v2H5v-2Z",
 };
 
 export function Icon({

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useGame } from "../store/store";
 import { ChatPanel } from "../panels/ChatPanel";
 import { MapPanel } from "../map/MapPanel";
 import { SheetPanel } from "../panels/SheetPanel";
@@ -38,6 +39,7 @@ function clamp({ chat, rail }: Layout): Layout {
 
 export function PlaySurface() {
   const ref = useRef<HTMLDivElement>(null);
+  const inCombat = useGame((s) => s.session?.combat != null);
   const [layout, setLayout] = useState<Layout>(loadLayout);
   const [desktop, setDesktop] = useState(
     typeof window !== "undefined" ? window.matchMedia("(min-width: 1024px)").matches : true,
@@ -85,10 +87,10 @@ export function PlaySurface() {
       <main className="grid min-h-0 flex-1 grid-cols-1 gap-3 p-3">
         <div className="min-h-[60vh]"><ChatPanel /></div>
         <div className="min-h-[60vh]"><MapPanel /></div>
+        {inCombat && <TurnTracker />}
         <aside className="flex min-h-0 flex-col gap-3">
           <PartyPanel />
           <SheetPanel />
-          <TurnTracker />
           <InventoryPanel />
         </aside>
       </main>
@@ -104,13 +106,20 @@ export function PlaySurface() {
     >
       <div className="min-h-0 min-w-0"><ChatPanel /></div>
       <Splitter onPointerDown={startDrag("chat")} />
-      <div className="min-h-0 min-w-0"><MapPanel /></div>
+      {/* Middle column: the map fills it; combat turn-order/HP docks below (per
+          the #47 sketch: "Pořadí tahu a informace z boje" under the map). */}
+      <div className="flex min-h-0 min-w-0 flex-col gap-3">
+        <div className="min-h-0 flex-1"><MapPanel /></div>
+        {inCombat && <div className="max-h-[40%] shrink-0 overflow-y-auto"><TurnTracker /></div>}
+      </div>
       <Splitter onPointerDown={startDrag("rail")} />
-      <aside className="flex min-h-0 min-w-0 flex-col gap-3 overflow-y-auto">
-        <PartyPanel />
-        <SheetPanel />
-        <TurnTracker />
-        <InventoryPanel />
+      {/* Right rail: party controls stay pinned at the top; the sheet (with its
+          actions) and the inventory each scroll on their own so the rail as a
+          whole never scrolls (per the #47 sketch annotations). */}
+      <aside className="flex min-h-0 min-w-0 flex-col gap-3 overflow-hidden">
+        <div className="shrink-0"><PartyPanel /></div>
+        <div className="min-h-0 flex-1 overflow-y-auto"><SheetPanel /></div>
+        <div className="max-h-[38%] shrink-0 overflow-y-auto"><InventoryPanel /></div>
       </aside>
     </main>
   );
