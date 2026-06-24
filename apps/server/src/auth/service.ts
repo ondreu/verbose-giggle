@@ -210,4 +210,75 @@ export class AuthService {
     this.sessions.deleteForUser(user.id);
     return { ...user, emailVerified: true };
   }
+
+  // --- Account settings (#58a) ---------------------------------------------
+
+  /** Update the display name. */
+  changeDisplayName(userId: string, displayName: string | null): User {
+    const user = this.users.findById(userId);
+    if (!user) throw new AuthError(404, "Účet nenalezen.");
+    const trimmed = displayName?.trim() || null;
+    this.users.updateProfile(userId, { displayName: trimmed });
+    return { ...user, displayName: trimmed };
+  }
+
+  /**
+   * Change the email. Resets verification (sends a new verification link to the
+   * new address) since the user must prove control of it. Throws on invalid or
+   * already-taken email.
+   */
+  async changeEmail(userId: string, newEmail: string): Promise<User> {
+    const user = this.users.findById(userId);
+    if (!user) throw new AuthError(404, "Účet nenalezen.");
+    const check = validateEmail(newEmail);
+    if (!check.ok) throw new AuthError(400, check.error!);
+
+    const existing = this.users.findByEmail(newEmail);
+    if (existing && existing.id !== userId) {
+      throw new AuthError(409, "Tento e-mail už používá jiný účet.");
+    }
+    try {
+      this.users.updateProfile(userId, { email: newEmail });
+    } catch (err) {
+      if (err instanceof DuplicateEmailError) {
+        throw new AuthError(409, "Tento e-mail už používá jiný účet.");
+      }
+      throw err;
+    }
+    this.users.setEmailVerified(userId, false);
+    const updated = this.users.findById(userId)!;
+    await this.sendVerification(updated);
+    return updated;
+  }
+
+  /**
+   * Change the password after re-checking the current one. Invalidates every
+   * session for the user; the caller may open a fresh one for the current
+   * device. Throws {@link AuthError} on a wrong current or weak new password.
+   */
+  async changePassword(userId: string, currentPassword: string, newPassword: string): Promise<void> {
+    const hash = this.users.getPasswordHash(userId);
+    if (!hash || !(await verifyPassword(currentPassword, hash))) {
+      throw new AuthError(401, "Současné heslo je nesprávné.");
+    }
+    const pwCheck = validatePassword(newPassword);
+    if (!pwCheck.ok) throw new AuthError(400, pwCheck.error!);
+    this.users.setPasswordHash(userId, await hashPassword(newPassword));
+    this.sessions.deleteForUser(userId);
+  }
+
+  /**
+   * Delete the account (GDPR). Removes sessions then the user row. NOTE: the
+   * user's vault data is cleaned up once per-user data isolation lands (#55f
+   * part 2); until then accounts don't own vault folders.
+   */
+  deleteAccount(userId: string): void {
+    this.sessions.deleteForUser(userId);
+    this.users.delete(userId);
+  }
+
+  /** Open a fresh session for a user (used after a password change). */
+  openSession(userId: string) {
+    return this.sessions.create(userId, this.sessionTtlMs);
+  }
 }

@@ -194,4 +194,52 @@ export async function registerAuthRoutes(app: FastifyInstance, ctx: AuthContext)
     }
     return reply.type("text/html").send(resetFormPage(token));
   });
+
+  // --- Account settings (#58a), all require the current session -------------
+  app.put<{ Body: { displayName?: string | null } }>("/api/account/profile", async (req, reply) => {
+    if (!req.user) return reply.code(401).send({ error: "Nepřihlášen." });
+    const dn = req.body?.displayName;
+    const user = ctx.service.changeDisplayName(req.user.id, typeof dn === "string" ? dn : null);
+    return reply.send({ user: userView(user) });
+  });
+
+  app.put<{ Body: { email?: string } }>("/api/account/email", async (req, reply) => {
+    if (!req.user) return reply.code(401).send({ error: "Nepřihlášen." });
+    if (typeof req.body?.email !== "string") return reply.code(400).send({ error: "Chybí e-mail." });
+    try {
+      const user = await ctx.service.changeEmail(req.user.id, req.body.email);
+      return reply.send({ user: userView(user) });
+    } catch (err) {
+      if (err instanceof AuthError) return reply.code(err.statusCode).send({ error: err.message });
+      throw err;
+    }
+  });
+
+  app.put<{ Body: { currentPassword?: string; newPassword?: string } }>(
+    "/api/account/password",
+    async (req, reply) => {
+      if (!req.user) return reply.code(401).send({ error: "Nepřihlášen." });
+      const { currentPassword, newPassword } = req.body ?? {};
+      if (typeof currentPassword !== "string" || typeof newPassword !== "string") {
+        return reply.code(400).send({ error: "Chybí heslo." });
+      }
+      try {
+        await ctx.service.changePassword(req.user.id, currentPassword, newPassword);
+        // changePassword dropped all sessions; re-issue one for this device.
+        const session = ctx.service.openSession(req.user.id);
+        setSessionCookie(reply, session.id, ctx.service.sessionMaxAgeMs);
+        return reply.send({ ok: true });
+      } catch (err) {
+        if (err instanceof AuthError) return reply.code(err.statusCode).send({ error: err.message });
+        throw err;
+      }
+    },
+  );
+
+  app.delete("/api/account", async (req, reply) => {
+    if (!req.user) return reply.code(401).send({ error: "Nepřihlášen." });
+    ctx.service.deleteAccount(req.user.id);
+    reply.clearCookie(SESSION_COOKIE, { path: "/" });
+    return reply.send({ ok: true });
+  });
 }

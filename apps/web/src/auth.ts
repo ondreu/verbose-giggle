@@ -22,14 +22,14 @@ export type AuthResult<T = void> =
   | { ok: true; data: T }
   | { ok: false; status: number; error: string };
 
-async function post<T = void>(path: string, body: unknown): Promise<AuthResult<T>> {
+async function request<T>(method: string, path: string, body?: unknown): Promise<AuthResult<T>> {
   let res: Response;
   try {
     res = await fetch(path, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
+      method,
+      headers: body !== undefined ? { "content-type": "application/json" } : undefined,
       credentials: "same-origin",
-      body: JSON.stringify(body),
+      body: body !== undefined ? JSON.stringify(body) : undefined,
     });
   } catch {
     return { ok: false, status: 0, error: "Nepodařilo se spojit se serverem." };
@@ -43,6 +43,8 @@ async function post<T = void>(path: string, body: unknown): Promise<AuthResult<T
   if (res.ok) return { ok: true, data: data as T };
   return { ok: false, status: res.status, error: data?.error || "Něco se pokazilo." };
 }
+
+const post = <T = void>(path: string, body: unknown) => request<T>("POST", path, body);
 
 export async function fetchAuthConfig(): Promise<AuthConfig> {
   try {
@@ -77,3 +79,18 @@ export const resendVerification = (email: string) =>
 export const requestPasswordReset = (email: string) => post("/api/auth/forgot", { email });
 
 export const logout = () => post("/api/auth/logout", {});
+
+// --- Account settings (#58a) ----------------------------------------------
+
+const put = <T = void>(path: string, body: unknown) => request<T>("PUT", path, body);
+
+export const changeProfile = (displayName: string | null) =>
+  put<{ user: AuthUser }>("/api/account/profile", { displayName });
+
+export const changeEmail = (email: string) =>
+  put<{ user: AuthUser }>("/api/account/email", { email });
+
+export const changePassword = (currentPassword: string, newPassword: string) =>
+  put("/api/account/password", { currentPassword, newPassword });
+
+export const deleteAccount = () => request("DELETE", "/api/account");

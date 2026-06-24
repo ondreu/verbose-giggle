@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useGame } from "../store/store";
 import { Icon } from "../components/Icon";
+import { AccountPanel } from "./AccountPanel";
 
 // Masked settings view returned by GET /api/settings — secret values are
 // never sent down, only whether they are set.
@@ -216,7 +217,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
             {/* Active tab panel */}
             <div className="flex min-h-0 flex-col">
               <div className="flex flex-col gap-5 overflow-y-auto p-6 font-body text-ink">
-                {tab === "account" && <PlaceholderPanel title="Účet" />}
+                {tab === "account" && <AccountPanel />}
                 {tab === "credits" && <PlaceholderPanel title="Kredity" />}
 
                 {tab === "aidm" && (

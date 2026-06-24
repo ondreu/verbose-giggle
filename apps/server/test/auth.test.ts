@@ -259,3 +259,74 @@ describe("password reset (#55d)", () => {
     expect(() => service.verifyEmail(email.lastToken())).toThrow();
   });
 });
+
+describe("account settings (#58a)", () => {
+  async function verifiedUser(service: AuthService, email: FakeEmailSender) {
+    const user = await service.register("hero@example.com", "Abcd1234");
+    service.verifyEmail(email.lastToken());
+    return user;
+  }
+
+  it("changes the display name", async () => {
+    const { service, email } = freshService();
+    const user = await verifiedUser(service, email);
+    const updated = service.changeDisplayName(user.id, "  Aragorn  ");
+    expect(updated.displayName).toBe("Aragorn");
+    expect(service.currentUser((await service.login("hero@example.com", "Abcd1234")).session.id)
+      ?.displayName).toBe("Aragorn");
+  });
+
+  it("changes email, drops verification and emails the new address", async () => {
+    const { service, users, email } = freshService();
+    const user = await verifiedUser(service, email);
+    email.sent = [];
+    const updated = await service.changeEmail(user.id, "New@Example.com");
+    expect(updated.email).toBe("new@example.com");
+    expect(updated.emailVerified).toBe(false);
+    expect(email.sent).toHaveLength(1);
+    expect(email.sent[0]!.to).toBe("new@example.com");
+    expect(users.findByEmail("new@example.com")).not.toBeNull();
+  });
+
+  it("refuses an email already used by another account", async () => {
+    const { service, email } = freshService();
+    const user = await verifiedUser(service, email);
+    await service.register("other@example.com", "Abcd1234");
+    await expect(service.changeEmail(user.id, "other@example.com")).rejects.toMatchObject({
+      statusCode: 409,
+    });
+  });
+
+  it("changes password after verifying the current one and drops sessions", async () => {
+    const { service, email } = freshService();
+    const user = await verifiedUser(service, email);
+    const { session } = await service.login("hero@example.com", "Abcd1234");
+    await expect(service.changePassword(user.id, "wrong", "NewPass99")).rejects.toMatchObject({
+      statusCode: 401,
+    });
+    await service.changePassword(user.id, "Abcd1234", "NewPass99");
+    // Old session invalidated; old password rejected; new password works.
+    expect(service.currentUser(session.id)).toBeNull();
+    await expect(service.login("hero@example.com", "Abcd1234")).rejects.toMatchObject({
+      statusCode: 401,
+    });
+    expect((await service.login("hero@example.com", "NewPass99")).user.id).toBe(user.id);
+  });
+
+  it("rejects a weak new password", async () => {
+    const { service, email } = freshService();
+    const user = await verifiedUser(service, email);
+    await expect(service.changePassword(user.id, "Abcd1234", "weak")).rejects.toMatchObject({
+      statusCode: 400,
+    });
+  });
+
+  it("deletes the account and its sessions", async () => {
+    const { service, users, email } = freshService();
+    const user = await verifiedUser(service, email);
+    const { session } = await service.login("hero@example.com", "Abcd1234");
+    service.deleteAccount(user.id);
+    expect(users.findById(user.id)).toBeNull();
+    expect(service.currentUser(session.id)).toBeNull();
+  });
+});

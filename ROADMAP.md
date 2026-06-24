@@ -138,8 +138,13 @@ ne „nice to have".
 
 ### #58 — Nastavení účtu pro uživatele
 
-- **#58a — Záložka *Účet*.** Změna emailu (re-verifikace), hesla, jména, smazání
-  účtu (GDPR), odhlášení.
+- **[x] #58a — Záložka *Účet*.** Backend: `PUT /api/account/{profile,email,
+  password}` + `DELETE /api/account` (vše vyžaduje session). Změna e-mailu resetuje
+  ověření a pošle nový ověřovací odkaz; změna hesla ověří současné a invaliduje
+  všechny session (současné zařízení dostane nové cookie); smazání = sessions +
+  user řádek (úklid vault dat čeká na izolaci #55f-2). Front-end: `AccountPanel`
+  v `SettingsModal` (jméno/e-mail/heslo/odhlášení/smazání), anonymní režim ukáže
+  „nepřihlášen". Testy v `test/auth.test.ts`.
 - **#58b — Per-uživatel preference.** Voice/jazyk (#48) vázané na účet.
   Provider-klíče: v hosted edici jen globální (op-only); v self-hosted BYO. Účet
   v hosted edici **nesmí** nabízet pole pro vlastní API klíč.
