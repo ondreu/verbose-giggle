@@ -12,7 +12,7 @@ import type { EventBus } from "../session/events.js";
 import { SessionManager } from "../session/manager.js";
 import { createCampaign } from "../vault/scaffold.js";
 import { instantiateTemplate, listTemplates } from "../vault/templates.js";
-import { listFiles, zipDir } from "../vault/zip.js";
+import { listFiles, unzipInto, zipDir } from "../vault/zip.js";
 import { forgeCampaign, type ForgeInput, type ProgressCallback } from "../vault/forge.js";
 import { createCharacter, creationOptions, levelUpOptions, removeFromParty, type CharacterDraft } from "../vault/creation.js";
 import {
@@ -266,6 +266,138 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
     }
     return { worlds };
   });
+
+  // --- World management: browse / edit / download / upload (#worlds) --------
+  /** Resolve a world id to its dir, confined to <vault>/worlds. */
+  function worldDir(id: string): string | null {
+    const safe = path.basename((id ?? "").trim());
+    if (!safe || safe !== (id ?? "").trim()) return null;
+    return path.join(config.vaultPath, "worlds", safe);
+  }
+
+  /** Resolve a relative path inside a world, refusing escapes (zip-slip/..). */
+  function worldFilePath(id: string, rel: string): string | null {
+    const dir = worldDir(id);
+    if (!dir) return null;
+    const base = path.resolve(dir);
+    const target = path.resolve(base, rel ?? "");
+    if (target !== base && !target.startsWith(base + path.sep)) return null;
+    return target;
+  }
+
+  // Files we treat as editable text in the world editor; everything else is
+  // browse/download only (e.g. map images).
+  const TEXT_EXT = new Set([".md", ".markdown", ".yaml", ".yml", ".json", ".txt", ".svg", ".csv"]);
+
+  /** Read-only file tree of a world's vault folder. */
+  app.get<{ Params: { id: string } }>("/api/worlds/:id/files", async (req, reply) => {
+    const dir = worldDir(req.params.id);
+    if (!dir) return reply.code(400).send({ error: "invalid world" });
+    try {
+      await fs.access(dir);
+      return { files: await listFiles(dir) };
+    } catch {
+      return reply.code(404).send({ error: "unknown world" });
+    }
+  });
+
+  /** Read a single text file from a world (for the editor). */
+  app.get<{ Params: { id: string }; Querystring: { path?: string } }>(
+    "/api/worlds/:id/file",
+    async (req, reply) => {
+      const rel = (req.query?.path ?? "").trim();
+      if (!rel) return reply.code(400).send({ error: "missing path" });
+      const target = worldFilePath(req.params.id, rel);
+      if (!target) return reply.code(400).send({ error: "invalid path" });
+      const editable = TEXT_EXT.has(path.extname(rel).toLowerCase());
+      if (!editable) return reply.code(415).send({ error: "Soubor není textový — jen ke stažení." });
+      try {
+        const content = await fs.readFile(target, "utf8");
+        return { path: rel, content };
+      } catch {
+        return reply.code(404).send({ error: "unknown file" });
+      }
+    },
+  );
+
+  /** Write (create/modify) a single text file in a world. */
+  app.put<{ Params: { id: string }; Body: { path?: string; content?: string } }>(
+    "/api/worlds/:id/file",
+    async (req, reply) => {
+      const dir = worldDir(req.params.id);
+      if (!dir) return reply.code(400).send({ error: "invalid world" });
+      try {
+        await fs.access(dir);
+      } catch {
+        return reply.code(404).send({ error: "unknown world" });
+      }
+      const rel = (req.body?.path ?? "").trim();
+      const target = worldFilePath(req.params.id, rel);
+      if (!rel || !target) return reply.code(400).send({ error: "invalid path" });
+      if (!TEXT_EXT.has(path.extname(rel).toLowerCase())) {
+        return reply.code(415).send({ error: "Lze upravovat jen textové soubory." });
+      }
+      if (typeof req.body?.content !== "string") return reply.code(400).send({ error: "missing content" });
+      try {
+        await fs.mkdir(path.dirname(target), { recursive: true });
+        const tmp = `${target}.tmp`;
+        await fs.writeFile(tmp, req.body.content, "utf8");
+        await fs.rename(tmp, target);
+        return { ok: true };
+      } catch (err) {
+        return reply.code(500).send({ error: err instanceof Error ? err.message : String(err) });
+      }
+    },
+  );
+
+  /** Export a world folder as a .zip download. */
+  app.get<{ Params: { id: string } }>("/api/worlds/:id/export", async (req, reply) => {
+    const dir = worldDir(req.params.id);
+    if (!dir) return reply.code(400).send({ error: "invalid world" });
+    try {
+      await fs.access(dir);
+    } catch {
+      return reply.code(404).send({ error: "unknown world" });
+    }
+    const zip = await zipDir(dir);
+    reply.header("Content-Type", "application/zip");
+    reply.header("Content-Disposition", `attachment; filename="${path.basename(dir)}.zip"`);
+    return reply.send(zip);
+  });
+
+  /**
+   * Import a .zip into a world, merging/overwriting its files (#worlds upload).
+   * The body is the base64 of the archive; a missing world id is created. Larger
+   * bodyLimit so map images and full-world archives fit.
+   */
+  app.post<{ Params: { id: string }; Body: { zipBase64?: string } }>(
+    "/api/worlds/:id/import",
+    { bodyLimit: 96 * 1024 * 1024 },
+    async (req, reply) => {
+      const dir = worldDir(req.params.id);
+      if (!dir) return reply.code(400).send({ error: "invalid world" });
+      const b64 = req.body?.zipBase64;
+      if (typeof b64 !== "string" || !b64) return reply.code(400).send({ error: "missing zip" });
+      let buf: Buffer;
+      try {
+        buf = Buffer.from(b64, "base64");
+      } catch {
+        return reply.code(400).send({ error: "invalid base64" });
+      }
+      try {
+        await fs.mkdir(dir, { recursive: true });
+        const written = await unzipInto(dir, buf);
+        // If the running campaign uses this world, reload so edits take effect.
+        if (ctx.manager.campaign.config.world === path.basename(dir)) {
+          await reopenManager();
+          ctx.bus.emit({ type: "reload", reason: "world-imported" });
+        }
+        return { ok: true, written };
+      } catch (err) {
+        return reply.code(400).send({ error: err instanceof Error ? err.message : String(err) });
+      }
+    },
+  );
 
   /** Create a fresh campaign folder (optionally switch to it). */
   app.post<{ Body: { name: string; folder?: string; startingLocationName?: string; select?: boolean } }>(

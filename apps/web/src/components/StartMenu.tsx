@@ -3,6 +3,7 @@ import { useGame, type CampaignInfo } from "../store/store";
 import { Icon } from "./Icon";
 import { CharacterCreate } from "./CharacterCreate";
 import { CampaignManager } from "./CampaignManager";
+import { WorldManager, type WorldInfo } from "./WorldManager";
 
 /**
  * First-run / home screen (#2, restructured per the #47 wireframes into a
@@ -11,11 +12,12 @@ import { CampaignManager } from "./CampaignManager";
  * (snapshots), with Nastavení anchored at the bottom. Entering play is still
  * `setView("play")`.
  */
-type Section = "campaigns" | "new" | "backups";
+type Section = "campaigns" | "new" | "worlds" | "backups";
 
 const NAV: { id: Section; label: string; icon: string }[] = [
   { id: "campaigns", label: "Kampaně", icon: "compass" },
   { id: "new", label: "Nová kampaň", icon: "plus" },
+  { id: "worlds", label: "Správa světů", icon: "globe" },
   { id: "backups", label: "Zálohy", icon: "archive" },
 ];
 
@@ -77,6 +79,7 @@ export function StartMenu({ onSettings }: { onSettings: () => void }) {
               <CampaignsSection onPlay={() => setCreateChar(true)} />
             )}
             {section === "new" && <NewCampaignSection />}
+            {section === "worlds" && <WorldsSection />}
             {section === "backups" && <RollbackPanel />}
           </div>
         </div>
@@ -616,6 +619,75 @@ function ForgeForm() {
           {working ? "…" : "Postavit a otevřít"}
         </button>
       </div>
+    </div>
+  );
+}
+
+/* ── Správa světů ────────────────────────────────────────────────────────── */
+
+function WorldsSection() {
+  const [worlds, setWorlds] = useState<WorldInfo[] | null>(null);
+  const [manage, setManage] = useState<WorldInfo | null>(null);
+
+  useEffect(() => {
+    void fetch("/api/worlds")
+      .then((r) => (r.ok ? r.json() : { worlds: [] }))
+      .then((d) => setWorlds(Array.isArray(d.worlds) ? d.worlds : []))
+      .catch(() => setWorlds([]));
+  }, []);
+
+  return (
+    <div className="flex flex-col gap-5">
+      {manage && <WorldManager world={manage} onClose={() => setManage(null)} />}
+
+      <section className="panel p-4">
+        <div className="mb-3 flex items-center gap-2">
+          <Icon name="globe" size={15} className="text-gold" />
+          <h2 className="panel-title pb-0">Sdílené světy</h2>
+        </div>
+        <p className="mb-3 font-body text-sm text-subtext0">
+          Svět existuje nezávisle na kampaních — kampaň se k němu přihlásí. Tady můžeš procházet a upravovat
+          jeho soubory (lokace, frakce, NPC, kroniku), stáhnout celý svět jako zálohu nebo nahrát jeho úpravu.
+        </p>
+
+        {worlds === null ? (
+          <p className="font-body italic text-subtext0">Načítám světy…</p>
+        ) : worlds.length === 0 ? (
+          <p className="font-body text-sm italic text-subtext0">
+            Žádné světy ve trezoru. Světy žijí ve složce <code className="font-log text-xs">worlds/</code> trezoru.
+          </p>
+        ) : (
+          <ul className="flex flex-col gap-1.5">
+            {worlds.map((w) => (
+              <li
+                key={w.id}
+                className="hover-lift flex items-center gap-3 rounded-sm border border-surface1 bg-bg-mantle/40 px-3 py-2"
+              >
+                <Icon name="globe" size={15} className="text-subtext0" />
+                <div className="min-w-0 flex-1">
+                  <div className="truncate font-body text-text">{w.name}</div>
+                  <div className="font-log text-[10px] text-subtext0">{w.id}</div>
+                </div>
+                <button
+                  className="btn-ghost text-[11px]"
+                  onClick={() => setManage(w)}
+                  title="Procházet, upravovat, stáhnout nebo nahrát soubory světa"
+                >
+                  spravovat
+                </button>
+                <a
+                  className="btn-ghost text-[11px]"
+                  href={`/api/worlds/${encodeURIComponent(w.id)}/export`}
+                  download={`${w.id}.zip`}
+                  title="Stáhnout svět jako ZIP"
+                >
+                  stáhnout
+                </a>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
     </div>
   );
 }

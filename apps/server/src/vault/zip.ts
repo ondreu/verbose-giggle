@@ -1,5 +1,6 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
+import zlib from "node:zlib";
 
 /**
  * Minimal dependency-free ZIP writer (#35). Produces a valid archive using the
@@ -115,4 +116,68 @@ export async function zipDir(dir: string): Promise<Buffer> {
 export async function listFiles(dir: string): Promise<string[]> {
   const files = await collect(dir);
   return files.map((f) => f.name).sort();
+}
+
+/** Reject zip-slip / absolute entries; return a confined POSIX-relative path. */
+function sanitizeEntry(name: string): string | null {
+  const norm = name.replace(/\\/g, "/").replace(/^\/+/, "");
+  const parts = norm.split("/").filter((s) => s && s !== ".");
+  if (parts.length === 0 || parts.some((s) => s === "..")) return null;
+  return parts.join("/");
+}
+
+/**
+ * Extract a ZIP archive into `destDir` (#worlds upload). Reads via the central
+ * directory so it tolerates archives written by other tools, and supports both
+ * STORE (method 0) and DEFLATE (method 8). Existing files are overwritten;
+ * entries that try to escape the destination (zip-slip) are skipped. Returns
+ * the number of files written.
+ */
+export async function unzipInto(destDir: string, zip: Buffer): Promise<number> {
+  // Find the End Of Central Directory record (scan back from the tail).
+  let eocd = -1;
+  for (let i = zip.length - 22; i >= 0; i--) {
+    if (zip.readUInt32LE(i) === 0x06054b50) {
+      eocd = i;
+      break;
+    }
+  }
+  if (eocd < 0) throw new Error("Neplatný ZIP soubor (chybí EOCD).");
+
+  const count = zip.readUInt16LE(eocd + 10);
+  let p = zip.readUInt32LE(eocd + 16); // central directory offset
+  let written = 0;
+
+  for (let n = 0; n < count; n++) {
+    if (zip.readUInt32LE(p) !== 0x02014b50) throw new Error("Poškozený ZIP (central dir).");
+    const method = zip.readUInt16LE(p + 10);
+    const compSize = zip.readUInt32LE(p + 20);
+    const nameLen = zip.readUInt16LE(p + 28);
+    const extraLen = zip.readUInt16LE(p + 30);
+    const commentLen = zip.readUInt16LE(p + 32);
+    const localOff = zip.readUInt32LE(p + 42);
+    const name = zip.toString("utf8", p + 46, p + 46 + nameLen);
+    p += 46 + nameLen + extraLen + commentLen;
+
+    if (name.endsWith("/")) continue; // directory entry
+    const safe = sanitizeEntry(name);
+    if (!safe) continue; // zip-slip / unsafe — skip
+
+    if (zip.readUInt32LE(localOff) !== 0x04034b50) throw new Error("Poškozený ZIP (local header).");
+    const lNameLen = zip.readUInt16LE(localOff + 26);
+    const lExtraLen = zip.readUInt16LE(localOff + 28);
+    const dataStart = localOff + 30 + lNameLen + lExtraLen;
+    const comp = zip.subarray(dataStart, dataStart + compSize);
+
+    let data: Buffer;
+    if (method === 0) data = Buffer.from(comp);
+    else if (method === 8) data = zlib.inflateRawSync(comp);
+    else throw new Error(`Nepodporovaná komprese ZIP (metoda ${method}).`);
+
+    const abs = path.join(destDir, safe);
+    await fs.mkdir(path.dirname(abs), { recursive: true });
+    await fs.writeFile(abs, data);
+    written++;
+  }
+  return written;
 }
