@@ -37,7 +37,7 @@ export function StartMenu({ onSettings }: { onSettings: () => void }) {
       {createChar && <CharacterCreate onClose={() => setCreateChar(false)} />}
       <div className="mx-auto flex min-h-full max-w-5xl flex-col gap-6 px-5 py-8 lg:py-10">
         <header className="flex items-center gap-3">
-          <Icon name="d20" size={34} className="text-gold" />
+          <Icon name="d20" size={34} className="flicker text-gold" />
           <div>
             <h1 className="font-display text-3xl tracking-wide text-text">Pán jeskyně</h1>
             <p className="font-body text-subtext0">Samostatně hostovaný AI vypravěč pro D&amp;D 5e</p>
@@ -53,7 +53,7 @@ export function StartMenu({ onSettings }: { onSettings: () => void }) {
                 onClick={() => setSection(n.id)}
                 className={`flex items-center gap-2.5 rounded-sm border px-3.5 py-2.5 text-left font-display text-sm tracking-wide transition-colors ${
                   section === n.id
-                    ? "border-gold/50 bg-gold/10 text-gold"
+                    ? "nav-glow border-gold/50 bg-gold/10 text-gold"
                     : "border-surface1 bg-bg-mantle/40 text-subtext1 hover:border-gold/30 hover:text-text"
                 }`}
               >
@@ -152,7 +152,7 @@ function CampaignsSection({ onPlay }: { onPlay: () => void }) {
           {campaigns.map((c) => (
             <li
               key={c.folder}
-              className={`flex items-center gap-3 rounded-sm border px-3 py-2 ${
+              className={`hover-lift flex items-center gap-3 rounded-sm border px-3 py-2 ${
                 c.active ? "border-gold/50 bg-gold/5" : "border-surface1 bg-bg-mantle/40"
               }`}
             >
@@ -206,7 +206,7 @@ function NewCampaignSection() {
       {NEW_OPTIONS.map((o) => {
         const open = mode === o.id;
         return (
-          <section key={o.id} className="panel overflow-hidden">
+          <section key={o.id} className={`panel overflow-hidden ${open ? "" : "hover-lift"}`}>
             <button
               className="flex w-full items-center gap-3 p-4 text-left transition-colors hover:bg-gold/5 disabled:cursor-not-allowed disabled:opacity-60"
               onClick={() => setMode(open ? null : o.id)}
@@ -566,7 +566,7 @@ function RollbackPanel() {
       ) : (
         <ul className="flex flex-col gap-1.5">
           {snapshots.map((s) => (
-            <li key={s.id} className="flex items-center gap-3 rounded-sm border border-surface1 bg-bg-mantle/40 px-3 py-2">
+            <li key={s.id} className="hover-lift flex items-center gap-3 rounded-sm border border-surface1 bg-bg-mantle/40 px-3 py-2">
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
                   <span className="truncate font-body text-text">{s.label}</span>

@@ -180,9 +180,15 @@ on old code and items **#15, #17, #18** are likely already resolved by updating.
 
 ## P2 — Polish & feel
 
-- **#3 — Modernize the UI; tasteful subtle effects.** Light motion/elevation,
-  better spacing/hierarchy — **without AI-slop** (no emoji, no generic gradients
-  for their own sake; keep the dark-fantasy intent in `theme/tokens.css`).
+- **[x] #3 — Modernize the UI; tasteful subtle effects.** Done. Added a small,
+  cohesive set of dark-fantasy micro-interactions in `theme/tokens.css`, all
+  gated behind `prefers-reduced-motion`: a slow irregular **candle flicker** on
+  the gilt d20 emblem (home / play header / login), a warm **sheen sweep** that
+  catches across `.btn-gold` once on hover, a 1px **hover-lift** with a warm edge
+  + deeper cast shadow on interactive cards/rows (campaign list, new-campaign
+  options, snapshots), a steady gold **nav-glow** under the active home-nav item,
+  and a warm gold **focus-visible ring** on buttons/links for keyboard a11y. No
+  emoji, no gratuitous gradients — every effect reads as candlelight on metal.
 - **#7 — Font legibility.** The display font is pretty but hard to read; bump
   weight/size a touch for body text and lean on Markdown (#1) for structure.
 - **[x] #51 — Deník kostek schovat jako vedlejší panel.** Done. Rušivý byl
