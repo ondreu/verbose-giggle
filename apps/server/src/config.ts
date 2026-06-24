@@ -61,6 +61,13 @@ export interface Config {
     publicUrl: string;
     /** SMTP transport for outbound email; null logs emails instead. */
     smtp: SmtpConfig | null;
+    /**
+     * Self-hosted default: let visitors enter without an account ("continue
+     * without login"). Hosted edition sets AUTH_ALLOW_ANONYMOUS=false.
+     */
+    allowAnonymous: boolean;
+    /** Whether self-service registration is open. */
+    registrationEnabled: boolean;
   };
 }
 
@@ -131,6 +138,8 @@ export function loadConfig(): Config {
     auth: {
       publicUrl: (process.env.PUBLIC_URL?.trim().replace(/\/+$/, "")) || `http://localhost:${port}`,
       smtp,
+      allowAnonymous: process.env.AUTH_ALLOW_ANONYMOUS !== "false",
+      registrationEnabled: process.env.AUTH_REGISTRATION !== "false",
     },
   };
 }

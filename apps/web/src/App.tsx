@@ -10,6 +10,7 @@ import { GameOverModal } from "./components/GameOverModal";
 import { EmberField } from "./components/EmberField";
 import { LoginScreen } from "./components/LoginScreen";
 import { ReferenceModal } from "./panels/ReferenceModal";
+import { fetchAuthConfig, fetchCurrentUser, type AuthConfig } from "./auth";
 
 export default function App() {
   const hydrate = useGame((s) => s.hydrate);
@@ -23,9 +24,29 @@ export default function App() {
   const narrationLen = useGame((s) => s.narration.length);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [refOpen, setRefOpen] = useState(false);
-  // Pre-prepared auth gate (#auth, stub): shown first, but fully bypassable —
-  // "continue without account" enters the app exactly as before. No backend yet.
+  // Auth gate (#55e). `authChecked` gates rendering until we've asked the
+  // server whether there's an existing session, so we don't flash the login
+  // screen for already-signed-in (or anonymous-allowed) users.
   const [authed, setAuthed] = useState(false);
+  const [authChecked, setAuthChecked] = useState(false);
+  const [authConfig, setAuthConfig] = useState<AuthConfig>({
+    allowAnonymous: true,
+    registrationEnabled: true,
+  });
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const [cfg, user] = await Promise.all([fetchAuthConfig(), fetchCurrentUser()]);
+      if (cancelled) return;
+      setAuthConfig(cfg);
+      if (user) setAuthed(true);
+      setAuthChecked(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     void hydrate();
@@ -37,7 +58,17 @@ export default function App() {
     if (view === "play" && campaign && narrationLen === 0) void intro();
   }, [view, campaign, narrationLen, intro]);
 
-  if (!authed) return <LoginScreen onContinue={() => setAuthed(true)} />;
+  // Hold rendering until the session check resolves (avoids a login flash).
+  if (!authChecked) return <div className="fixed inset-0 bg-bg-crust" />;
+
+  if (!authed)
+    return (
+      <LoginScreen
+        onAuthed={() => setAuthed(true)}
+        allowAnonymous={authConfig.allowAnonymous}
+        registrationEnabled={authConfig.registrationEnabled}
+      />
+    );
 
   if (view === "home") {
     return (

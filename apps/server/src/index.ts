@@ -72,6 +72,10 @@ async function main(): Promise<void> {
   await registerAuthRoutes(app, {
     service: authService,
     cookieSecure: config.auth.publicUrl.startsWith("https://"),
+    flags: {
+      allowAnonymous: config.auth.allowAnonymous,
+      registrationEnabled: config.auth.registrationEnabled,
+    },
   });
 
   const campaignDir = await findCampaignDir(config.vaultPath, settings.campaign);

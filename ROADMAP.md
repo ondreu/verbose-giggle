@@ -91,8 +91,14 @@ ne „nice to have".
   Emailový odkaz cílí na `GET /api/auth/reset?token=` — self-contained HTML
   formulář, takže reset funguje i bez front-endu (#55e). Sdílí token/email
   infra s #55b. Testy v `test/auth.test.ts`.
-- **#55e — Napojit `LoginScreen`.** Vyměnit `onContinue()` stub za reálná volání
-  + error stavy; „pokračovat bez přihlášení" jen v self-hosted režimu.
+- **[x] #55e — Napojit `LoginScreen`.** Stub `onContinue()` nahrazen reálnými
+  voláními přes klienta `apps/web/src/auth.ts` (login/register/forgot/resend,
+  `credentials: same-origin`). `LoginScreen` má režimy login/registrace/
+  zapomenuté heslo, chybové i potvrzovací stavy a nabídku znovu poslat ověření
+  při 403. `App.tsx` při startu ověří session (`GET /api/auth/me`) a načte
+  `GET /api/auth/config` → „pokračovat bez přihlášení" a odkaz na registraci se
+  zobrazí jen podle serverových flagů (`allowAnonymous`/`registrationEnabled`,
+  env `AUTH_ALLOW_ANONYMOUS`/`AUTH_REGISTRATION`).
 - **#55f — Autorizace na endpointech.** Největší skrytá práce: protáhnout
   `userId` ze session do `SessionManager`/vaultu a izolovat kampaně per uživatel.
   Bez toho je registrace kosmetika.

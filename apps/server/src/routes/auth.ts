@@ -11,6 +11,8 @@ export interface AuthContext {
   service: AuthService;
   /** Send the cookie with the Secure flag (true behind HTTPS). */
   cookieSecure: boolean;
+  /** Public auth flags surfaced to the client (#55e). */
+  flags: { allowAnonymous: boolean; registrationEnabled: boolean };
 }
 
 /** Name of the session cookie. */
@@ -99,6 +101,9 @@ export async function registerAuthRoutes(app: FastifyInstance, ctx: AuthContext)
       }
     },
   );
+
+  // Public flags so the login screen can adapt (anonymous access, registration).
+  app.get("/api/auth/config", async () => ({ ...ctx.flags }));
 
   app.post<{ Body: { email?: string } }>("/api/auth/resend-verification", async (req, reply) => {
     const email = req.body?.email;

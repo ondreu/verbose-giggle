@@ -1,23 +1,107 @@
 import { useMemo, useState } from "react";
 import { Icon } from "./Icon";
 import { EmberField } from "./EmberField";
+import { login, register, requestPasswordReset, resendVerification } from "../auth";
+
+type Mode = "login" | "register" | "forgot";
 
 /**
- * Pre-prepared login / registration screen. Auth is not wired to a backend yet
- * (#auth, stub): every action — including the explicit "continue without
- * account" link — simply enters the app as before. An almost-empty stage: a
- * blurred dark-fantasy city silhouette, embers drifting in front of it, and a
- * single window centred on top.
+ * Login / registration / password-reset screen, wired to the auth API (#55e).
+ * On a successful login it calls `onAuthed`; "continue without login" is only
+ * offered when the server reports anonymous access is allowed (self-hosted).
+ * The stage behind it is decorative: a blurred dark-fantasy skyline with
+ * drifting embers.
  */
-export function LoginScreen({ onContinue }: { onContinue: () => void }) {
-  const [mode, setMode] = useState<"login" | "register">("login");
-  const isRegister = mode === "register";
+export function LoginScreen({
+  onAuthed,
+  allowAnonymous,
+  registrationEnabled,
+}: {
+  onAuthed: () => void;
+  allowAnonymous: boolean;
+  registrationEnabled: boolean;
+}) {
+  const [mode, setMode] = useState<Mode>("login");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  // Set when login fails because the email isn't verified — offers a resend.
+  const [needsVerify, setNeedsVerify] = useState(false);
 
-  // No backend yet — any submit just continues into the app.
-  const submit = (e: React.FormEvent) => {
+  const isRegister = mode === "register";
+  const isForgot = mode === "forgot";
+
+  function switchMode(next: Mode) {
+    setMode(next);
+    setError(null);
+    setNotice(null);
+    setNeedsVerify(false);
+  }
+
+  async function submit(e: React.FormEvent) {
     e.preventDefault();
-    onContinue();
-  };
+    setError(null);
+    setNotice(null);
+    setNeedsVerify(false);
+
+    if (isRegister && password !== confirm) {
+      setError("Hesla se neshodují.");
+      return;
+    }
+
+    setBusy(true);
+    try {
+      if (mode === "login") {
+        const res = await login(email, password);
+        if (res.ok) return onAuthed();
+        if (res.status === 403) setNeedsVerify(true);
+        setError(res.error);
+      } else if (mode === "register") {
+        const res = await register(email, password);
+        if (res.ok) {
+          setNotice("Účet vytvořen. Zkontroluj e-mail a klikni na ověřovací odkaz.");
+          switchModeKeepNotice("login");
+        } else {
+          setError(res.error);
+        }
+      } else {
+        // forgot — always neutral.
+        await requestPasswordReset(email);
+        setNotice("Pokud účet existuje, poslali jsme odkaz pro obnovení hesla.");
+        switchModeKeepNotice("login");
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // Switch mode but keep the just-set notice visible.
+  function switchModeKeepNotice(next: Mode) {
+    setMode(next);
+    setError(null);
+    setNeedsVerify(false);
+    setConfirm("");
+  }
+
+  async function onResend() {
+    setBusy(true);
+    try {
+      await resendVerification(email);
+      setNeedsVerify(false);
+      setNotice("Ověřovací e-mail jsme poslali znovu.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const title = isRegister
+    ? "Založ si účet a vydej se do temných síní."
+    : isForgot
+      ? "Zadej e-mail a pošleme ti odkaz pro obnovení hesla."
+      : "Přihlas se a pokračuj ve svém příběhu.";
 
   return (
     <div className="fixed inset-0 z-[3000] flex items-center justify-center overflow-hidden bg-bg-crust px-4">
@@ -28,9 +112,7 @@ export function LoginScreen({ onContinue }: { onContinue: () => void }) {
         <div className="mb-5 flex flex-col items-center gap-2 text-center">
           <Icon name="d20" size={40} className="flicker text-gold" />
           <h1 className="font-display text-2xl tracking-wide text-text">Pán jeskyně</h1>
-          <p className="font-body text-sm text-subtext0">
-            {isRegister ? "Založ si účet a vydej se do temných síní." : "Přihlas se a pokračuj ve svém příběhu."}
-          </p>
+          <p className="font-body text-sm text-subtext0">{title}</p>
         </div>
 
         <form className="flex flex-col gap-3" onSubmit={submit}>
@@ -39,20 +121,28 @@ export function LoginScreen({ onContinue }: { onContinue: () => void }) {
               id="login-email"
               type="email"
               autoComplete="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
               className="settings-input bg-bg-crust text-text"
               placeholder="hrdina@kraj.cz"
             />
           </Field>
 
-          <Field label="Heslo" htmlFor="login-password">
-            <input
-              id="login-password"
-              type="password"
-              autoComplete={isRegister ? "new-password" : "current-password"}
-              className="settings-input bg-bg-crust text-text"
-              placeholder="••••••••"
-            />
-          </Field>
+          {!isForgot && (
+            <Field label="Heslo" htmlFor="login-password">
+              <input
+                id="login-password"
+                type="password"
+                autoComplete={isRegister ? "new-password" : "current-password"}
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="settings-input bg-bg-crust text-text"
+                placeholder="••••••••"
+              />
+            </Field>
+          )}
 
           {isRegister && (
             <Field label="Heslo znovu" htmlFor="login-confirm">
@@ -60,35 +150,82 @@ export function LoginScreen({ onContinue }: { onContinue: () => void }) {
                 id="login-confirm"
                 type="password"
                 autoComplete="new-password"
+                required
+                value={confirm}
+                onChange={(e) => setConfirm(e.target.value)}
                 className="settings-input bg-bg-crust text-text"
                 placeholder="••••••••"
               />
             </Field>
           )}
 
-          <button type="submit" className="btn-gold mt-1 w-full py-2.5 text-sm">
-            {isRegister ? "Vytvořit účet" : "Přihlásit se"}
+          {error && (
+            <p className="font-log text-xs text-blood" role="alert">
+              {error}
+            </p>
+          )}
+          {needsVerify && (
+            <button
+              type="button"
+              className="btn-link self-start text-xs underline-offset-2 hover:underline"
+              onClick={onResend}
+              disabled={busy}
+            >
+              Poslat ověřovací e-mail znovu
+            </button>
+          )}
+          {notice && <p className="font-log text-xs text-verdigris">{notice}</p>}
+
+          <button type="submit" className="btn-gold mt-1 w-full py-2.5 text-sm" disabled={busy}>
+            {busy
+              ? "Pracuji…"
+              : isRegister
+                ? "Vytvořit účet"
+                : isForgot
+                  ? "Poslat odkaz"
+                  : "Přihlásit se"}
           </button>
         </form>
 
-        <p className="mt-4 text-center font-log text-xs text-subtext0">
-          {isRegister ? "Už máš účet? " : "Nemáš účet? "}
-          <button
-            type="button"
-            className="btn-link text-xs underline-offset-2 hover:underline"
-            onClick={() => setMode(isRegister ? "login" : "register")}
-          >
-            {isRegister ? "Přihlas se" : "Zaregistruj se"}
-          </button>
-        </p>
+        {!isForgot && (
+          <p className="mt-3 text-center font-log text-xs text-subtext0">
+            <button
+              type="button"
+              className="btn-link text-xs underline-offset-2 hover:underline"
+              onClick={() => switchMode("forgot")}
+            >
+              Zapomenuté heslo?
+            </button>
+          </p>
+        )}
 
-        <div className="mt-5 flex flex-col items-center gap-1 border-t border-surface1 pt-4">
-          <button type="button" className="btn-link flex items-center gap-1 text-sm" onClick={onContinue}>
-            Pokračovat bez přihlášení
-            <Icon name="compass" size={14} />
-          </button>
-          <span className="font-log text-[10px] text-subtext0/70">Účty zatím nejsou aktivní</span>
-        </div>
+        {(registrationEnabled || isRegister || isForgot) && (
+          <p className="mt-2 text-center font-log text-xs text-subtext0">
+            {isRegister
+              ? "Už máš účet? "
+              : isForgot
+                ? "Zpět na "
+                : registrationEnabled
+                  ? "Nemáš účet? "
+                  : ""}
+            <button
+              type="button"
+              className="btn-link text-xs underline-offset-2 hover:underline"
+              onClick={() => switchMode(isRegister || isForgot ? "login" : "register")}
+            >
+              {isRegister || isForgot ? "Přihlas se" : "Zaregistruj se"}
+            </button>
+          </p>
+        )}
+
+        {allowAnonymous && (
+          <div className="mt-5 flex flex-col items-center gap-1 border-t border-surface1 pt-4">
+            <button type="button" className="btn-link flex items-center gap-1 text-sm" onClick={onAuthed}>
+              Pokračovat bez přihlášení
+              <Icon name="compass" size={14} />
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
