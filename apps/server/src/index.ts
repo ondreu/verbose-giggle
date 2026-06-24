@@ -16,6 +16,7 @@ import { SessionStore } from "./auth/sessions.js";
 import { loadOrCreateSecret } from "./auth/tokens.js";
 import { LogEmailSender, SmtpEmailSender, type EmailSender } from "./auth/email.js";
 import { AuthService } from "./auth/service.js";
+import { registerAuthGuard } from "./auth/middleware.js";
 
 async function findCampaignDir(vaultPath: string, selected?: string): Promise<string> {
   // Precedence: GUI setting → CAMPAIGN env → first folder found.
@@ -69,6 +70,8 @@ async function main(): Promise<void> {
     secret,
     publicUrl: config.auth.publicUrl,
   });
+  // Resolve req.user from the session and gate protected routes (#55f part 1).
+  registerAuthGuard(app, { service: authService, allowAnonymous: config.auth.allowAnonymous });
   await registerAuthRoutes(app, {
     service: authService,
     cookieSecure: config.auth.publicUrl.startsWith("https://"),

@@ -99,9 +99,15 @@ ne „nice to have".
   `GET /api/auth/config` → „pokračovat bez přihlášení" a odkaz na registraci se
   zobrazí jen podle serverových flagů (`allowAnonymous`/`registrationEnabled`,
   env `AUTH_ALLOW_ANONYMOUS`/`AUTH_REGISTRATION`).
-- **#55f — Autorizace na endpointech.** Největší skrytá práce: protáhnout
-  `userId` ze session do `SessionManager`/vaultu a izolovat kampaně per uživatel.
-  Bez toho je registrace kosmetika.
+- **[~] #55f — Autorizace na endpointech.** **Hotovo (část 1 — autentizace):**
+  `auth/middleware.ts` resolvuje session usera na `req.user` na každém requestu
+  a — když je `allowAnonymous=false` (hosted) — blokuje chráněné `/api` routy
+  bez session (401). Veřejné: `/api/auth/*`, `/api/health`, statika.
+  Integrační testy (`test/auth-guard.test.ts`).
+  **Zbývá (část 2 — izolace dat):** protáhnout `userId` do `SessionManager`/
+  vaultu a izolovat kampaně per uživatel (dnes 1 sdílený vault + 1
+  `SessionManager` při startu). Architektonicky velké — čeká na rozhodnutí
+  o layoutu vaultu a vlastnictví stávajících dat.
 
 ### #56 — Uživatelské kredity / metering
 
