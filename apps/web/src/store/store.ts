@@ -123,10 +123,15 @@ interface GameStore {
    *  active player; in combat it can point at another member for view-only
    *  inspection without changing whose turn it is. `null` = follow active_player. */
   viewedPlayer: string | null;
+  /** Out-of-combat speaker mode (#47): false = act as the active character,
+   *  true = address the whole party. Ignored in combat (initiative speaks). */
+  partyVoice: boolean;
 
   setView: (v: View) => void;
   /** Select which party member the rail (sheet/inventory) displays (#47). */
   setViewedPlayer: (id: string | null) => void;
+  /** Toggle whether out-of-combat actions are spoken as the whole party (#47). */
+  setPartyVoice: (v: boolean) => void;
   /** Ask the player to choose a target (list / free-text / map click). */
   requestTarget: (title: string, allowNone?: boolean) => Promise<TargetResult>;
   /** Fulfil the active target request (called by the picker or a map click). */
@@ -223,10 +228,13 @@ export const useGame = create<GameStore>((set, get) => ({
   snapshots: [],
   targetRequest: null,
   viewedPlayer: null,
+  partyVoice: false,
 
   setView: (v) => set({ view: v }),
 
   setViewedPlayer: (id) => set({ viewedPlayer: id }),
+
+  setPartyVoice: (v) => set({ partyVoice: v }),
 
   requestTarget: (title, allowNone = true) =>
     new Promise<TargetResult>((resolve) => {
@@ -361,9 +369,12 @@ export const useGame = create<GameStore>((set, get) => ({
 
   sendAction: async (input: string) => {
     if (!input.trim() || get().busy) return;
-    const { session, actors } = get();
+    const { session, actors, partyVoice } = get();
+    // The whole-party voice only applies out of combat; in combat the initiative
+    // order picks the speaker (#47).
+    const speakAsParty = partyVoice && !session?.combat;
     const activeId = session?.active_player ?? null;
-    const actorName = activeId ? actors[activeId]?.name : undefined;
+    const actorName = speakAsParty ? "Družina" : activeId ? actors[activeId]?.name : undefined;
     set((s) => ({
       busy: true,
       error: null,
@@ -373,7 +384,7 @@ export const useGame = create<GameStore>((set, get) => ({
       const res = await fetch("/api/action", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ input }),
+        body: JSON.stringify({ input, as: speakAsParty ? "party" : undefined }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));

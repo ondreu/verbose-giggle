@@ -719,7 +719,7 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
   });
 
   /** Player free-text action → the LLM/engine turn loop. */
-  app.post<{ Body: { input: string } }>("/api/action", async (req, reply) => {
+  app.post<{ Body: { input: string; as?: string } }>("/api/action", async (req, reply) => {
     const input = (req.body?.input ?? "").trim();
     if (!input) return reply.code(400).send({ error: "empty input" });
     // A finished campaign (party wipe, #23) accepts no further actions until
@@ -729,7 +729,8 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
     try {
       // Checkpoint the pre-turn state so the player can undo this message.
       await checkpointTurn(ctx.manager.campaign.dir, `Před: „${input.slice(0, 40)}“`);
-      const { narration } = await runTurn({ manager: ctx.manager, llm, bus: ctx.bus, input });
+      const partyVoice = req.body?.as === "party";
+      const { narration } = await runTurn({ manager: ctx.manager, llm, bus: ctx.bus, input, partyVoice });
       return { narration };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
