@@ -67,9 +67,15 @@ ne „nice to have".
   (self-describing formát, snadná migrace na argon2). `apps/server/src/db/`,
   `apps/server/src/auth/{users,password}.ts`, test `test/users.test.ts`. Pozn.:
   baseline Node zvednut 20→22.
-- **#55b — Registrace + ověření emailu.** `POST /api/auth/register` (validace
-  síly hesla, hash), ověřovací odkaz podepsaným tokenem s expirací. Vyžaduje
-  **odesílání emailů** (SMTP — nová závislost).
+- **[x] #55b — Registrace + ověření emailu.** `POST /api/auth/register`
+  (validace e-mailu + síly hesla, scrypt hash), `POST
+  /api/auth/resend-verification` (neutrální odpověď proti enumeraci) a `GET
+  /api/auth/verify?token=` (HTML potvrzení). Ověřovací odkaz = HMAC podepsaný
+  token s expirací (`auth/tokens.ts`, sdílí #55d), tajemství z `AUTH_SECRET`
+  nebo persistované v `<vault>/db/auth-secret`. Odesílání e-mailů přes
+  `EmailSender` — default loguje odkaz, SMTP přes `nodemailer` (lazy) když je
+  `SMTP_HOST` nastaven. `apps/server/src/auth/{service,tokens,validation,email}.ts`,
+  `routes/auth.ts`, test `test/auth.test.ts`.
 - **#55c — Login + session.** `POST /api/auth/login` → **httpOnly cookie**
   (bezpečnější default proti XSS než JWT). `config.basicAuth` zůstane jako
   „op-only" zámek pro self-hosted.

@@ -8,6 +8,12 @@ import { loadSettings } from "./settings.js";
 import { EventBus } from "./session/events.js";
 import { SessionManager } from "./session/manager.js";
 import { registerGameRoutes } from "./routes/game.js";
+import { registerAuthRoutes } from "./routes/auth.js";
+import { openDatabase } from "./db/database.js";
+import { UserStore } from "./auth/users.js";
+import { loadOrCreateSecret } from "./auth/tokens.js";
+import { LogEmailSender, SmtpEmailSender, type EmailSender } from "./auth/email.js";
+import { AuthService } from "./auth/service.js";
 
 async function findCampaignDir(vaultPath: string, selected?: string): Promise<string> {
   // Precedence: GUI setting → CAMPAIGN env → first folder found.
@@ -46,6 +52,19 @@ async function main(): Promise<void> {
       }
     });
   }
+
+  // Accounts (#55): app DB + auth service. File-first SQLite in the vault.
+  const db = openDatabase(config.vaultPath);
+  const users = new UserStore(db);
+  const secret = loadOrCreateSecret(config.vaultPath);
+  const emailSender: EmailSender = config.auth.smtp
+    ? new SmtpEmailSender(config.auth.smtp)
+    : new LogEmailSender(app.log);
+  const authService = new AuthService(users, emailSender, {
+    secret,
+    publicUrl: config.auth.publicUrl,
+  });
+  await registerAuthRoutes(app, { service: authService });
 
   const campaignDir = await findCampaignDir(config.vaultPath, settings.campaign);
   app.log.info(`Loading campaign from ${campaignDir}`);
