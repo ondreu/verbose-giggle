@@ -133,11 +133,14 @@ ne „nice to have".
   e-mailem rovnou dostane roli admin a `ensureAdmin()` při startu povýší už
   existující účet. `routes/admin.ts`, `auth/middleware.ts`. Testy v
   `auth-guard.test.ts` + `auth.test.ts`.
-- **[~] #57b — Rozsah.** Hotovo: `GET /api/admin/users` (seznam) + `GET
-  /api/admin/overview` (počty). Zbývá: mutace (změna role/verify/ban/reset),
-  ruční úprava kreditů (#56), přehled spotřeby/nákladů, globální settings,
-  správa kampaní/vaultů, logy, health.
-- **#57c — Audit log.** Každá admin akce (grant, ban, změna settings) append-only.
+- **[~] #57b — Rozsah.** Hotovo: seznam uživatelů + overview počty; mutace
+  `PUT /api/admin/users/:id/role`, `…/verify`, `DELETE …/:id` (ban — smaže i
+  session), s pojistkami proti self-demote/self-delete; `GET /api/admin/audit`.
+  Zbývá: ruční úprava kreditů (#56), přehled spotřeby/nákladů, globální server
+  settings, správa kampaní/vaultů, logy, health.
+- **[x] #57c — Audit log.** Append-only tabulka `audit_log` (v3 migrace) +
+  `AuditStore`; každá admin mutace (role/verify/delete) zapíše záznam s actorem,
+  cílem a detailem. `auth/audit.ts`. Testy v `admin.test.ts`.
 - **#57d — UI.** Samostatná `/admin` routa (gated rolí) — čistší než rozšiřovat
   `SettingsModal`.
 

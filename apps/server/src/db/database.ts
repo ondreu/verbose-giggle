@@ -62,6 +62,20 @@ const MIGRATIONS: ReadonlyArray<(db: SqliteDatabase) => void> = [
     `);
     db.exec("CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);");
   },
+  // v3 — audit log (#57c). Append-only record of admin actions.
+  (db) => {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS audit_log (
+        id         TEXT PRIMARY KEY,
+        actor_id   TEXT NOT NULL,
+        action     TEXT NOT NULL,
+        target_id  TEXT,
+        detail     TEXT,
+        created_at TEXT NOT NULL
+      ) STRICT;
+    `);
+    db.exec("CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_log(created_at);");
+  },
 ];
 
 function migrate(db: SqliteDatabase): void {

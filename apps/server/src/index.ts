@@ -14,6 +14,7 @@ import { registerAdminRoutes } from "./routes/admin.js";
 import { openDatabase } from "./db/database.js";
 import { UserStore } from "./auth/users.js";
 import { SessionStore } from "./auth/sessions.js";
+import { AuditStore } from "./auth/audit.js";
 import { loadOrCreateSecret } from "./auth/tokens.js";
 import { LogEmailSender, SmtpEmailSender, type EmailSender } from "./auth/email.js";
 import { AuthService } from "./auth/service.js";
@@ -62,6 +63,7 @@ async function main(): Promise<void> {
   const db = openDatabase(config.vaultPath);
   const users = new UserStore(db);
   const sessions = new SessionStore(db);
+  const audit = new AuditStore(db);
   sessions.pruneExpired();
   const secret = loadOrCreateSecret(config.vaultPath);
   const emailSender: EmailSender = config.auth.smtp
@@ -85,7 +87,7 @@ async function main(): Promise<void> {
       registrationEnabled: config.auth.registrationEnabled,
     },
   });
-  await registerAdminRoutes(app, { users });
+  await registerAdminRoutes(app, { users, sessions, audit });
 
   const campaignDir = await findCampaignDir(config.vaultPath, settings.campaign);
   app.log.info(`Loading campaign from ${campaignDir}`);
