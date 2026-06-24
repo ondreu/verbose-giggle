@@ -84,8 +84,13 @@ ne „nice to have".
   /api/auth/me`. Server-side úložiště = reálný logout/revokace (vs. JWT).
   `auth/sessions.ts`, `@fastify/cookie`. `config.basicAuth` zůstává op-only
   zámek. Testy v `test/auth.test.ts`.
-- **#55d — Reset hesla.** `POST /api/auth/forgot` + `/reset` přes emailový token
-  (sdílí infra s #55b).
+- **[x] #55d — Reset hesla.** `POST /api/auth/forgot` (neutrální odpověď) pošle
+  e-mail s reset tokenem (purpose `reset-password`, krátká expirace);
+  `POST /api/auth/reset {token,password}` ověří token + sílu hesla, přehashuje,
+  invaliduje VŠECHNY session uživatele a zároveň označí e-mail jako ověřený.
+  Emailový odkaz cílí na `GET /api/auth/reset?token=` — self-contained HTML
+  formulář, takže reset funguje i bez front-endu (#55e). Sdílí token/email
+  infra s #55b. Testy v `test/auth.test.ts`.
 - **#55e — Napojit `LoginScreen`.** Vyměnit `onContinue()` stub za reálná volání
   + error stavy; „pokračovat bez přihlášení" jen v self-hosted režimu.
 - **#55f — Autorizace na endpointech.** Největší skrytá práce: protáhnout

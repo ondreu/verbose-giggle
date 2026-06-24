@@ -15,7 +15,7 @@ class FakeEmailSender implements EmailSender {
   async send(message: EmailMessage): Promise<void> {
     this.sent.push(message);
   }
-  /** Pull the verification token out of the most recent email's link. */
+  /** Pull the token out of the most recent email's link. */
   lastToken(): string {
     const text = this.sent.at(-1)?.text ?? "";
     return /token=([^\s&]+)/.exec(text)?.[1] ?? "";
@@ -197,5 +197,65 @@ describe("login + sessions (#55c)", () => {
     const { service } = freshService();
     expect(service.currentUser(undefined)).toBeNull();
     expect(service.currentUser("nope")).toBeNull();
+  });
+});
+
+describe("password reset (#55d)", () => {
+  it("emails a reset link and changes the password", async () => {
+    const { service, email } = freshService();
+    await service.register("hero@example.com", "Abcd1234");
+    service.verifyEmail(email.lastToken());
+
+    email.sent = [];
+    await service.requestPasswordReset("Hero@Example.com");
+    expect(email.sent).toHaveLength(1);
+    expect(email.sent[0]!.text).toContain("/api/auth/reset?token=");
+
+    await service.resetPassword(email.lastToken(), "NewPass99");
+    // Old password no longer works; new one does.
+    await expect(service.login("hero@example.com", "Abcd1234")).rejects.toMatchObject({
+      statusCode: 401,
+    });
+    const { user } = await service.login("hero@example.com", "NewPass99");
+    expect(user.email).toBe("hero@example.com");
+  });
+
+  it("stays neutral for an unknown email", async () => {
+    const { service, email } = freshService();
+    await service.requestPasswordReset("nobody@example.com");
+    expect(email.sent).toHaveLength(0);
+  });
+
+  it("invalidates existing sessions on reset", async () => {
+    const { service, email } = freshService();
+    await service.register("hero@example.com", "Abcd1234");
+    service.verifyEmail(email.lastToken());
+    const { session } = await service.login("hero@example.com", "Abcd1234");
+    expect(service.currentUser(session.id)).not.toBeNull();
+
+    await service.requestPasswordReset("hero@example.com");
+    await service.resetPassword(email.lastToken(), "NewPass99");
+    expect(service.currentUser(session.id)).toBeNull();
+  });
+
+  it("rejects an invalid token and a weak new password", async () => {
+    const { service, email } = freshService();
+    await service.register("hero@example.com", "Abcd1234");
+    service.verifyEmail(email.lastToken());
+    await expect(service.resetPassword("garbage", "NewPass99")).rejects.toMatchObject({
+      statusCode: 400,
+    });
+    await service.requestPasswordReset("hero@example.com");
+    await expect(service.resetPassword(email.lastToken(), "weak")).rejects.toMatchObject({
+      statusCode: 400,
+    });
+  });
+
+  it("won't accept a reset token at the verify endpoint (purpose-scoped)", async () => {
+    const { service, email } = freshService();
+    await service.register("hero@example.com", "Abcd1234");
+    email.sent = [];
+    await service.requestPasswordReset("hero@example.com");
+    expect(() => service.verifyEmail(email.lastToken())).toThrow();
   });
 });

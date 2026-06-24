@@ -7,7 +7,7 @@
 import { hashPassword, verifyPassword } from "./password.js";
 import { createToken, verifyToken } from "./tokens.js";
 import { validateEmail, validatePassword } from "./validation.js";
-import { verificationEmail, type EmailSender } from "./email.js";
+import { passwordResetEmail, verificationEmail, type EmailSender } from "./email.js";
 import { DuplicateEmailError, type User, type UserStore } from "./users.js";
 import type { Session, SessionStore } from "./sessions.js";
 
@@ -18,6 +18,8 @@ export interface AuthServiceOptions {
   publicUrl: string;
   /** Verification-link lifetime. Defaults to 24h. */
   verifyTtlMs?: number;
+  /** Password-reset-link lifetime. Defaults to 1h. */
+  resetTtlMs?: number;
   /** Login session lifetime. Defaults to 30 days. */
   sessionTtlMs?: number;
   /** Require a verified email before login is allowed. Defaults to true. */
@@ -44,6 +46,7 @@ export interface LoginResult {
 
 export class AuthService {
   private readonly verifyTtlMs: number;
+  private readonly resetTtlMs: number;
   private readonly sessionTtlMs: number;
   private readonly requireVerifiedEmail: boolean;
 
@@ -54,6 +57,7 @@ export class AuthService {
     private readonly opts: AuthServiceOptions,
   ) {
     this.verifyTtlMs = opts.verifyTtlMs ?? DAY_MS;
+    this.resetTtlMs = opts.resetTtlMs ?? 60 * 60 * 1000;
     this.sessionTtlMs = opts.sessionTtlMs ?? 30 * DAY_MS;
     this.requireVerifiedEmail = opts.requireVerifiedEmail ?? true;
   }
@@ -63,9 +67,13 @@ export class AuthService {
     return this.sessionTtlMs;
   }
 
-  private verifyLink(token: string): string {
+  private link(pathname: string, token: string): string {
     const base = this.opts.publicUrl.replace(/\/+$/, "");
-    return `${base}/api/auth/verify?token=${encodeURIComponent(token)}`;
+    return `${base}${pathname}?token=${encodeURIComponent(token)}`;
+  }
+
+  private verifyLink(token: string): string {
+    return this.link("/api/auth/verify", token);
   }
 
   /** Send (or re-send) a verification email for an existing user. */
@@ -162,5 +170,44 @@ export class AuthService {
     const session = this.sessions.get(sessionId);
     if (!session) return null;
     return this.users.findById(session.userId);
+  }
+
+  /**
+   * Email a password-reset link if the account exists. Always resolves without
+   * signalling whether the address is registered (no enumeration).
+   */
+  async requestPasswordReset(emailInput: string): Promise<void> {
+    const user = this.users.findByEmail(emailInput);
+    if (!user) return;
+    const token = createToken(user.id, "reset-password", this.opts.secret, this.resetTtlMs);
+    await this.email.send(passwordResetEmail(user.email, this.link("/api/auth/reset", token)));
+  }
+
+  /**
+   * Set a new password from a valid reset token. Invalidates the user's
+   * existing sessions so a leaked session can't outlive the reset. Throws
+   * {@link AuthError} on a bad/expired token or weak password.
+   */
+  async resetPassword(token: string, newPassword: string): Promise<User> {
+    const result = verifyToken(token, "reset-password", this.opts.secret);
+    if (!result.ok) {
+      const msg =
+        result.reason === "expired"
+          ? "Odkaz pro obnovení hesla vypršel. Vyžádej si nový."
+          : "Neplatný odkaz pro obnovení hesla.";
+      throw new AuthError(400, msg);
+    }
+    const pwCheck = validatePassword(newPassword);
+    if (!pwCheck.ok) throw new AuthError(400, pwCheck.error!);
+
+    const user = this.users.findById(result.userId);
+    if (!user) throw new AuthError(400, "Účet nenalezen.");
+
+    this.users.setPasswordHash(user.id, await hashPassword(newPassword));
+    // A reset implies the address is controlled by the user; treat it as
+    // verification too, and drop all other sessions.
+    if (!user.emailVerified) this.users.setEmailVerified(user.id, true);
+    this.sessions.deleteForUser(user.id);
+    return { ...user, emailVerified: true };
   }
 }
