@@ -57,6 +57,9 @@ const PATHS: Record<string, string> = {
   // Two opposed arrows — swap to a different model (#47, stubbed).
   swap:
     "M7 7h11l-3-3 1.4-1.4L21.8 8l-5.4 5.4L15 12l3-3H7V7Zm10 10H6l3 3-1.4 1.4L2.2 16l5.4-5.4L9 12l-3 3h11v2Z",
+  // Vertical ellipsis — per-message action menu (#47).
+  dots:
+    "M12 4a2 2 0 1 0 0 4 2 2 0 0 0 0-4Zm0 6a2 2 0 1 0 0 4 2 2 0 0 0 0-4Zm0 6a2 2 0 1 0 0 4 2 2 0 0 0 0-4Z",
 };
 
 export function Icon({

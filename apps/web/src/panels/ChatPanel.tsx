@@ -31,7 +31,6 @@ export function ChatPanel() {
   const [diaryOpen, setDiaryOpen] = useState(false);
   const [questsOpen, setQuestsOpen] = useState(false);
   const [refOpen, setRefOpen] = useState(false);
-  const [hint, setHint] = useState<string | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
   // Follow streaming text: the last line grows without changing array length,
   // so key the scroll on its text length too (#32).
@@ -43,12 +42,6 @@ export function ChatPanel() {
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [narration.length, lastLen, thinking, aiActing]);
-
-  // Brief feedback for not-yet-wired controls (#47: "prepare the UI").
-  const stub = (label: string) => {
-    setHint(`${label} — funkce se připravuje.`);
-    window.setTimeout(() => setHint((h) => (h?.startsWith(label) ? null : h)), 2600);
-  };
 
   const submit = () => {
     const text = input.trim();
@@ -125,8 +118,12 @@ export function ChatPanel() {
               onSpeak={() => speakLine(line.text)}
               onUndo={() => void undoTurn()}
               onVisualize={() => void generateImage("scene", undefined, "Atmosféra scény")}
-              onRegenerate={() => stub("Regenerovat")}
-              onSwapModel={() => stub("Jiným modelem")}
+              onRegenerate={() => {
+                /* #54: backend not wired yet. */
+              }}
+              onSwapModel={() => {
+                /* #54: backend not wired yet. */
+              }}
             />
           );
         })}
@@ -145,9 +142,6 @@ export function ChatPanel() {
         <div ref={endRef} />
       </div>
 
-      {hint && (
-        <div className="border-t border-gold/30 bg-gold/5 px-4 py-1.5 font-log text-xs text-gold">{hint}</div>
-      )}
       {error && (
         <div className="border-t border-blood/40 bg-blood/10 px-4 py-1.5 font-log text-xs text-blood">{error}</div>
       )}
@@ -216,7 +210,7 @@ function PlayerMessage({ actor, text }: { actor?: string; text: string }) {
   );
 }
 
-/** A DM narration block with its hover/last action rail (#47 "AI zpráva"). */
+/** A DM narration block with its always-visible action menu (#47 "AI zpráva"). */
 function DmMessage({
   text,
   isLast,
@@ -238,51 +232,72 @@ function DmMessage({
   onRegenerate: () => void;
   onSwapModel: () => void;
 }) {
+  const [open, setOpen] = useState(false);
+  const run = (fn: () => void) => () => {
+    fn();
+    setOpen(false);
+  };
   return (
-    <div className="group mb-4">
-      <div className="font-body text-[1.12rem] font-medium leading-relaxed text-text">
+    <div className="mb-4 flex items-start gap-2">
+      <div className="min-w-0 flex-1 font-body text-[1.12rem] font-medium leading-relaxed text-text">
         <Markdown text={text} />
       </div>
-      {/* Action rail: always visible on the latest DM line, on hover otherwise. */}
-      <div
-        className={`mt-1.5 flex items-center gap-1 transition-opacity ${
-          isLast ? "opacity-100" : "opacity-0 focus-within:opacity-100 group-hover:opacity-100"
-        }`}
-      >
-        <RailBtn icon="speaker" title="Předčíst zprávu nahlas" onClick={onSpeak} />
-        {isLast && <RailBtn icon="undo" title="Vrátit tah (zpět o jednu zprávu)" onClick={onUndo} disabled={busy} />}
-        <RailBtn icon="refresh" title="Regenerovat odpověď (připravujeme)" onClick={onRegenerate} muted />
-        <RailBtn icon="swap" title="Vygenerovat jiným modelem (připravujeme)" onClick={onSwapModel} muted />
-        <RailBtn icon="camera" title="Vizualizovat scénu" onClick={onVisualize} disabled={busy || imageLoading} />
+      {/* One always-visible menu button opens an attached popover of actions. */}
+      <div className="relative shrink-0">
+        <button
+          className={`mt-1 grid h-7 w-7 place-items-center rounded-sm border transition-colors ${
+            open ? "border-gold/50 bg-gold/10 text-gold" : "border-transparent text-subtext0 hover:border-gold/40 hover:bg-gold/10 hover:text-gold"
+          }`}
+          onClick={() => setOpen((o) => !o)}
+          aria-haspopup="menu"
+          aria-expanded={open}
+          title="Akce zprávy"
+        >
+          <Icon name="dots" size={16} />
+        </button>
+        {open && (
+          <>
+            {/* Click-away backdrop. */}
+            <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+            <div
+              role="menu"
+              className="panel absolute right-0 z-50 mt-1 flex w-52 flex-col py-1"
+            >
+              <MenuItem icon="speaker" label="Předčíst zprávu" onClick={run(onSpeak)} />
+              {isLast && <MenuItem icon="undo" label="Vrátit tah" onClick={run(onUndo)} disabled={busy} />}
+              <MenuItem icon="camera" label="Vizualizovat scénu" onClick={run(onVisualize)} disabled={busy || imageLoading} />
+              <div className="my-1 border-t border-surface1" />
+              <MenuItem icon="refresh" label="Regenerovat" onClick={run(onRegenerate)} />
+              <MenuItem icon="swap" label="Jiným modelem" onClick={run(onSwapModel)} />
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
 }
 
-/** One icon in the per-message action rail. `muted` marks a not-yet-wired stub. */
-function RailBtn({
+/** One row inside the per-message action popover. */
+function MenuItem({
   icon,
-  title,
+  label,
   onClick,
   disabled,
-  muted,
 }: {
   icon: string;
-  title: string;
+  label: string;
   onClick: () => void;
   disabled?: boolean;
-  muted?: boolean;
 }) {
   return (
     <button
-      className={`grid h-7 w-7 place-items-center rounded-sm border border-transparent transition-colors hover:border-gold/40 hover:bg-gold/10 hover:text-gold disabled:opacity-40 disabled:hover:border-transparent disabled:hover:bg-transparent ${
-        muted ? "text-subtext0/70" : "text-subtext0"
-      }`}
+      role="menuitem"
+      className="flex items-center gap-2.5 px-3 py-1.5 text-left font-body text-sm text-subtext1 transition-colors hover:bg-gold/10 hover:text-gold disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-subtext1"
       onClick={onClick}
       disabled={disabled}
-      title={title}
     >
-      <Icon name={icon} size={14} />
+      <Icon name={icon} size={15} />
+      {label}
     </button>
   );
 }
