@@ -180,9 +180,15 @@ on old code and items **#15, #17, #18** are likely already resolved by updating.
 
 ## P2 — Polish & feel
 
-- **#3 — Modernize the UI; tasteful subtle effects.** Light motion/elevation,
-  better spacing/hierarchy — **without AI-slop** (no emoji, no generic gradients
-  for their own sake; keep the dark-fantasy intent in `theme/tokens.css`).
+- **[x] #3 — Modernize the UI; tasteful subtle effects.** Done. Added a small,
+  cohesive set of dark-fantasy micro-interactions in `theme/tokens.css`, all
+  gated behind `prefers-reduced-motion`: a slow irregular **candle flicker** on
+  the gilt d20 emblem (home / play header / login), a warm **sheen sweep** that
+  catches across `.btn-gold` once on hover, a 1px **hover-lift** with a warm edge
+  + deeper cast shadow on interactive cards/rows (campaign list, new-campaign
+  options, snapshots), a steady gold **nav-glow** under the active home-nav item,
+  and a warm gold **focus-visible ring** on buttons/links for keyboard a11y. No
+  emoji, no gratuitous gradients — every effect reads as candlelight on metal.
 - **#7 — Font legibility.** The display font is pretty but hard to read; bump
   weight/size a touch for body text and lean on Markdown (#1) for structure.
 - **[x] #51 — Deník kostek schovat jako vedlejší panel.** Done. Rušivý byl
@@ -191,13 +197,30 @@ on old code and items **#15, #17, #18** are likely already resolved by updating.
   (`DiceLog.tsx` smazán z obou layoutů). Inline animované karty hodů přímo v
   chatu (#33, `RollLine` v `ChatPanel`) zůstávají zachované — ty fungují skvěle
   a jsou hlavním způsobem, jak hráč hody vidí v kontextu vyprávění.
-- **#47 — UI layout adjustments per user sketches.** Visual and layout changes
-  per wireframes supplied by the user. Awaiting delivery of sketches.
-  - **#47a — Layout implementation.** Adjust panel layout, navigation and visual
-    hierarchy per supplied wireframes. Preserve responsiveness and existing
-    functionality.
-  - **#47b — Design consistency.** Verify changes stay within the existing design
-    system (Catppuccin colours, font stack, panel/parchment motifs).
+- **[x] #47 — UI layout adjustments per user sketches.** Done. Restructured the
+  home/menu and play surface to the supplied wireframes.
+  - **[x] #47a — Layout implementation.** The home screen (`StartMenu.tsx`) is no
+    longer one long scroll: it's a persistent left-nav (Kampaně / Nová kampaň /
+    Zálohy, with Nastavení anchored at the bottom) driving a content pane. The
+    *Kampaně* view leads with a "Pokračovat / Hrát" card for the active campaign
+    then lists every campaign (active row gets a gold **Hrát**, others **otevřít**
+    + **spravovat**). *Nová kampaň* presents the four sketch options — prázdná
+    (works), AI generovaná (works), **ze šablony** and **import složky** as
+    clearly-flagged "připravujeme" stubs (UI prepared, no backend yet). *Zálohy*
+    hosts the snapshot/rollback panel. `SettingsModal.tsx` is now a tabbed dialog
+    (Účet · Kredity · AI DM · TTS · Obrázky · Info · Selfhosting) — Účet/Kredity
+    are placeholders, the rest map to the existing `settings.json` fields. The
+    play surface (`PlaySurface.tsx`) docks the combat turn-order/HP under the map
+    (middle column) and the right rail now pins the party controls at the top
+    with the character sheet (+ its actions) and the inventory each scrolling
+    independently, so the rail as a whole never scrolls. Nav collapses to
+    horizontal tabs below `lg`; splitters/persisted widths (#11) preserved.
+  - **[x] #47b — Design consistency.** All new chrome reuses the existing tokens
+    (`panel`/`panel-title`/`btn-gold`/`btn-ghost`/`settings-input`, the
+    gold/blood/arcane accents, the parchment Settings surface) and the original
+    inline-SVG `Icon` set — extended with a few new single-colour glyphs (plus,
+    archive, user, coins, info, server, speaker, upload). No emoji, no gradients
+    for their own sake.
 - **[x] #11 — Resizable UI panels.** Done. The three-column play surface is now
   a `PlaySurface` component (`apps/web/src/components/PlaySurface.tsx`) with
   draggable splitters between chat/map and map/rail; widths are stored as

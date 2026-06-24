@@ -26,7 +26,7 @@ export function LoginScreen({ onContinue }: { onContinue: () => void }) {
 
       <div className="panel relative z-10 w-full max-w-sm p-6 backdrop-blur-sm sm:p-7">
         <div className="mb-5 flex flex-col items-center gap-2 text-center">
-          <Icon name="d20" size={40} className="text-gold" />
+          <Icon name="d20" size={40} className="flicker text-gold" />
           <h1 className="font-display text-2xl tracking-wide text-text">Pán jeskyně</h1>
           <p className="font-body text-sm text-subtext0">
             {isRegister ? "Založ si účet a vydej se do temných síní." : "Přihlas se a pokračuj ve svém příběhu."}

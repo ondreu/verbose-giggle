@@ -62,7 +62,7 @@ export default function App() {
           aria-label="Domů"
           onClick={() => setView("home")}
         >
-          <Icon name="d20" size={22} className="text-gold" />
+          <Icon name="d20" size={22} className="flicker text-gold" />
         </button>
         <h1 className="font-display text-lg tracking-wide">{campaign?.name ?? "Pán jeskyně"}</h1>
         {time && (

@@ -164,16 +164,21 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
 
   const campaignChanged = view != null && campaign !== view.campaign;
 
+  // Settings are grouped into tabs per the #47 wireframe. Účet/Kredity are
+  // pre-prepared placeholders (accounts/billing aren't wired yet); the rest
+  // drive the real settings.json fields.
+  const [tab, setTab] = useState<TabId>("aidm");
+
   return (
     <div
       className="fixed inset-0 z-[2000] flex items-center justify-center bg-bg-crust/70 p-6 backdrop-blur-sm"
       onClick={onClose}
     >
       <div
-        className="parchment flex max-h-[85vh] w-full max-w-xl flex-col p-6"
+        className="parchment flex max-h-[88vh] w-full max-w-3xl flex-col p-0"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="mb-3 flex items-center gap-2 border-b border-ink/20 pb-2">
+        <div className="flex items-center gap-2 border-b border-ink/20 px-6 py-3">
           <Icon name="gear" size={18} className="text-ink" />
           <h2 className="font-display text-lg">Nastavení</h2>
           <button className="ml-auto font-log text-sm text-ink/60 hover:text-ink" onClick={onClose}>
@@ -182,218 +187,294 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
         </div>
 
         {view === null ? (
-          <p className="font-body italic text-ink/60">{error ?? "Načítám…"}</p>
+          <p className="px-6 py-5 font-body italic text-ink/60">{error ?? "Načítám…"}</p>
         ) : (
-          <div className="flex flex-col gap-5 overflow-y-auto pr-1 font-body text-ink">
-            {/* Narrator status */}
-            <div className="flex items-center gap-2 text-sm">
-              <span
-                className={`h-2 w-2 rounded-full ${view.activeNarrator === "llm" ? "bg-verdigris" : "bg-ink/40"}`}
-              />
-              {view.activeNarrator === "llm"
-                ? "Aktivní vypravěč: jazykový model"
-                : "Aktivní vypravěč: offline mock (bez klíče nebo vynuceno)"}
-            </div>
-
-            {/* LLM */}
-            <fieldset className="flex flex-col gap-2">
-              <legend className="font-display text-sm uppercase tracking-wider">Jazykový model</legend>
-              <Field label="Režim">
-                <select
-                  className="settings-input"
-                  value={provider}
-                  onChange={(e) => setProvider(e.target.value as "auto" | "mock")}
-                >
-                  <option value="auto">Automaticky (model, je-li klíč)</option>
-                  <option value="mock">Vynutit offline mock</option>
-                </select>
-              </Field>
-              <Field label="API klíč">
-                <input
-                  type="password"
-                  className="settings-input"
-                  placeholder={view.llm.apiKeySet ? "•••••• (uloženo — ponech prázdné = beze změny)" : "nenastaveno"}
-                  value={llmKey}
-                  onChange={(e) => setLlmKey(e.target.value)}
-                  autoComplete="off"
-                />
-              </Field>
-              <Field label="Base URL">
-                <input className="settings-input" value={llmBaseUrl} onChange={(e) => setLlmBaseUrl(e.target.value)} />
-              </Field>
-              <Field label="Model">
-                <input className="settings-input" value={llmModel} onChange={(e) => setLlmModel(e.target.value)} />
-              </Field>
-            </fieldset>
-
-            {/* Image generation */}
-            <fieldset className="flex flex-col gap-2">
-              <legend className="font-display text-sm uppercase tracking-wider">Generování obrázků</legend>
-              <label className="flex items-center gap-2 text-sm">
-                <input type="checkbox" checked={imageEnabled} onChange={(e) => setImageEnabled(e.target.checked)} />
-                Povolit generování obrázků
-              </label>
-              {imageEnabled && (
-                <>
-                  <Field label="Base URL">
-                    <input
-                      className="settings-input"
-                      placeholder="https://api.mistral.ai/v1"
-                      value={imageBaseUrl}
-                      onChange={(e) => setImageBaseUrl(e.target.value)}
-                    />
-                  </Field>
-                  <Field label="Model">
-                    <input
-                      className="settings-input"
-                      placeholder="výchozí dle poskytovatele"
-                      value={imageModel}
-                      onChange={(e) => setImageModel(e.target.value)}
-                    />
-                  </Field>
-                  <Field label="API klíč">
-                    <input
-                      type="password"
-                      className="settings-input"
-                      placeholder={
-                        view.image.apiKeySet
-                          ? "•••••• (uloženo)"
-                          : view.image.usesLlmKey
-                            ? "prázdné = použije klíč jazykového modelu"
-                            : "nenastaveno"
-                      }
-                      value={imageKey}
-                      onChange={(e) => setImageKey(e.target.value)}
-                      autoComplete="off"
-                    />
-                  </Field>
-                </>
-              )}
-            </fieldset>
-
-            {/* Voice (TTS) */}
-            <fieldset className="flex flex-col gap-2">
-              <legend className="font-display text-sm uppercase tracking-wider">Hlas (Azure AI Speech)</legend>
-              <p className="text-xs italic text-ink/60">
-                Expresivní česká narace. Prázdný klíč → použije se záložní Piper
-                {view.tts.piperFallback ? " (nastaven)" : " (nenastaven)"}.
-              </p>
-              <Field label="API klíč (Azure Speech)">
-                <input
-                  type="password"
-                  className="settings-input"
-                  placeholder={view.tts.azureKeySet ? "•••••• (uloženo — prázdné = beze změny)" : "nenastaveno → záložní Piper"}
-                  value={ttsKey}
-                  onChange={(e) => setTtsKey(e.target.value)}
-                  autoComplete="off"
-                />
-              </Field>
-              <Field label="Region">
-                <input
-                  className="settings-input"
-                  placeholder="westeurope"
-                  value={ttsRegion}
-                  onChange={(e) => setTtsRegion(e.target.value)}
-                />
-              </Field>
-              <Field label="Hlas">
-                <select className="settings-input" value={ttsVoice} onChange={(e) => setTtsVoice(e.target.value)}>
-                  {!["cs-CZ-AntoninNeural", "cs-CZ-VlastaNeural"].includes(ttsVoice) && (
-                    <option value={ttsVoice}>{ttsVoice}</option>
-                  )}
-                  <option value="cs-CZ-AntoninNeural">cs-CZ-AntoninNeural (mužský)</option>
-                  <option value="cs-CZ-VlastaNeural">cs-CZ-VlastaNeural (ženský)</option>
-                </select>
-              </Field>
-              <div className="grid grid-cols-2 gap-2">
-                <Field label="Tempo (rate)">
-                  <input className="settings-input" placeholder="-6%" value={ttsRate} onChange={(e) => setTtsRate(e.target.value)} />
-                </Field>
-                <Field label="Výška (pitch)">
-                  <input className="settings-input" placeholder="-2%" value={ttsPitch} onChange={(e) => setTtsPitch(e.target.value)} />
-                </Field>
-              </div>
-              <div className="flex items-center gap-3">
+          <div className="grid min-h-0 flex-1 grid-cols-1 sm:grid-cols-[12rem_1fr]">
+            {/* Tab rail */}
+            <nav className="flex flex-row flex-wrap gap-1 border-b border-ink/15 p-3 sm:flex-col sm:border-b-0 sm:border-r">
+              {TABS.map((t) => (
                 <button
-                  type="button"
-                  className="flex items-center gap-1.5 rounded-sm border border-ink/30 bg-ink/10 px-3 py-1 font-display text-xs hover:bg-ink/20 disabled:opacity-50"
-                  onClick={previewVoice}
-                  disabled={previewing}
+                  key={t.id}
+                  onClick={() => setTab(t.id)}
+                  className={`flex items-center gap-2 rounded-sm px-3 py-2 text-left font-display text-sm transition-colors ${
+                    tab === t.id ? "bg-ink/15 text-ink" : "text-ink/60 hover:bg-ink/10 hover:text-ink"
+                  }`}
                 >
-                  <Icon name="flame" size={13} />
-                  {previewing ? "Přehrávám…" : "Přehrát ukázku"}
+                  <Icon name={t.icon} size={15} />
+                  {t.label}
                 </button>
-                {previewError && <span className="text-xs text-blood">{previewError}</span>}
+              ))}
+            </nav>
+
+            {/* Active tab panel */}
+            <div className="flex min-h-0 flex-col">
+              <div className="flex flex-col gap-5 overflow-y-auto p-6 font-body text-ink">
+                {tab === "account" && <PlaceholderPanel title="Účet" />}
+                {tab === "credits" && <PlaceholderPanel title="Kredity" />}
+
+                {tab === "aidm" && (
+                  <fieldset className="flex flex-col gap-2">
+                    <legend className="font-display text-sm uppercase tracking-wider">Jazykový model (AI DM)</legend>
+                    <div className="mb-1 flex items-center gap-2 text-sm">
+                      <span
+                        className={`h-2 w-2 rounded-full ${view.activeNarrator === "llm" ? "bg-verdigris" : "bg-ink/40"}`}
+                      />
+                      {view.activeNarrator === "llm"
+                        ? "Aktivní vypravěč: jazykový model"
+                        : "Aktivní vypravěč: offline mock (bez klíče nebo vynuceno)"}
+                    </div>
+                    <Field label="Režim">
+                      <select
+                        className="settings-input"
+                        value={provider}
+                        onChange={(e) => setProvider(e.target.value as "auto" | "mock")}
+                      >
+                        <option value="auto">Automaticky (model, je-li klíč)</option>
+                        <option value="mock">Vynutit offline mock</option>
+                      </select>
+                    </Field>
+                    <Field label="API klíč">
+                      <input
+                        type="password"
+                        className="settings-input"
+                        placeholder={view.llm.apiKeySet ? "•••••• (uloženo — ponech prázdné = beze změny)" : "nenastaveno"}
+                        value={llmKey}
+                        onChange={(e) => setLlmKey(e.target.value)}
+                        autoComplete="off"
+                      />
+                    </Field>
+                    <Field label="Base URL">
+                      <input className="settings-input" value={llmBaseUrl} onChange={(e) => setLlmBaseUrl(e.target.value)} />
+                    </Field>
+                    <Field label="Model">
+                      <input className="settings-input" value={llmModel} onChange={(e) => setLlmModel(e.target.value)} />
+                    </Field>
+                  </fieldset>
+                )}
+
+                {tab === "tts" && (
+                  <fieldset className="flex flex-col gap-2">
+                    <legend className="font-display text-sm uppercase tracking-wider">Hlas (TTS — Azure AI Speech)</legend>
+                    <p className="text-xs italic text-ink/60">
+                      Expresivní česká narace. Prázdný klíč → použije se záložní Piper
+                      {view.tts.piperFallback ? " (nastaven)" : " (nenastaven)"}.
+                    </p>
+                    <Field label="API klíč (Azure Speech)">
+                      <input
+                        type="password"
+                        className="settings-input"
+                        placeholder={view.tts.azureKeySet ? "•••••• (uloženo — prázdné = beze změny)" : "nenastaveno → záložní Piper"}
+                        value={ttsKey}
+                        onChange={(e) => setTtsKey(e.target.value)}
+                        autoComplete="off"
+                      />
+                    </Field>
+                    <Field label="Region">
+                      <input
+                        className="settings-input"
+                        placeholder="westeurope"
+                        value={ttsRegion}
+                        onChange={(e) => setTtsRegion(e.target.value)}
+                      />
+                    </Field>
+                    <Field label="Hlas">
+                      <select className="settings-input" value={ttsVoice} onChange={(e) => setTtsVoice(e.target.value)}>
+                        {!["cs-CZ-AntoninNeural", "cs-CZ-VlastaNeural"].includes(ttsVoice) && (
+                          <option value={ttsVoice}>{ttsVoice}</option>
+                        )}
+                        <option value="cs-CZ-AntoninNeural">cs-CZ-AntoninNeural (mužský)</option>
+                        <option value="cs-CZ-VlastaNeural">cs-CZ-VlastaNeural (ženský)</option>
+                      </select>
+                    </Field>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Field label="Tempo (rate)">
+                        <input className="settings-input" placeholder="-6%" value={ttsRate} onChange={(e) => setTtsRate(e.target.value)} />
+                      </Field>
+                      <Field label="Výška (pitch)">
+                        <input className="settings-input" placeholder="-2%" value={ttsPitch} onChange={(e) => setTtsPitch(e.target.value)} />
+                      </Field>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <button
+                        type="button"
+                        className="flex items-center gap-1.5 rounded-sm border border-ink/30 bg-ink/10 px-3 py-1 font-display text-xs hover:bg-ink/20 disabled:opacity-50"
+                        onClick={previewVoice}
+                        disabled={previewing}
+                      >
+                        <Icon name="flame" size={13} />
+                        {previewing ? "Přehrávám…" : "Přehrát ukázku"}
+                      </button>
+                      {previewError && <span className="text-xs text-blood">{previewError}</span>}
+                    </div>
+                    <p className="text-xs italic text-ink/50">
+                      Ukázka použije i neuložené hodnoty z formuláře. Pomalejší tempo a nižší výška ={" "}
+                      dramatičtější projev. Aktivní engine:{" "}
+                      {view.tts.engine === "azure" ? "Azure" : view.tts.engine === "piper" ? "Piper (záložní)" : "vypnuto"}.
+                    </p>
+                  </fieldset>
+                )}
+
+                {tab === "images" && (
+                  <fieldset className="flex flex-col gap-2">
+                    <legend className="font-display text-sm uppercase tracking-wider">Generování obrázků</legend>
+                    <label className="flex items-center gap-2 text-sm">
+                      <input type="checkbox" checked={imageEnabled} onChange={(e) => setImageEnabled(e.target.checked)} />
+                      Povolit generování obrázků
+                    </label>
+                    {imageEnabled && (
+                      <>
+                        <Field label="Base URL">
+                          <input
+                            className="settings-input"
+                            placeholder="https://api.mistral.ai/v1"
+                            value={imageBaseUrl}
+                            onChange={(e) => setImageBaseUrl(e.target.value)}
+                          />
+                        </Field>
+                        <Field label="Model">
+                          <input
+                            className="settings-input"
+                            placeholder="výchozí dle poskytovatele"
+                            value={imageModel}
+                            onChange={(e) => setImageModel(e.target.value)}
+                          />
+                        </Field>
+                        <Field label="API klíč">
+                          <input
+                            type="password"
+                            className="settings-input"
+                            placeholder={
+                              view.image.apiKeySet
+                                ? "•••••• (uloženo)"
+                                : view.image.usesLlmKey
+                                  ? "prázdné = použije klíč jazykového modelu"
+                                  : "nenastaveno"
+                            }
+                            value={imageKey}
+                            onChange={(e) => setImageKey(e.target.value)}
+                            autoComplete="off"
+                          />
+                        </Field>
+                      </>
+                    )}
+                  </fieldset>
+                )}
+
+                {tab === "info" && (
+                  <fieldset className="flex flex-col gap-2">
+                    <legend className="font-display text-sm uppercase tracking-wider">Obsah &amp; info</legend>
+                    <Field label="Kampaň">
+                      <select className="settings-input" value={campaign} onChange={(e) => setCampaign(e.target.value)}>
+                        {!view.campaigns.includes(campaign) && <option value={campaign}>{campaign}</option>}
+                        {view.campaigns.map((c) => (
+                          <option key={c} value={c}>
+                            {c}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                    {campaignChanged && (
+                      <p className="text-xs italic text-blood">Změna kampaně se projeví po restartu serveru.</p>
+                    )}
+                    <Field label="Cesta k SRD">
+                      <input
+                        className="settings-input"
+                        placeholder="./srd"
+                        value={srdPath}
+                        onChange={(e) => setSrdPath(e.target.value)}
+                      />
+                    </Field>
+                    {view.srd.total > 0 ? (
+                      <p className="text-xs italic text-verdigris">
+                        Dataset načten: {view.srd.total} záznamů — {view.srd.spells} kouzel, {view.srd.monsters} nestvůr,{" "}
+                        {view.srd.classes} povolání ({view.srd.subclasses} podtříd), {view.srd.races} ras (
+                        {view.srd.subraces} podras), {view.srd.feats} vlastností.
+                      </p>
+                    ) : (
+                      <p className="text-xs italic text-blood">
+                        Žádný SRD dataset nenačten — zadej cestu ke složce s {`5e-SRD-*.json`} a ulož.
+                      </p>
+                    )}
+                    <p className="text-xs italic text-ink/50">
+                      Cesta k SRD se po uložení namountuje hned. Změna kampaně se projeví po restartu serveru.
+                    </p>
+                  </fieldset>
+                )}
+
+                {tab === "selfhosting" && (
+                  <fieldset className="flex flex-col gap-2">
+                    <legend className="font-display text-sm uppercase tracking-wider">Selfhosting</legend>
+                    <p className="text-sm text-ink/80">
+                      Tahle instance běží ve tvé vlastní režii. Citlivé provozní volby se nastavují v prostředí
+                      kontejneru (<code className="font-log text-xs">.env</code>), ne tady.
+                    </p>
+                    <ul className="flex flex-col gap-1.5 text-sm text-ink/70">
+                      <li className="flex items-center gap-2">
+                        <span className={`h-2 w-2 rounded-full ${view.env.basicAuth ? "bg-verdigris" : "bg-ink/40"}`} />
+                        Přihlášení (Basic Auth): {view.env.basicAuth ? "zapnuto" : "vypnuto"}
+                      </li>
+                      <li className="flex items-center gap-2">
+                        <span className={`h-2 w-2 rounded-full ${view.tts.piperFallback ? "bg-verdigris" : "bg-ink/40"}`} />
+                        Záložní Piper TTS: {view.tts.piperFallback ? "nastaven" : "nenastaven"}
+                      </li>
+                    </ul>
+                    <p className="text-xs italic text-ink/50">
+                      Přihlášení i adresa záložního Piperu se konfigurují v prostředí (.env). Data kampaní žijí
+                      v pojmenovaném Docker volume <code className="font-log text-xs">vault_data</code>, takže
+                      přežijí aktualizaci image.
+                    </p>
+                  </fieldset>
+                )}
               </div>
-              <p className="text-xs italic text-ink/50">
-                Ukázka použije i neuložené hodnoty z formuláře. Pomalejší tempo a nižší výška ={" "}
-                dramatičtější projev. Aktivní engine:{" "}
-                {view.tts.engine === "azure" ? "Azure" : view.tts.engine === "piper" ? "Piper (záložní)" : "vypnuto"}.
-              </p>
-            </fieldset>
 
-            {/* Content */}
-            <fieldset className="flex flex-col gap-2">
-              <legend className="font-display text-sm uppercase tracking-wider">Obsah</legend>
-              <Field label="Kampaň">
-                <select className="settings-input" value={campaign} onChange={(e) => setCampaign(e.target.value)}>
-                  {!view.campaigns.includes(campaign) && <option value={campaign}>{campaign}</option>}
-                  {view.campaigns.map((c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              {campaignChanged && (
-                <p className="text-xs italic text-blood">Změna kampaně se projeví po restartu serveru.</p>
+              {error && <p className="px-6 text-sm text-blood">{error}</p>}
+
+              {/* Persistent save bar (account/credits are placeholders — nothing to save). */}
+              {tab !== "account" && tab !== "credits" && (
+                <div className="flex items-center gap-3 border-t border-ink/20 px-6 py-3">
+                  <button
+                    className="rounded-sm border border-ink/30 bg-ink/10 px-4 py-1.5 font-display text-sm hover:bg-ink/20 disabled:opacity-50"
+                    onClick={save}
+                    disabled={saving}
+                  >
+                    {saving ? "Ukládám…" : "Uložit"}
+                  </button>
+                  <button className="font-log text-sm text-ink/60 hover:text-ink" onClick={onClose}>
+                    Zavřít
+                  </button>
+                </div>
               )}
-              <Field label="Cesta k SRD">
-                <input
-                  className="settings-input"
-                  placeholder="./srd"
-                  value={srdPath}
-                  onChange={(e) => setSrdPath(e.target.value)}
-                />
-              </Field>
-              {view.srd.total > 0 ? (
-                <p className="text-xs italic text-verdigris">
-                  Dataset načten: {view.srd.total} záznamů — {view.srd.spells} kouzel, {view.srd.monsters} nestvůr,{" "}
-                  {view.srd.classes} povolání ({view.srd.subclasses} podtříd), {view.srd.races} ras (
-                  {view.srd.subraces} podras), {view.srd.feats} vlastností.
-                </p>
-              ) : (
-                <p className="text-xs italic text-blood">
-                  Žádný SRD dataset nenačten — zadej cestu ke složce s {`5e-SRD-*.json`} a ulož.
-                </p>
-              )}
-              <p className="text-xs italic text-ink/50">
-                Cesta k SRD se po uložení namountuje hned. Změna kampaně se projeví po restartu serveru.
-              </p>
-            </fieldset>
-
-            <p className="text-xs italic text-ink/50">
-              Přihlášení ({view.env.basicAuth ? "zapnuto" : "vypnuto"}) a adresa záložního Piperu se
-              konfigurují v prostředí (.env), ne zde.
-            </p>
-
-            {error && <p className="text-sm text-blood">{error}</p>}
-
-            <div className="flex items-center gap-3 border-t border-ink/20 pt-3">
-              <button
-                className="rounded-sm border border-ink/30 bg-ink/10 px-4 py-1.5 font-display text-sm hover:bg-ink/20 disabled:opacity-50"
-                onClick={save}
-                disabled={saving}
-              >
-                {saving ? "Ukládám…" : "Uložit"}
-              </button>
-              <button className="font-log text-sm text-ink/60 hover:text-ink" onClick={onClose}>
-                Zavřít
-              </button>
             </div>
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+type TabId = "account" | "credits" | "aidm" | "tts" | "images" | "info" | "selfhosting";
+
+const TABS: { id: TabId; label: string; icon: string }[] = [
+  { id: "account", label: "Účet", icon: "user" },
+  { id: "credits", label: "Kredity", icon: "coins" },
+  { id: "aidm", label: "AI DM", icon: "flame" },
+  { id: "tts", label: "TTS", icon: "speaker" },
+  { id: "images", label: "Obrázky", icon: "camera" },
+  { id: "info", label: "Info", icon: "info" },
+  { id: "selfhosting", label: "Selfhosting", icon: "server" },
+];
+
+/** Pre-prepared tab with no backend yet (accounts/billing) — #47 stub. */
+function PlaceholderPanel({ title }: { title: string }) {
+  return (
+    <div className="flex flex-col items-center gap-3 py-10 text-center">
+      <Icon name={title === "Účet" ? "user" : "coins"} size={28} className="text-ink/40" />
+      <p className="font-display text-base text-ink/70">{title}</p>
+      <p className="max-w-xs font-body text-sm text-ink/55">
+        {title === "Účet"
+          ? "Účty zatím nejsou aktivní. Aplikace běží bez přihlášení."
+          : "Kreditní systém zatím není zapojen — selfhosted instance využívá tvůj vlastní API klíč."}
+      </p>
     </div>
   );
 }
