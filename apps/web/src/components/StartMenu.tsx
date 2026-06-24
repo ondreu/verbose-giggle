@@ -194,7 +194,7 @@ type NewMode = "empty" | "ai" | "template" | "import";
 const NEW_OPTIONS: { id: NewMode; title: string; desc: string; icon: string; ready: boolean }[] = [
   { id: "empty", title: "Nová prázdná kampaň", desc: "Začni s čistým světem a postav si ho po svém.", icon: "scroll", ready: true },
   { id: "ai", title: "Nová AI generovaná kampaň", desc: "AI postaví svět, NPC i úvodní úkol podle tvého zadání.", icon: "flame", ready: true },
-  { id: "template", title: "Kampaň ze šablony", desc: "Vyber si připravený scénář a rovnou hraj.", icon: "document", ready: false },
+  { id: "template", title: "Kampaň ze šablony", desc: "Vyber si připravený scénář a rovnou hraj.", icon: "document", ready: true },
   { id: "import", title: "Importovat složku kampaně", desc: "Načti existující vault složku z disku.", icon: "upload", ready: false },
 ];
 
@@ -234,7 +234,13 @@ function NewCampaignSection() {
             </button>
             {open && o.ready && (
               <div className="border-t border-surface1 px-4 pb-4 pt-3">
-                {o.id === "empty" ? <EmptyCampaignForm /> : <ForgeForm />}
+                {o.id === "empty" ? (
+                  <EmptyCampaignForm />
+                ) : o.id === "template" ? (
+                  <TemplateForm />
+                ) : (
+                  <ForgeForm />
+                )}
               </div>
             )}
           </section>
@@ -288,6 +294,103 @@ function EmptyCampaignForm() {
       <div className="mt-1 flex justify-end">
         <button className="btn-gold px-4 py-2 text-sm" disabled={!name.trim() || working} onClick={() => void submit()}>
           {working ? "…" : "Vytvořit a otevřít"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+interface TemplateInfo {
+  folder: string;
+  name: string;
+  party: number;
+  world?: string;
+}
+
+/** Pick a built-in template scenario and instantiate it into a fresh, persistent campaign (#3). */
+function TemplateForm() {
+  const createFromTemplate = useGame((s) => s.createFromTemplate);
+  const busy = useGame((s) => s.busy);
+  const [templates, setTemplates] = useState<TemplateInfo[] | null>(null);
+  const [selected, setSelected] = useState<string | null>(null);
+  const [name, setName] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [working, setWorking] = useState(false);
+
+  useEffect(() => {
+    void fetch("/api/templates")
+      .then((r) => (r.ok ? r.json() : { templates: [] }))
+      .then((d) => setTemplates(Array.isArray(d.templates) ? d.templates : []))
+      .catch(() => setTemplates([]));
+  }, []);
+
+  const submit = async () => {
+    if (!selected || working) return;
+    setWorking(true);
+    setError(null);
+    const res = await createFromTemplate({ template: selected, name: name.trim() || undefined });
+    setWorking(false);
+    if (!res.ok) {
+      setError(res.error ?? "Vytvoření kampaně ze šablony selhalo");
+      return;
+    }
+    // Server emits `reload`; the new campaign becomes active.
+    setName("");
+    setSelected(null);
+  };
+
+  if (templates === null) {
+    return <p className="font-body text-sm italic text-subtext0">Načítám šablony…</p>;
+  }
+  if (templates.length === 0) {
+    return <p className="font-body text-sm italic text-subtext0">Žádné vestavěné šablony nejsou k dispozici.</p>;
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      <p className="font-body text-sm text-subtext0">
+        Vyber připravený scénář. Vznikne tvoje vlastní kopie, která se ukládá samostatně — postup se
+        nikdy neztratí ani po restartu serveru.
+      </p>
+      <ul className="flex flex-col gap-1.5">
+        {templates.map((t) => (
+          <li key={t.folder}>
+            <button
+              onClick={() => setSelected(t.folder)}
+              className={`hover-lift flex w-full items-center gap-3 rounded-sm border px-3 py-2 text-left transition-colors ${
+                selected === t.folder ? "border-gold/60 bg-gold/10" : "border-surface1 bg-bg-mantle/40 hover:border-gold/30"
+              }`}
+            >
+              <Icon name="document" size={15} className={selected === t.folder ? "text-gold" : "text-subtext0"} />
+              <div className="min-w-0 flex-1">
+                <div className="truncate font-body text-text">{t.name}</div>
+                <div className="font-log text-[10px] text-subtext0">
+                  {t.party} postav{t.world ? ` · svět ${t.world}` : ""}
+                </div>
+              </div>
+            </button>
+          </li>
+        ))}
+      </ul>
+      {selected && (
+        <>
+          <label className="font-log text-[11px] uppercase tracking-wider text-subtext0">Název kopie (volitelné)</label>
+          <input
+            className="settings-input bg-bg-crust text-text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder={templates.find((t) => t.folder === selected)?.name ?? "Název kampaně"}
+          />
+        </>
+      )}
+      {error && <p className="font-log text-xs text-blood">{error}</p>}
+      <div className="mt-1 flex justify-end">
+        <button
+          className="btn-gold px-4 py-2 text-sm"
+          disabled={!selected || working || busy}
+          onClick={() => void submit()}
+        >
+          {working ? "…" : "Vytvořit a hrát"}
         </button>
       </div>
     </div>

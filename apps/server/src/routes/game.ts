@@ -11,6 +11,7 @@ import { startEncounter } from "../session/encounter.js";
 import type { EventBus } from "../session/events.js";
 import { SessionManager } from "../session/manager.js";
 import { createCampaign } from "../vault/scaffold.js";
+import { instantiateTemplate, listTemplates } from "../vault/templates.js";
 import { listFiles, zipDir } from "../vault/zip.js";
 import { forgeCampaign, type ForgeInput, type ProgressCallback } from "../vault/forge.js";
 import { createCharacter, creationOptions, levelUpOptions, removeFromParty, type CharacterDraft } from "../vault/creation.js";
@@ -282,6 +283,31 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
           await reopenManager(folder);
           llm = makeLlm();
           ctx.bus.emit({ type: "reload", reason: "campaign-created" });
+        }
+        return { ok: true, folder };
+      } catch (err) {
+        return reply.code(400).send({ error: err instanceof Error ? err.message : String(err) });
+      }
+    },
+  );
+
+  /** List the built-in template campaigns for the start menu (#3). */
+  app.get("/api/templates", async () => ({ templates: await listTemplates() }));
+
+  /** Instantiate a built-in template into a fresh, persistent campaign (#3). */
+  app.post<{ Body: { template: string; name?: string; select?: boolean } }>(
+    "/api/campaigns/from-template",
+    async (req, reply) => {
+      const template = (req.body?.template ?? "").trim();
+      if (!template) return reply.code(400).send({ error: "missing template" });
+      try {
+        const folder = await instantiateTemplate(config.vaultPath, template, req.body?.name);
+        if (req.body?.select !== false) {
+          await saveSettings(config.vaultPath, { campaign: folder });
+          config = applySettings(loadConfig(), await loadSettings(config.vaultPath));
+          await reopenManager(folder);
+          llm = makeLlm();
+          ctx.bus.emit({ type: "reload", reason: "campaign-from-template" });
         }
         return { ok: true, folder };
       } catch (err) {
@@ -594,6 +620,11 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
 
       const lv = await ctx.manager.applyTool(gs, "level_up", { actor });
       if (!lv.ok) return reply.code(400).send({ error: lv.error });
+      // The engine signals a refused level-up (e.g. not enough XP) by returning
+      // an `{ error }` result rather than throwing, so `lv.ok` stays true. Surface
+      // it as a 400 so the UI shows the reason instead of closing silently (#7).
+      const lvErr = (lv.result as { error?: string } | undefined)?.error;
+      if (typeof lvErr === "string") return reply.code(400).send({ error: lvErr });
       if (req.body?.subclass) {
         const r = await ctx.manager.applyTool(gs, "choose_subclass", { actor, subclass: req.body.subclass });
         if (!r.ok) return reply.code(400).send({ error: r.error });

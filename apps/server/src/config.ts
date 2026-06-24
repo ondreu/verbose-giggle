@@ -16,6 +16,18 @@ export const bundledSrdDir = path.resolve(
   "../../../packages/srd/data",
 );
 
+/**
+ * Bundled example vault shipped in-repo (`data/vault.example`), resolved the
+ * same way as {@link bundledSrdDir}. Its campaigns double as built-in
+ * "Kampaň ze šablony" templates (#3): they ship with the image and are copied
+ * into the live vault on demand, so a fresh playthrough persists independently
+ * and never resets on restart.
+ */
+export const bundledVaultDir = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "../../../data/vault.example",
+);
+
 export interface Config {
   port: number;
   host: string;

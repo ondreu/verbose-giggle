@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import { csClass, csLineage } from "@adm/schemas";
 import { useGame } from "../store/store";
 import { Icon } from "../components/Icon";
@@ -20,6 +21,20 @@ export function PartyPanel() {
   const busy = useGame((s) => s.busy);
   const [showCreate, setShowCreate] = useState(false);
   const [menuFor, setMenuFor] = useState<string | null>(null);
+  // Anchor rect for the kebab menu. The party tabs live in an `overflow-x-auto`
+  // strip, which clips any absolutely-positioned dropdown (overflow-y resolves
+  // to auto), so the menu is rendered in a portal at fixed coordinates (#4).
+  const [menuAnchor, setMenuAnchor] = useState<{ top: number; right: number } | null>(null);
+
+  const openMenu = (id: string, e: React.MouseEvent<HTMLButtonElement>) => {
+    if (menuFor === id) {
+      setMenuFor(null);
+      return;
+    }
+    const r = e.currentTarget.getBoundingClientRect();
+    setMenuAnchor({ top: r.bottom + 2, right: window.innerWidth - r.right });
+    setMenuFor(id);
+  };
 
   const party = Object.values(actors).filter((a) => a.faction === "party");
 
@@ -103,7 +118,7 @@ export function PartyPanel() {
                         : "bg-surface1 text-text"
                       : "opacity-60 hover:opacity-100"
                   }`}
-                  onClick={() => setMenuFor((m) => (m === a.id ? null : a.id))}
+                  onClick={(e) => openMenu(a.id, e)}
                   aria-haspopup="menu"
                   aria-expanded={menuFor === a.id}
                   title="Možnosti postavy"
@@ -112,29 +127,35 @@ export function PartyPanel() {
                 </button>
               </div>
 
-              {menuFor === a.id && (
-                <>
-                  <div className="fixed inset-0 z-40" onClick={() => setMenuFor(null)} />
-                  <div role="menu" className="panel absolute right-0 z-50 mt-0.5 flex w-44 flex-col py-1">
-                    {camped ? (
-                      <PartyMenuItem
-                        icon="footprints"
-                        label="Přivolat z tábora"
-                        onClick={() => recall(a.id)}
-                        disabled={busy}
-                      />
-                    ) : (
-                      <PartyMenuItem
-                        icon="hourglass"
-                        label="Poslat do tábora"
-                        onClick={() => toCamp(a.id)}
-                        disabled={busy || inCombat}
-                        title={inCombat ? "Nelze během boje" : undefined}
-                      />
-                    )}
-                  </div>
-                </>
-              )}
+              {menuFor === a.id && menuAnchor &&
+                createPortal(
+                  <>
+                    <div className="fixed inset-0 z-[1900]" onClick={() => setMenuFor(null)} />
+                    <div
+                      role="menu"
+                      className="panel fixed z-[1901] flex w-44 flex-col py-1"
+                      style={{ top: menuAnchor.top, right: menuAnchor.right }}
+                    >
+                      {camped ? (
+                        <PartyMenuItem
+                          icon="footprints"
+                          label="Přivolat z tábora"
+                          onClick={() => recall(a.id)}
+                          disabled={busy}
+                        />
+                      ) : (
+                        <PartyMenuItem
+                          icon="hourglass"
+                          label="Poslat do tábora"
+                          onClick={() => toCamp(a.id)}
+                          disabled={busy || inCombat}
+                          title={inCombat ? "Nelze během boje" : undefined}
+                        />
+                      )}
+                    </div>
+                  </>,
+                  document.body,
+                )}
             </div>
           );
         })}

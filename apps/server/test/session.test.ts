@@ -66,6 +66,27 @@ describe("SessionManager + example vault", () => {
     expect(mgr.session.quests["dovez-konvoj"]?.status).toBe("completed");
   });
 
+  it("persists spell-slot usage into the session overlay across rebuilds (#9)", async () => {
+    const mgr = await SessionManager.open(await freshCampaign());
+    const gs = mgr.buildGameState();
+    expect(gs.actors.elara?.spell_slots["1"]?.used).toBe(0);
+
+    // Cast a level-1 spell with the default slot_level (0): it must spend a
+    // level-1 slot, and that usage must survive into the overlay + next rebuild.
+    const res = await mgr.applyTool(gs, "cast_spell", {
+      caster: "elara",
+      spell: "cure-wounds",
+      targets: ["thorin"],
+    });
+    expect(res.ok).toBe(true);
+    expect(mgr.session.actors.elara?.spell_slots?.["1"]?.used).toBe(1);
+
+    // A fresh GameState (base sheet + overlay) still shows the slot as spent —
+    // before the fix it reset to the sheet's 0 and the cast "cost nothing".
+    const gs2 = mgr.buildGameState();
+    expect(gs2.actors.elara?.spell_slots["1"]?.used).toBe(1);
+  });
+
   it("dispatches a deterministic engine command and records the dice log", async () => {
     const mgr = await SessionManager.open(await freshCampaign());
     const gs = mgr.buildGameState();

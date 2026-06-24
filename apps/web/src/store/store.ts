@@ -180,6 +180,11 @@ interface GameStore {
     length?: "short" | "medium" | "long";
     detail?: "sparse" | "normal" | "rich";
   }) => Promise<{ ok: boolean; error?: string; folder?: string; usedLlm?: boolean }>;
+  /** Instantiate a built-in template into a fresh persistent campaign (#3). */
+  createFromTemplate: (input: {
+    template: string;
+    name?: string;
+  }) => Promise<{ ok: boolean; error?: string; folder?: string }>;
   listSnapshots: () => Promise<void>;
   createSnapshot: (label?: string) => Promise<void>;
   restoreSnapshot: (id: string) => Promise<void>;
@@ -651,6 +656,26 @@ export const useGame = create<GameStore>((set, get) => ({
       }
       // Server emits `reload`; the new campaign re-hydrates.
       return { ok: true, folder: data.folder, usedLlm: data.usedLlm };
+    } finally {
+      set({ busy: false });
+    }
+  },
+
+  createFromTemplate: async (input) => {
+    set({ busy: true, error: null });
+    try {
+      const res = await fetch("/api/campaigns/from-template", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...input, select: true }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        set({ error: data.error ?? `Chyba ${res.status}` });
+        return { ok: false, error: data.error };
+      }
+      // Server emits `reload`; the new campaign re-hydrates.
+      return { ok: true, folder: data.folder };
     } finally {
       set({ busy: false });
     }
