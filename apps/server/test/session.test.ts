@@ -8,6 +8,7 @@ import { SessionManager } from "../src/session/manager.js";
 import { runTurn } from "../src/session/loop.js";
 import type { EventBus } from "../src/session/events.js";
 import type { LlmClient } from "../src/llm/client.js";
+import { bundledSrdDir } from "../src/config.js";
 
 const SOURCE = fileURLToPath(
   new URL("../../../data/vault.example/campaigns/konvoj-do-vresoviste", import.meta.url),
@@ -67,7 +68,9 @@ describe("SessionManager + example vault", () => {
   });
 
   it("persists spell-slot usage into the session overlay across rebuilds (#9)", async () => {
-    const mgr = await SessionManager.open(await freshCampaign());
+    // Mount the bundled SRD (the production default) so cure-wounds resolves to
+    // a level-1 spell — the package no longer ships an inline data subset.
+    const mgr = await SessionManager.open(await freshCampaign(), { srdDir: bundledSrdDir });
     const gs = mgr.buildGameState();
     expect(gs.actors.elara?.spell_slots["1"]?.used).toBe(0);
 

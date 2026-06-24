@@ -1,4 +1,3 @@
-import { EQUIPMENT, MONSTERS, SPELLS } from "./data.js";
 import type {
   SrdClass,
   SrdEquipment,
@@ -16,17 +15,13 @@ import type {
 } from "./types.js";
 
 export * from "./types.js";
-export { MONSTERS, SPELLS, EQUIPMENT } from "./data.js";
 
 /**
- * Read-only typed accessors over the bundled SRD subset. A production loader
- * can merge a mounted /data/srd dataset on top of these defaults; the
- * accessors stay pure (no IO) so the engine can depend on them safely.
- *
- * The monster/spell/equipment categories ship a small bundled default
- * (`data.ts`); the richer creation/leveling categories (races, classes,
- * feats…) are only populated when a full dataset is mounted (#20), so they
- * default to empty and are tolerant of a minimal setup.
+ * Read-only typed accessors over an SRD dataset. The package itself ships no
+ * data — every category starts empty and is filled from the `overrides` a
+ * loader passes in (the server's `loadSrdDataset` over the bundled JSON in
+ * `packages/srd/data`, #45a). The accessors stay pure (no IO) so the engine can
+ * depend on them safely; engine tests pass an inline fixture subset.
  */
 export interface SrdIndex {
   monster(id: string): SrdMonster | undefined;
@@ -77,9 +72,9 @@ export interface SrdOverrides {
 }
 
 export function createSrdIndex(overrides?: SrdOverrides): SrdIndex {
-  const monsters = { ...MONSTERS, ...(overrides?.monsters ?? {}) };
-  const spells = { ...SPELLS, ...(overrides?.spells ?? {}) };
-  const equipment = { ...EQUIPMENT, ...(overrides?.equipment ?? {}) };
+  const monsters = { ...(overrides?.monsters ?? {}) };
+  const spells = { ...(overrides?.spells ?? {}) };
+  const equipment = { ...(overrides?.equipment ?? {}) };
   const races = { ...(overrides?.races ?? {}) };
   const subraces = { ...(overrides?.subraces ?? {}) };
   const classes = { ...(overrides?.classes ?? {}) };

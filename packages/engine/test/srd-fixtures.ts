@@ -1,12 +1,16 @@
-import type { SrdEquipment, SrdMonster, SrdSpell } from "./types.js";
+import type { SrdEquipment, SrdMonster, SrdOverrides, SrdSpell } from "@adm/srd";
 
 /**
- * A small bundled SRD subset for the example campaign and tests. The full
- * dataset (5e-bits/5e-database) is mounted at /data/srd in production and
- * loaded by `loadSrd`; this inline subset guarantees the engine and example
- * vault work out of the box with zero IO. SRD 5.1, CC-BY-4.0.
+ * A tiny SRD subset used as the default fixture for the pure-engine tests.
+ *
+ * The engine package has no IO, so it can't load the bundled JSON dataset
+ * (`packages/srd/data`, mounted by the server). These inline records give the
+ * engine tests stable goblins/spells/weapons to exercise rules against without
+ * a dataset. (Previously this lived in `@adm/srd/src/data.ts`; it moved here
+ * when that runtime-redundant bundle was removed — the server now always loads
+ * the full bundled dataset.) SRD 5.1, CC-BY-4.0.
  */
-export const MONSTERS: Record<string, SrdMonster> = {
+export const FIXTURE_MONSTERS: Record<string, SrdMonster> = {
   goblin: {
     id: "goblin",
     name: "Goblin",
@@ -53,7 +57,7 @@ export const MONSTERS: Record<string, SrdMonster> = {
   },
 };
 
-export const SPELLS: Record<string, SrdSpell> = {
+export const FIXTURE_SPELLS: Record<string, SrdSpell> = {
   "fire-bolt": {
     id: "fire-bolt",
     name: "Fire Bolt",
@@ -84,7 +88,7 @@ export const SPELLS: Record<string, SrdSpell> = {
   },
 };
 
-export const EQUIPMENT: Record<string, SrdEquipment> = {
+export const FIXTURE_EQUIPMENT: Record<string, SrdEquipment> = {
   longsword: {
     id: "longsword",
     name: "Longsword",
@@ -110,4 +114,11 @@ export const EQUIPMENT: Record<string, SrdEquipment> = {
     weight: 0.5,
     properties: ["consumable"],
   },
+};
+
+/** The default SRD overrides for engine tests: the inline fixture subset. */
+export const FIXTURE_OVERRIDES: SrdOverrides = {
+  monsters: FIXTURE_MONSTERS,
+  spells: FIXTURE_SPELLS,
+  equipment: FIXTURE_EQUIPMENT,
 };
