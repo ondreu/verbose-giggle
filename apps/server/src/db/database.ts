@@ -76,6 +76,21 @@ const MIGRATIONS: ReadonlyArray<(db: SqliteDatabase) => void> = [
     `);
     db.exec("CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_log(created_at);");
   },
+  // v4 — credit ledger (#56a). Append-only; balance = SUM(delta). Deltas are
+  // integers in the smallest credit unit (no floats).
+  (db) => {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS credit_ledger (
+        id         TEXT PRIMARY KEY,
+        user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        delta      INTEGER NOT NULL,
+        reason     TEXT NOT NULL,
+        ref        TEXT,
+        created_at TEXT NOT NULL
+      ) STRICT;
+    `);
+    db.exec("CREATE INDEX IF NOT EXISTS idx_ledger_user ON credit_ledger(user_id);");
+  },
 ];
 
 function migrate(db: SqliteDatabase): void {

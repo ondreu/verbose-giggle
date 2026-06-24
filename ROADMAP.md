@@ -111,8 +111,11 @@ ne „nice to have".
 
 ### #56 — Uživatelské kredity / metering
 
-- **#56a — Kreditní účet + transakce.** `credit_ledger` (user_id, delta, důvod,
-  ref, timestamp) jako **append-only ledger**; zůstatek = součet.
+- **[x] #56a — Kreditní účet + transakce.** Append-only `credit_ledger`
+  (user_id, delta, reason, ref, timestamp; v4 migrace, FK cascade) + `CreditStore`
+  (`grant`/`charge`/`balance`/`history`). Zůstatek = `SUM(delta)`; delty jsou
+  celá čísla v nejmenší jednotce (bez floatů). `credits/ledger.ts`, test
+  `test/credits.test.ts`.
 - **#56b — Měření spotřeby.** Strhávat **per reálná spotřeba tokenů** (LLM/
   obrázek/TTS) = cost + markup; usage brát z odpovědi poskytovatele, ne odhad.
   **Pozor na determinismus (#12):** strhávání je vedlejší efekt mimo engine.
