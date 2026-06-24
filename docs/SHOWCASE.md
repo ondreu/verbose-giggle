@@ -69,10 +69,11 @@ campaigns/<your-slug>/
 ### `campaign.yaml` (copy & edit)
 
 ```yaml
-name: The Velen Roads
+name: Konvoj do Vřesoviště
 ruleset: dnd5e-srd
-world_map: maps/continent.svg        # path within the campaign folder
-starting_location: rozcesti           # a location id
+world: marka-havrani                   # optional: build inside a shared world (#49)
+world_map: maps/marka-overview.svg        # path within the campaign folder
+starting_location: cerny-brod         # a location id
 party: [thorin, elara]                # character ids
 companions: [shadowpaw]               # companion ids
 language: cs
@@ -139,6 +140,11 @@ Aim for a 30–45 min demo arc:
 
 ### Where to get map & art assets
 
+- **Bundled example:** the world ships with a hand-authored, dependency-free
+  parchment overworld at `worlds/marka-havrani/maps/marka-overview.svg`. Its terrain,
+  rivers, roads and place icons are drawn in the SAME 0..1 → 1000px space the engine
+  uses for `coords` (y-down), so the interactive location pins land exactly on the
+  drawn settlements. Copy it into a campaign's `maps/` and point `world_map` at it.
 - **Overworld maps (free generators):** [Azgaar's Fantasy Map Generator](https://azgaar.github.io/Fantasy-Map-Generator/)
   (export PNG), [watabou's procgen](https://watabou.itch.io/) (regions, cities,
   villages), or [Inkarnate](https://inkarnate.com) (free tier, export PNG). Drop

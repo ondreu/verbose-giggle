@@ -1,0 +1,228 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000" width="1000" height="1000" font-family="Cinzel, Georgia, serif">
+  <defs>
+    <radialGradient id="parch" cx="50%" cy="42%" r="75%">
+      <stop offset="0%" stop-color="#e9dcc0"/>
+      <stop offset="62%" stop-color="#dcc9a3"/>
+      <stop offset="100%" stop-color="#c4ac80"/>
+    </radialGradient>
+    <linearGradient id="river" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#5b7d86"/>
+      <stop offset="100%" stop-color="#3d5b66"/>
+    </linearGradient>
+    <filter id="paper"><feTurbulence type="fractalNoise" baseFrequency="0.012" numOctaves="3" seed="11" result="n"/>
+      <feColorMatrix in="n" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.05 0"/></filter>
+    <filter id="edge"><feTurbulence type="fractalNoise" baseFrequency="0.02" numOctaves="2" seed="5" result="n"/>
+      <feDisplacementMap in="SourceGraphic" in2="n" scale="9"/></filter>
+    <filter id="soft" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="1.5" stdDeviation="1.4" flood-color="#000" flood-opacity="0.35"/></filter>
+  </defs>
+
+  <!-- Parchment -->
+  <rect width="1000" height="1000" fill="url(#parch)"/>
+  <rect width="1000" height="1000" fill="url(#parch)" filter="url(#paper)" opacity="0.6"/>
+
+  <!-- Decorative border -->
+  <rect x="22" y="22" width="956" height="956" fill="none" stroke="#5a4a2c" stroke-width="3" filter="url(#edge)"/>
+  <rect x="34" y="34" width="932" height="932" fill="none" stroke="#7a6438" stroke-width="1.4" opacity="0.8"/>
+
+  <!-- ===================== TERRAIN ===================== -->
+
+  <!-- East: Velenská vřesoviště (heath stipple) -->
+  <g fill="#9c7e57" opacity="0.5">
+    <g id="dot"><circle r="2.2"/></g>
+    <use href="#dot" x="560" y="380"/><use href="#dot" x="600" y="410"/><use href="#dot" x="640" y="390"/>
+    <use href="#dot" x="680" y="430"/><use href="#dot" x="620" y="470"/><use href="#dot" x="660" y="500"/>
+    <use href="#dot" x="700" y="470"/><use href="#dot" x="740" y="440"/><use href="#dot" x="580" y="520"/>
+    <use href="#dot" x="720" y="520"/><use href="#dot" x="760" y="500"/><use href="#dot" x="640" y="560"/>
+    <use href="#dot" x="600" y="600"/><use href="#dot" x="680" y="600"/><use href="#dot" x="780" y="560"/>
+    <use href="#dot" x="560" y="450"/><use href="#dot" x="800" y="470"/><use href="#dot" x="740" y="580"/>
+  </g>
+
+  <!-- NW: Stříbrné vrchy (mountain range) -->
+  <g fill="#8a7350" stroke="#5d4a2c" stroke-width="2" stroke-linejoin="round" filter="url(#soft)">
+    <path d="M120,300 L165,180 L210,300 Z"/>
+    <path d="M175,300 L225,150 L280,300 Z"/>
+    <path d="M250,310 L300,205 L350,310 Z"/>
+    <path d="M150,320 L185,255 L220,320 Z"/>
+  </g>
+  <g fill="#cdb88c" opacity="0.85">
+    <path d="M225,150 L205,205 L245,205 Z"/>
+    <path d="M165,180 L150,222 L182,222 Z"/>
+    <path d="M300,205 L283,250 L318,250 Z"/>
+  </g>
+
+  <!-- N-central: Šípový hvozd (forest) -->
+  <g fill="#5e6f3e" stroke="#3f4d29" stroke-width="1.5" filter="url(#soft)">
+    <g id="tree"><path d="M0,6 L-7,6 L0,-9 L7,6 Z"/><rect x="-1.5" y="5" width="3" height="5" fill="#4a3a24" stroke="none"/></g>
+    <use href="#tree" x="360" y="270"/><use href="#tree" x="385" y="258"/><use href="#tree" x="410" y="272"/>
+    <use href="#tree" x="372" y="292"/><use href="#tree" x="398" y="288"/><use href="#tree" x="426" y="294"/>
+    <use href="#tree" x="350" y="248"/><use href="#tree" x="440" y="276"/><use href="#tree" x="414" y="250"/>
+    <use href="#tree" x="388" y="312"/><use href="#tree" x="362" y="318"/><use href="#tree" x="430" y="318"/>
+  </g>
+
+  <!-- E: Mlžné blato (marsh) -->
+  <g stroke="#5a6b5a" stroke-width="2" fill="none" opacity="0.7" stroke-linecap="round">
+    <path d="M655,545 q12,-8 24,0 q12,8 24,0"/>
+    <path d="M665,565 q12,-8 24,0 q12,8 24,0"/>
+    <path d="M650,585 q12,-8 24,0 q12,8 24,0"/>
+    <path d="M690,548 q12,-8 24,0 q12,8 24,0"/>
+    <path d="M700,575 q12,-8 24,0 q12,8 24,0"/>
+  </g>
+
+  <!-- ===================== RIVERS ===================== -->
+  <!-- Stříbřenka: NE -> Černý Brod (ford) -> Novigrad -> off west -->
+  <path d="M610,195 C560,290 520,420 480,550 C440,500 360,470 300,450 C220,455 165,462 110,480"
+        fill="none" stroke="url(#river)" stroke-width="9" stroke-linecap="round" filter="url(#edge)"/>
+  <!-- Mšené tributary: N -> Novigrad -->
+  <path d="M345,140 C328,250 312,350 300,450" fill="none" stroke="url(#river)" stroke-width="6"
+        stroke-linecap="round" filter="url(#edge)" opacity="0.95"/>
+
+  <!-- ===================== ROADS ===================== -->
+  <g stroke="#7a5a32" stroke-width="3.2" fill="none" stroke-linecap="round" stroke-dasharray="2 7" opacity="0.85">
+    <!-- Western spine: Novigrad - Rozcestí - Černý Brod - Vřesoviště -->
+    <path d="M300,450 L400,510 L480,550 L620,630"/>
+    <!-- Novigrad - Kamenec - Stříbrné doly -->
+    <path d="M300,450 L250,250 L200,180"/>
+    <!-- Novigrad - Dlouhý luh; Rozcestí - Dlouhý luh -->
+    <path d="M300,450 L380,620"/>
+    <path d="M400,510 L380,620"/>
+    <!-- Novigrad - Šípový hvozd -->
+    <path d="M300,450 L400,300"/>
+  </g>
+  <!-- Wild tracks east (fainter) -->
+  <g stroke="#8a6a44" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-dasharray="1 9" opacity="0.6">
+    <path d="M480,550 L600,520 L680,360 L790,430"/>
+    <path d="M620,630 L700,560"/>
+  </g>
+
+  <!-- ===================== PLACE ICONS ===================== -->
+  <!-- (settlement NAMES come from the app's interactive markers, drawn on top) -->
+
+  <!-- Novigrad (city, walled, 300,450) -->
+  <g transform="translate(300,450)" filter="url(#soft)">
+    <rect x="-16" y="-6" width="32" height="16" fill="#b9a06f" stroke="#4a3a22" stroke-width="2"/>
+    <rect x="-16" y="-16" width="8" height="12" fill="#a88f5e" stroke="#4a3a22" stroke-width="2"/>
+    <rect x="8" y="-16" width="8" height="12" fill="#a88f5e" stroke="#4a3a22" stroke-width="2"/>
+    <rect x="-4" y="-22" width="8" height="18" fill="#d9c79a" stroke="#4a3a22" stroke-width="2"/>
+    <circle cx="0" cy="-26" r="2.6" fill="#cfe0ea" stroke="#4a3a22" stroke-width="1"/>
+  </g>
+
+  <!-- Černý Brod (town + ford, 480,550) -->
+  <g transform="translate(480,550)" filter="url(#soft)">
+    <rect x="-12" y="-4" width="24" height="13" fill="#b9a06f" stroke="#4a3a22" stroke-width="2"/>
+    <rect x="-4" y="-15" width="8" height="13" fill="#d9c79a" stroke="#4a3a22" stroke-width="2"/>
+  </g>
+
+  <!-- Kamenec (mining town, 250,250) -->
+  <g transform="translate(250,250)" filter="url(#soft)">
+    <rect x="-11" y="-4" width="22" height="12" fill="#a89878" stroke="#4a3a22" stroke-width="2"/>
+    <path d="M-11,-4 L0,-13 L11,-4 Z" fill="#c8b890" stroke="#4a3a22" stroke-width="2"/>
+  </g>
+
+  <!-- Stříbrné doly (mine, 200,180) -->
+  <g transform="translate(200,180)" filter="url(#soft)">
+    <path d="M-9,8 A11,11 0 0 1 9,8 Z" fill="#4a3a24" stroke="#2c2114" stroke-width="2"/>
+    <path d="M-7,-6 L7,4 M7,-6 L-7,4" stroke="#6b5636" stroke-width="3" stroke-linecap="round"/>
+  </g>
+
+  <!-- Rozcestí (crossroads inn, 400,510) -->
+  <g transform="translate(400,510)" filter="url(#soft)">
+    <path d="M-9,0 H9 M0,-9 V9" stroke="#6b4f2c" stroke-width="3.4" stroke-linecap="round"/>
+    <rect x="-4" y="-4" width="8" height="8" fill="#d9c79a" stroke="#4a3a22" stroke-width="1.6"/>
+  </g>
+
+  <!-- Dlouhý luh (village, 380,620) -->
+  <g transform="translate(380,620)" filter="url(#soft)">
+    <rect x="-8" y="-3" width="16" height="10" fill="#bda874" stroke="#4a3a22" stroke-width="2"/>
+    <path d="M-8,-3 L0,-11 L8,-3 Z" fill="#d2bf90" stroke="#4a3a22" stroke-width="2"/>
+  </g>
+
+  <!-- Vřesoviště (village, 620,630) -->
+  <g transform="translate(620,630)" filter="url(#soft)">
+    <rect x="-8" y="-3" width="16" height="10" fill="#bda874" stroke="#4a3a22" stroke-width="2"/>
+    <path d="M-8,-3 L0,-11 L8,-3 Z" fill="#d2bf90" stroke="#4a3a22" stroke-width="2"/>
+  </g>
+
+  <!-- Šípový hvozd marker (forest landmark, 400,300) — handled by trees; small glade -->
+
+  <!-- Kostniční vrch (barrow hill, 500,300) -->
+  <g transform="translate(500,300)" filter="url(#soft)">
+    <path d="M-13,8 Q0,-12 13,8 Z" fill="#9a8a64" stroke="#4a3a22" stroke-width="2"/>
+    <circle cx="0" cy="2" r="3" fill="#e8e0cf" stroke="#4a3a22" stroke-width="1.2"/>
+  </g>
+
+  <!-- Vlčí rokle (goblin ravine, 680,360) -->
+  <g transform="translate(680,360)" filter="url(#soft)">
+    <path d="M-10,-9 L-3,9 L3,-4 L10,9 L4,-11 Z" fill="#6e5a3a" stroke="#3a2c18" stroke-width="2"/>
+  </g>
+
+  <!-- Vraní hrad (ruined castle, 790,430) -->
+  <g transform="translate(790,430)" filter="url(#soft)">
+    <rect x="-14" y="-4" width="28" height="14" fill="#6f6149" stroke="#332817" stroke-width="2"/>
+    <rect x="-14" y="-16" width="7" height="14" fill="#5e5240" stroke="#332817" stroke-width="2"/>
+    <rect x="9" y="-18" width="6" height="16" fill="#5e5240" stroke="#332817" stroke-width="2"/>
+    <path d="M-2,-4 L-2,-14 L4,-9 Z" fill="#241c10" stroke="none"/>
+    <path d="M-22,2 l6,-3 M16,4 l6,2" stroke="#3a2c18" stroke-width="1.4"/>
+  </g>
+
+  <!-- ===================== FEATURE LABELS ===================== -->
+  <g fill="#4a3a22" font-style="italic">
+    <text x="232" y="338" font-size="19" text-anchor="middle" opacity="0.85">Stříbrné vrchy</text>
+    <text x="395" y="352" font-size="17" text-anchor="middle" opacity="0.8">Šípový hvozd</text>
+    <text x="703" y="630" font-size="17" text-anchor="middle" opacity="0.8">Mlžné blato</text>
+    <text x="372" y="455" font-size="15" text-anchor="middle" fill="#3d5b66" transform="rotate(-24 372 455)">Stříbřenka</text>
+    <text x="330" y="250" font-size="12" text-anchor="middle" fill="#3d5b66" transform="rotate(72 330 250)">Mšená</text>
+  </g>
+  <!-- Region labels (spaced, faint) -->
+  <text x="690" y="320" font-size="34" letter-spacing="10" fill="#5a4a2c" opacity="0.45" text-anchor="middle">VELEN</text>
+  <text x="300" y="600" font-size="20" letter-spacing="6" fill="#5a4a2c" opacity="0.4" text-anchor="middle">Z Á P A D N Í   L Á N Y</text>
+
+  <!-- ===================== CARTOUCHE / TITLE ===================== -->
+  <g filter="url(#soft)">
+    <rect x="300" y="58" width="400" height="70" rx="6" fill="#e6d7b4" stroke="#5a4a2c" stroke-width="2.5"/>
+    <rect x="308" y="66" width="384" height="54" rx="4" fill="none" stroke="#8a6f3e" stroke-width="1"/>
+  </g>
+  <text x="500" y="100" font-size="34" letter-spacing="6" fill="#3a2c16" text-anchor="middle">HAVRANÍ MARKA</text>
+  <text x="500" y="120" font-size="12" letter-spacing="3" fill="#6b5530" text-anchor="middle" font-style="italic">pohraničí Novigradského knížectví</text>
+
+  <!-- Raven sigil -->
+  <g transform="translate(500,168)" fill="#2a2018">
+    <path d="M0,-10 C7,-12 14,-7 12,0 C18,-1 20,4 14,7 C16,12 9,14 4,11 C2,16 -4,16 -6,11 C-12,13 -17,8 -12,4 C-18,2 -16,-5 -10,-5 C-10,-11 -5,-13 0,-10 Z"/>
+    <path d="M12,0 l10,-2 -8,5 Z"/>
+  </g>
+
+  <!-- Compass rose (top-right) -->
+  <g transform="translate(885,140)" filter="url(#soft)">
+    <circle r="40" fill="none" stroke="#5a4a2c" stroke-width="1.5"/>
+    <path d="M0,-38 L7,0 L0,38 L-7,0 Z" fill="#8a6f3e" stroke="#3a2c16" stroke-width="1"/>
+    <path d="M-38,0 L0,7 L38,0 L0,-7 Z" fill="#cdb88c" stroke="#3a2c16" stroke-width="1"/>
+    <text x="0" y="-46" font-size="16" fill="#3a2c16" text-anchor="middle">S</text>
+  </g>
+
+  <!-- Scale bar (bottom-left) -->
+  <g transform="translate(80,930)" fill="#3a2c16">
+    <rect x="0" y="0" width="60" height="7" fill="#3a2c16"/>
+    <rect x="60" y="0" width="60" height="7" fill="#e6d7b4" stroke="#3a2c16" stroke-width="1"/>
+    <rect x="120" y="0" width="60" height="7" fill="#3a2c16"/>
+    <text x="0" y="-6" font-size="13">0</text>
+    <text x="180" y="-6" font-size="13" text-anchor="middle">~60 km</text>
+  </g>
+
+  <!-- Legend (bottom-right) -->
+  <g transform="translate(720,860)">
+    <rect x="0" y="0" width="250" height="100" rx="5" fill="#e6d7b4" stroke="#5a4a2c" stroke-width="1.6" opacity="0.92"/>
+    <text x="125" y="20" font-size="13" letter-spacing="2" fill="#3a2c16" text-anchor="middle">LEGENDA</text>
+    <g font-size="12" fill="#3a2c16">
+      <rect x="14" y="32" width="14" height="9" fill="#b9a06f" stroke="#4a3a22" stroke-width="1.5"/>
+      <text x="36" y="41">město / ves</text>
+      <path d="M150,30 l-9,9 M141,30 l9,9" stroke="#6b5636" stroke-width="2.4"/>
+      <text x="162" y="41">doly</text>
+      <path d="M14,58 h16" stroke="#7a5a32" stroke-width="3" stroke-dasharray="2 5"/>
+      <text x="36" y="62">cesta</text>
+      <path d="M138,58 h16" stroke="#3d5b66" stroke-width="4"/>
+      <text x="162" y="62">řeka</text>
+      <rect x="14" y="76" width="12" height="9" fill="#6f6149" stroke="#332817" stroke-width="1.5"/>
+      <text x="36" y="84">zřícenina</text>
+    </g>
+  </g>
+</svg>

@@ -1,7 +1,7 @@
 name: Stíny Vraního hradu
 ruleset: dnd5e-srd
 world: marka-havrani
-world_map: maps/continent.svg
+world_map: maps/marka-overview.svg
 starting_location: novigrad
 party: [bram, kira]
 companions: [halbrecht]

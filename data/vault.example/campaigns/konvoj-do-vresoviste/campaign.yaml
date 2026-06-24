@@ -1,7 +1,7 @@
 name: Konvoj do Vřesoviště
 ruleset: dnd5e-srd
 world: marka-havrani
-world_map: maps/continent.svg
+world_map: maps/marka-overview.svg
 starting_location: cerny-brod
 party: [thorin, elara]
 companions: [shadowpaw]
