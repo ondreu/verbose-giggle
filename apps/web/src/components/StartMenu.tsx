@@ -145,6 +145,7 @@ function ForgeCampaign() {
   const [worlds, setWorlds] = useState<{ id: string; name: string }[]>([]);
   const [world, setWorld] = useState("");
   const [worldShared, setWorldShared] = useState(false);
+  const [sandbox, setSandbox] = useState(false);
   const [working, setWorking] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState<{ phase: string; msg: string }[]>([]);
@@ -176,6 +177,7 @@ function ForgeCampaign() {
           detail,
           world: world || undefined,
           world_shared: world ? worldShared : undefined,
+          sandbox: sandbox || undefined,
           select: true,
         }),
       });
@@ -328,6 +330,22 @@ function ForgeCampaign() {
               )}
             </div>
           )}
+
+          {/* Sandbox mode (#sandbox): no predetermined quest — free exploration. */}
+          <label className="flex items-start gap-2 font-body text-xs text-subtext0">
+            <input
+              type="checkbox"
+              className="mt-0.5"
+              checked={sandbox}
+              onChange={(e) => setSandbox(e.target.checked)}
+              disabled={working}
+            />
+            <span>
+              Sandbox — bez předem daného úkolu či zápletky. AI postaví svět, ale
+              družina ho prozkoumává volně vlastním tempem a Pán jeskyně ji do
+              ničeho netlačí.
+            </span>
+          </label>
 
           {/* Streaming progress log */}
           {progress.length > 0 && (

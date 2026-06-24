@@ -1,6 +1,6 @@
 import { approachStep, gridDistanceFt, toolSpecs, type GameState } from "@adm/engine";
 import type { Llm, ChatMsg } from "../llm/client.js";
-import { aiTurnInstruction, ARRIVAL_BEAT, CAMPAIGN_START, type EnemyRange, RECAP_PROMPT, sceneSnapshot, type SceneConnection, type SceneQuest, type SceneWorld, SYSTEM_PROMPT, turnControlNote } from "../llm/prompt.js";
+import { aiTurnInstruction, ARRIVAL_BEAT, CAMPAIGN_START, CAMPAIGN_START_SANDBOX, type EnemyRange, RECAP_PROMPT, sceneSnapshot, type SceneConnection, type SceneQuest, type SceneWorld, SYSTEM_PROMPT, turnControlNote } from "../llm/prompt.js";
 import type { EventBus } from "./events.js";
 import type { SessionManager } from "./manager.js";
 
@@ -31,6 +31,11 @@ function sceneWorld(manager: SessionManager): SceneWorld | undefined {
   }));
   if (Object.keys(factionGoals).length === 0 && events.length === 0) return undefined;
   return { factionGoals, events };
+}
+
+/** Sandbox-mode flag for the scene snapshot (#sandbox). */
+function sceneOpts(manager: SessionManager): { sandbox?: boolean } {
+  return { sandbox: manager.campaign.config.sandbox === true };
 }
 
 const MAX_TOOL_ROUNDS = 8; // turn budget to avoid loops (§9.2)
@@ -185,7 +190,7 @@ export async function runTurn(opts: {
   const turnNote = turnControlMessage(manager, gs);
   const messages: ChatMsg[] = [
     { role: "system", content: SYSTEM_PROMPT },
-    { role: "system", content: sceneSnapshot(manager.session, gs.actors, sceneConnections(manager), availableQuests(manager), sceneWorld(manager)) },
+    { role: "system", content: sceneSnapshot(manager.session, gs.actors, sceneConnections(manager), availableQuests(manager), sceneWorld(manager), sceneOpts(manager)) },
     ...(turnNote ? [turnNote] : []),
     ...recent,
     { role: "user", content: input },
@@ -219,10 +224,11 @@ export async function runIntro(opts: {
 }): Promise<{ intro: string }> {
   const { manager, llm, bus } = opts;
   const gs = manager.buildGameState();
+  const sandbox = manager.campaign.config.sandbox === true;
   const messages: ChatMsg[] = [
     { role: "system", content: SYSTEM_PROMPT },
-    { role: "system", content: sceneSnapshot(manager.session, gs.actors, sceneConnections(manager), availableQuests(manager), sceneWorld(manager)) },
-    { role: "user", content: CAMPAIGN_START },
+    { role: "system", content: sceneSnapshot(manager.session, gs.actors, sceneConnections(manager), availableQuests(manager), sceneWorld(manager), sceneOpts(manager)) },
+    { role: "user", content: sandbox ? CAMPAIGN_START_SANDBOX : CAMPAIGN_START },
   ];
   // No streaming: the intro is returned over HTTP and appended by the client
   // directly (avoiding an SSE race on first load), so streamed deltas would
@@ -251,7 +257,7 @@ export async function runArrival(opts: {
   const gs = manager.buildGameState();
   const messages: ChatMsg[] = [
     { role: "system", content: SYSTEM_PROMPT },
-    { role: "system", content: sceneSnapshot(manager.session, gs.actors, sceneConnections(manager), availableQuests(manager), sceneWorld(manager)) },
+    { role: "system", content: sceneSnapshot(manager.session, gs.actors, sceneConnections(manager), availableQuests(manager), sceneWorld(manager), sceneOpts(manager)) },
     { role: "user", content: ARRIVAL_BEAT },
   ];
   const narration = await executeToolLoop({ manager, llm, bus, gs, messages });

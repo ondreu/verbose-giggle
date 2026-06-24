@@ -24,8 +24,10 @@ export async function startEncounter(
   const positions: Record<string, { x: number; y: number }> = {};
 
   // Party + companions present in the campaign, placed at party_start cells.
+  // Members resting in camp sit the fight out (party-roster management).
+  const camped = new Set(manager.session.camp ?? []);
   const partyIds = [...manager.campaign.config.party, ...manager.campaign.config.companions].filter(
-    (id) => manager.campaign.actors[id],
+    (id) => manager.campaign.actors[id] && !camped.has(id),
   );
   partyIds.forEach((id, i) => {
     const cell = enc.party_start[i] ?? enc.party_start[enc.party_start.length - 1];

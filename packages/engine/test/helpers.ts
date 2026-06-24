@@ -44,6 +44,7 @@ export function makeState(
     revealed_locations: ["start"],
     time: { day: 1, hour: 8 },
     active_player: actors[0]?.id ?? null,
+    camp: [],
     actors: {},
     combat: null,
     log: [],

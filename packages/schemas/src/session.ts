@@ -73,6 +73,10 @@ export const SessionState = z.object({
   revealed_locations: z.array(Slug).default([]),
   time: z.object({ day: z.number().int(), hour: z.number().int() }).default({ day: 1, hour: 8 }),
   active_player: z.string().nullable().default(null),
+  /** Party members resting in camp: kept on the roster but out of play — not
+   *  placed in encounters, never take an AI turn, and can't be the hotseat
+   *  active character until recalled. Mutated only via the camp engine tools. */
+  camp: z.array(z.string()).default([]),
   actors: z.record(z.string(), ActorOverlay).default({}),
   combat: CombatState.nullable().default(null),
   log: z.array(LogEntry).default([]),

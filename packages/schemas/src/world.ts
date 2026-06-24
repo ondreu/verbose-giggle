@@ -114,6 +114,10 @@ export const CampaignSchema = z
      *  from the authored notes. No effect without `world`. */
     world_shared: z.boolean().default(false),
     world_map: z.string().optional(),
+    /** Open-ended sandbox campaign (no predetermined main quest/plot). The DM
+     *  lets the party explore the world freely at their own pace and offers
+     *  opportunities rather than driving a railroad. */
+    sandbox: z.boolean().default(false),
     starting_location: Slug,
     party: z.array(Slug).default([]),
     companions: z.array(Slug).default([]),

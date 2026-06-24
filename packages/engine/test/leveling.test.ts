@@ -27,6 +27,7 @@ describe("level up", () => {
       id: "f",
       name: "Fighter",
       level: 4,
+      xp: 6500, // enough to reach level 5
       abilities: { str: 16, dex: 12, con: 14, int: 10, wis: 10, cha: 10 },
       hp: { max: 30, current: 30, temp: 0 },
       hit_dice: { type: "d10", total: 4, remaining: 4 },
@@ -45,6 +46,7 @@ describe("level up", () => {
       id: "w",
       name: "Wizard",
       level: 4,
+      xp: 6500, // enough to reach level 5
       abilities: { str: 8, dex: 12, con: 12, int: 16, wis: 10, cha: 10 },
       hit_dice: { type: "d6", total: 4, remaining: 4 },
       spell_slots: { "1": { max: 4, used: 1 }, "2": { max: 3, used: 0 } },
@@ -57,6 +59,26 @@ describe("level up", () => {
     w.level = 20;
     const r = levelUp(state, { actor: "w" });
     expect(r).toHaveProperty("error");
+  });
+
+  it("refuses to level up without enough earned XP", () => {
+    const a = makeActor({
+      id: "h",
+      name: "Hero",
+      level: 1,
+      xp: 0, // level 2 needs 300 XP
+      hit_dice: { type: "d8", total: 1, remaining: 1 },
+    });
+    const state = makeState([a]);
+    const r = levelUp(state, { actor: "h" });
+    expect(r).toHaveProperty("error");
+    expect(a.level).toBe(1); // unchanged
+
+    // With the threshold met, the same call now succeeds.
+    a.xp = 300;
+    const ok = levelUp(state, { actor: "h" });
+    expect(ok).not.toHaveProperty("error");
+    expect(a.level).toBe(2);
   });
 });
 
@@ -101,7 +123,7 @@ describe("SRD-driven features, subclass and feats (#20)", () => {
   };
 
   it("grants class features for the new level on level-up", () => {
-    const w = makeActor({ id: "w", name: "Wizard", class: "wizard", level: 2, hit_dice: { type: "d6", total: 2, remaining: 2 } });
+    const w = makeActor({ id: "w", name: "Wizard", class: "wizard", level: 2, xp: 900, hit_dice: { type: "d6", total: 2, remaining: 2 } });
     const state = makeState([w], "seed", srd as never);
     levelUp(state, { actor: "w" }); // → level 3
     expect(w.features).toContain("wizard-l3");

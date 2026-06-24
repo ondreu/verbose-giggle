@@ -199,6 +199,7 @@ export async function loadSession(c: LoadedCampaign): Promise<SessionState> {
       revealed_locations: [c.config.starting_location],
       time: { day: 1, hour: 8 },
       active_player: c.config.party[0] ?? null,
+      camp: [],
       actors: {},
       combat: null,
       log: [],

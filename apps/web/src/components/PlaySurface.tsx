@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { ChatPanel } from "../panels/ChatPanel";
 import { MapPanel } from "../map/MapPanel";
 import { SheetPanel } from "../panels/SheetPanel";
+import { PartyPanel } from "../panels/PartyPanel";
 import { TurnTracker } from "../panels/TurnTracker";
 import { InventoryPanel } from "../panels/InventoryPanel";
 
@@ -85,6 +86,7 @@ export function PlaySurface() {
         <div className="min-h-[60vh]"><ChatPanel /></div>
         <div className="min-h-[60vh]"><MapPanel /></div>
         <aside className="flex min-h-0 flex-col gap-3">
+          <PartyPanel />
           <SheetPanel />
           <TurnTracker />
           <InventoryPanel />
@@ -105,6 +107,7 @@ export function PlaySurface() {
       <div className="min-h-0 min-w-0"><MapPanel /></div>
       <Splitter onPointerDown={startDrag("rail")} />
       <aside className="flex min-h-0 min-w-0 flex-col gap-3 overflow-y-auto">
+        <PartyPanel />
         <SheetPanel />
         <TurnTracker />
         <InventoryPanel />
