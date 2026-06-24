@@ -9,11 +9,13 @@ import type { FastifyInstance } from "fastify";
 import type { UserRole, UserStore } from "../auth/users.js";
 import type { SessionStore } from "../auth/sessions.js";
 import type { AuditStore } from "../auth/audit.js";
+import type { CreditStore } from "../credits/ledger.js";
 
 export interface AdminContext {
   users: UserStore;
   sessions: SessionStore;
   audit: AuditStore;
+  credits: CreditStore;
 }
 
 function userRow(u: ReturnType<UserStore["list"]>[number]) {
@@ -28,7 +30,9 @@ function userRow(u: ReturnType<UserStore["list"]>[number]) {
 }
 
 export async function registerAdminRoutes(app: FastifyInstance, ctx: AdminContext): Promise<void> {
-  app.get("/api/admin/users", async () => ({ users: ctx.users.list().map(userRow) }));
+  app.get("/api/admin/users", async () => ({
+    users: ctx.users.list().map((u) => ({ ...userRow(u), credits: ctx.credits.balance(u.id) })),
+  }));
 
   app.get("/api/admin/overview", async () => {
     const all = ctx.users.list();
@@ -70,6 +74,24 @@ export async function registerAdminRoutes(app: FastifyInstance, ctx: AdminContex
       ctx.users.setEmailVerified(target.id, verified);
       ctx.audit.record(req.user!.id, "user.verify", target.id, String(verified));
       return reply.send({ user: userRow(ctx.users.findById(target.id)!) });
+    },
+  );
+
+  // Manually adjust a user's credits (#56d). Positive grants, negative deducts.
+  app.post<{ Params: { id: string }; Body: { amount?: number; reason?: string } }>(
+    "/api/admin/users/:id/credits",
+    async (req, reply) => {
+      const amount = req.body?.amount;
+      if (typeof amount !== "number" || !Number.isInteger(amount) || amount === 0) {
+        return reply.code(400).send({ error: "Částka musí být nenulové celé číslo." });
+      }
+      const target = ctx.users.findById(req.params.id);
+      if (!target) return reply.code(404).send({ error: "Uživatel nenalezen." });
+      const reason = (req.body?.reason || "admin-adjust").slice(0, 200);
+      if (amount > 0) ctx.credits.grant(target.id, amount, reason);
+      else ctx.credits.charge(target.id, -amount, reason);
+      ctx.audit.record(req.user!.id, "user.credits", target.id, `${amount > 0 ? "+" : ""}${amount} (${reason})`);
+      return reply.send({ balance: ctx.credits.balance(target.id) });
     },
   );
 

@@ -5,6 +5,7 @@ import { openInMemoryDatabase } from "../src/db/database.js";
 import { UserStore } from "../src/auth/users.js";
 import { SessionStore } from "../src/auth/sessions.js";
 import { AuditStore } from "../src/auth/audit.js";
+import { CreditStore } from "../src/credits/ledger.js";
 import { AuthService } from "../src/auth/service.js";
 import { registerAuthGuard } from "../src/auth/middleware.js";
 import { registerAdminRoutes } from "../src/routes/admin.js";
@@ -15,6 +16,7 @@ async function setup() {
   const users = new UserStore(db);
   const sessions = new SessionStore(db);
   const audit = new AuditStore(db);
+  const credits = new CreditStore(db);
   const service = new AuthService(users, sessions, { send: async () => {} }, {
     secret: "s",
     publicUrl: "http://localhost",
@@ -29,10 +31,10 @@ async function setup() {
   const app: FastifyInstance = Fastify();
   await app.register(fastifyCookie);
   registerAuthGuard(app, { service, allowAnonymous: true });
-  await registerAdminRoutes(app, { users, sessions, audit });
+  await registerAdminRoutes(app, { users, sessions, audit, credits });
   await app.ready();
 
-  return { app, users, sessions, audit, service, admin, member, adminSid, memberSid };
+  return { app, users, sessions, audit, credits, service, admin, member, adminSid, memberSid };
 }
 
 const asAdmin = (sid: string) => ({ cookies: { adm_session: sid } });
@@ -90,6 +92,42 @@ describe("admin user management (#57b/#57c)", () => {
     expect(del.statusCode).toBe(200);
     expect(users.findById(member.id)).toBeNull();
     expect(sessions.get(memberSid)).toBeNull();
+    await app.close();
+  });
+
+  it("grants and deducts credits, surfacing the balance in the user list", async () => {
+    const { app, credits, member, adminSid } = await setup();
+    const grant = await app.inject({
+      method: "POST",
+      url: `/api/admin/users/${member.id}/credits`,
+      payload: { amount: 500, reason: "welcome" },
+      ...asAdmin(adminSid),
+    });
+    expect(grant.statusCode).toBe(200);
+    expect(grant.json().balance).toBe(500);
+
+    await app.inject({
+      method: "POST",
+      url: `/api/admin/users/${member.id}/credits`,
+      payload: { amount: -200 },
+      ...asAdmin(adminSid),
+    });
+    expect(credits.balance(member.id)).toBe(300);
+
+    const list = await app.inject({ method: "GET", url: "/api/admin/users", ...asAdmin(adminSid) });
+    const row = list.json().users.find((u: { id: string }) => u.id === member.id);
+    expect(row.credits).toBe(300);
+    await app.close();
+  });
+
+  it("rejects a zero or non-integer credit adjustment", async () => {
+    const { app, member, adminSid } = await setup();
+    expect(
+      (await app.inject({ method: "POST", url: `/api/admin/users/${member.id}/credits`, payload: { amount: 0 }, ...asAdmin(adminSid) })).statusCode,
+    ).toBe(400);
+    expect(
+      (await app.inject({ method: "POST", url: `/api/admin/users/${member.id}/credits`, payload: { amount: 1.5 }, ...asAdmin(adminSid) })).statusCode,
+    ).toBe(400);
     await app.close();
   });
 

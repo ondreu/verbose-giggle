@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import {
   adminAudit,
   adminDeleteUser,
+  adminGrantCredits,
   adminListUsers,
   adminOverview,
   adminSetRole,
@@ -87,6 +88,7 @@ export function AdminPage() {
                 <th className="py-1 pr-3">Jméno</th>
                 <th className="py-1 pr-3">Role</th>
                 <th className="py-1 pr-3">Ověřen</th>
+                <th className="py-1 pr-3">Kredity</th>
                 <th className="py-1 pr-3">Akce</th>
               </tr>
             </thead>
@@ -97,8 +99,9 @@ export function AdminPage() {
                   <td className="py-1.5 pr-3">{u.displayName ?? "—"}</td>
                   <td className="py-1.5 pr-3">{u.role}</td>
                   <td className="py-1.5 pr-3">{u.emailVerified ? "ano" : "ne"}</td>
+                  <td className="py-1.5 pr-3">{u.credits}</td>
                   <td className="py-1.5 pr-3">
-                    <div className="flex flex-wrap gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <button
                         className="btn-link text-xs underline"
                         onClick={() => act(adminSetRole(u.id, u.role === "admin" ? "user" : "admin"))}
@@ -110,6 +113,16 @@ export function AdminPage() {
                         onClick={() => act(adminSetVerified(u.id, !u.emailVerified))}
                       >
                         {u.emailVerified ? "zrušit ověření" : "ověřit"}
+                      </button>
+                      <button
+                        className="btn-link text-xs underline"
+                        onClick={() => {
+                          const v = prompt(`Úprava kreditů pro ${u.email} (kladně přidá, záporně odečte):`, "100");
+                          const amount = v == null ? NaN : Number(v);
+                          if (Number.isInteger(amount) && amount !== 0) void act(adminGrantCredits(u.id, amount));
+                        }}
+                      >
+                        kredity
                       </button>
                       <button
                         className="btn-link text-xs text-blood underline"

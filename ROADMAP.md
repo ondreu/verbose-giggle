@@ -123,10 +123,12 @@ ne „nice to have".
   tahu). **BYO-key (self-hosted):** metering se přeskakuje; hosted BYO nepovolí.
 - **#56c — Vynucení limitu.** Před drahou operací zkontrolovat zůstatek; při 0
   vrátit čistý 402 do UI (ne pád). Rozhodnout: tvrdý stop vs. mock narrator.
-- **#56d — Dobíjení.** Začít **admin grantem** (#57); platební brána (Stripe)
-  až později (vlastní compliance).
-- **#56e — UI.** Naplnit záložku *Kredity* (zůstatek, historie, koupit) +
-  ukazatel v hlavičce.
+- **[x] #56d — Dobíjení.** Admin grant: `POST /api/admin/users/:id/credits`
+  (kladně přidá, záporně odečte; audit). Zůstatek je vidět v admin seznamu
+  uživatelů. Platební brána (Stripe) až později.
+- **[x] #56e — UI.** Záložka *Kredity* (`CreditsPanel`: zůstatek + historie
+  pohybů; anonym vidí vysvětlení) přes `GET /api/credits`. Admin má per-uživatele
+  tlačítko „kredity". Zbývá: ukazatel v hlavičce a „koupit" (čeká na platby).
 
 ### #57 — Dev / admin panel
 

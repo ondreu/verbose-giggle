@@ -99,6 +99,7 @@ export const deleteAccount = () => request("DELETE", "/api/account");
 
 export interface AdminUser extends AuthUser {
   createdAt: string;
+  credits: number;
 }
 export interface AdminOverview {
   users: number;
@@ -122,3 +123,18 @@ export const adminSetRole = (id: string, role: "admin" | "user") =>
 export const adminSetVerified = (id: string, verified: boolean) =>
   put(`/api/admin/users/${id}/verify`, { verified });
 export const adminDeleteUser = (id: string) => request("DELETE", `/api/admin/users/${id}`);
+export const adminGrantCredits = (id: string, amount: number, reason?: string) =>
+  request<{ balance: number }>("POST", `/api/admin/users/${id}/credits`, { amount, reason });
+
+// --- Credits (#56e) --------------------------------------------------------
+
+export interface CreditMovement {
+  id: string;
+  delta: number;
+  reason: string;
+  ref: string | null;
+  createdAt: string;
+}
+
+export const fetchCredits = () =>
+  request<{ balance: number; history: CreditMovement[] }>("GET", "/api/credits");

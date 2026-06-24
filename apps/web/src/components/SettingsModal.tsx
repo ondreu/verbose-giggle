@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useGame } from "../store/store";
 import { Icon } from "../components/Icon";
 import { AccountPanel } from "./AccountPanel";
+import { CreditsPanel } from "./CreditsPanel";
 
 // Masked settings view returned by GET /api/settings — secret values are
 // never sent down, only whether they are set.
@@ -218,7 +219,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
             <div className="flex min-h-0 flex-col">
               <div className="flex flex-col gap-5 overflow-y-auto p-6 font-body text-ink">
                 {tab === "account" && <AccountPanel />}
-                {tab === "credits" && <PlaceholderPanel title="Kredity" />}
+                {tab === "credits" && <CreditsPanel />}
 
                 {tab === "aidm" && (
                   <fieldset className="flex flex-col gap-2">
@@ -483,21 +484,6 @@ const TABS: { id: TabId; label: string; icon: string }[] = [
   { id: "info", label: "Info", icon: "info" },
   { id: "selfhosting", label: "Selfhosting", icon: "server" },
 ];
-
-/** Pre-prepared tab with no backend yet (accounts/billing) — #47 stub. */
-function PlaceholderPanel({ title }: { title: string }) {
-  return (
-    <div className="flex flex-col items-center gap-3 py-10 text-center">
-      <Icon name={title === "Účet" ? "user" : "coins"} size={28} className="text-ink/40" />
-      <p className="font-display text-base text-ink/70">{title}</p>
-      <p className="max-w-xs font-body text-sm text-ink/55">
-        {title === "Účet"
-          ? "Účty zatím nejsou aktivní. Aplikace běží bez přihlášení."
-          : "Kreditní systém zatím není zapojen — selfhosted instance využívá tvůj vlastní API klíč."}
-      </p>
-    </div>
-  );
-}
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
