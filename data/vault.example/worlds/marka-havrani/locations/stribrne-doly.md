@@ -8,6 +8,8 @@ coords: { x: 0.20, y: 0.18 }
 connections:
   - to: kamenec
     travel: { distance_km: 6, days: 0, terrain: road, danger: medium }
+  - to: zulova-hlubina
+    travel: { distance_km: 0, days: 1, terrain: tunnel, danger: high }
 discovered: false
 ---
 # Stříbrné doly
