@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { csAbility, csAbilityAbbr, csSkill } from "@adm/schemas";
+import { csAbility, csAbilityAbbr, csSkill, csSpellName } from "@adm/schemas";
 import { useGame } from "../store/store";
 import { Icon } from "./Icon";
 import { FeatureCard, SpellCard, Tip, ABILITY_TIP, SKILL_TIP } from "./InfoCard";
@@ -499,7 +499,7 @@ function SpellPicker({
                       : "border-surface2 text-subtext1 hover:border-gold/40"
                 }`}
               >
-                {s.name}
+                {csSpellName(s.id, s.name)}
               </button>
             </SpellCard>
           );

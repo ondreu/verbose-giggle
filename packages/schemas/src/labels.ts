@@ -259,6 +259,237 @@ export const FEAT_CS: Record<string, string> = {
   grappler: "Zápasník",
 };
 
+/**
+ * Player-facing Czech names for SRD spells (#45b). Keyed by the English SRD id
+ * (ids stay English for determinism); only the displayed label is translated.
+ * This is a curated starter layer covering every SRD cantrip and level-1 spell
+ * — the set a new caster actually picks and casts (creation caps the picker at
+ * level 1). Higher-level spells fall back to a prettified English name via
+ * {@link csSpellName}; extend this map to localize more. (#45b is `[~]`.)
+ */
+export const SPELL_NAME_CS: Record<string, string> = {
+  // Cantrips (level 0)
+  "acid-splash": "Kyselinová sprška",
+  "chill-touch": "Mrazivý dotek",
+  "dancing-lights": "Tančící světla",
+  druidcraft: "Druidský um",
+  "eldritch-blast": "Mystický výšleh",
+  "fire-bolt": "Ohnivá střela",
+  guidance: "Vedení",
+  light: "Světlo",
+  "mage-hand": "Kouzelná ruka",
+  mending: "Spravení",
+  message: "Vzkaz",
+  "minor-illusion": "Drobná iluze",
+  "poison-spray": "Jedovatý postřik",
+  prestidigitation: "Prestidigitace",
+  "produce-flame": "Vyvolání plamene",
+  "ray-of-frost": "Mrazivý paprsek",
+  resistance: "Odolnost",
+  "sacred-flame": "Posvátný plamen",
+  shillelagh: "Shillelagh",
+  "shocking-grasp": "Šokující sevření",
+  "spare-the-dying": "Záchrana umírajícího",
+  thaumaturgy: "Thaumaturgie",
+  "true-strike": "Jistý úder",
+  "vicious-mockery": "Zlomyslný posměšek",
+  // Level 1
+  alarm: "Poplach",
+  "animal-friendship": "Přátelství se zvířaty",
+  bane: "Záhuba",
+  bless: "Požehnání",
+  "burning-hands": "Hořící ruce",
+  "charm-person": "Očarování osoby",
+  "color-spray": "Barevná sprška",
+  command: "Rozkaz",
+  "comprehend-languages": "Porozumění jazykům",
+  "create-or-destroy-water": "Stvoření či zničení vody",
+  "cure-wounds": "Léčení ran",
+  "detect-evil-and-good": "Odhalení zla a dobra",
+  "detect-magic": "Odhalení magie",
+  "detect-poison-and-disease": "Odhalení jedu a nemoci",
+  "disguise-self": "Přestrojení",
+  "divine-favor": "Boží přízeň",
+  entangle: "Spoutání",
+  "expeditious-retreat": "Spěšný ústup",
+  "faerie-fire": "Vílí oheň",
+  "false-life": "Klamný život",
+  "feather-fall": "Pírkový pád",
+  "find-familiar": "Přivolání familiára",
+  "floating-disk": "Vznášející se disk",
+  "fog-cloud": "Mlžný oblak",
+  goodberry: "Léčivé bobule",
+  grease: "Mastnota",
+  "guiding-bolt": "Navádějící střela",
+  "healing-word": "Léčivé slovo",
+  "hellish-rebuke": "Pekelná odveta",
+  heroism: "Hrdinství",
+  "hideous-laughter": "Příšerný smích",
+  "hunters-mark": "Lovcovo znamení",
+  identify: "Identifikace",
+  "illusory-script": "Iluzorní písmo",
+  "inflict-wounds": "Uštědření ran",
+  jump: "Skok",
+  longstrider: "Dlouhý krok",
+  "mage-armor": "Kouzelná zbroj",
+  "magic-missile": "Magická střela",
+  "protection-from-evil-and-good": "Ochrana před zlem a dobrem",
+  "purify-food-and-drink": "Očištění jídla a pití",
+  sanctuary: "Útočiště",
+  shield: "Štít",
+  "shield-of-faith": "Štít víry",
+  "silent-image": "Tichý obraz",
+  sleep: "Spánek",
+  "speak-with-animals": "Řeč se zvířaty",
+  thunderwave: "Hromová vlna",
+  "unseen-servant": "Neviditelný sluha",
+};
+
+/**
+ * Player-facing Czech names for SRD equipment (#45b): all weapons and armor
+ * (every character carries some), plus the adventuring gear and equipment packs
+ * that appear in starting kits. Unknown ids fall back to a prettified English
+ * name via {@link csItemName}. Ids stay English (SRD); only labels translate.
+ */
+export const ITEM_NAME_CS: Record<string, string> = {
+  // Weapons
+  club: "Kyj",
+  dagger: "Dýka",
+  greatclub: "Velký kyj",
+  handaxe: "Sekerka",
+  javelin: "Oštěp",
+  "light-hammer": "Lehké kladivo",
+  mace: "Palcát",
+  quarterstaff: "Bojová hůl",
+  sickle: "Srp",
+  spear: "Kopí",
+  "crossbow-light": "Lehká kuše",
+  dart: "Šipka",
+  shortbow: "Krátký luk",
+  sling: "Prak",
+  battleaxe: "Bojová sekera",
+  flail: "Řemdih",
+  glaive: "Sudlice",
+  greataxe: "Velká sekera",
+  greatsword: "Velký meč",
+  halberd: "Halapartna",
+  lance: "Dřevec",
+  longsword: "Dlouhý meč",
+  maul: "Perlík",
+  morningstar: "Palcát s bodci",
+  pike: "Píka",
+  rapier: "Rapír",
+  scimitar: "Šavle",
+  shortsword: "Krátký meč",
+  trident: "Trojzubec",
+  "war-pick": "Válečný špičák",
+  warhammer: "Válečné kladivo",
+  whip: "Bič",
+  blowgun: "Foukačka",
+  "crossbow-hand": "Ruční kuše",
+  "crossbow-heavy": "Těžká kuše",
+  longbow: "Dlouhý luk",
+  net: "Síť",
+  // Armor & shields
+  "padded-armor": "Prošívaná zbroj",
+  "leather-armor": "Kožená zbroj",
+  "studded-leather-armor": "Cvočkovaná kožená zbroj",
+  "hide-armor": "Kožešinová zbroj",
+  "chain-shirt": "Kroužková košile",
+  "scale-mail": "Šupinová zbroj",
+  breastplate: "Náprsní pancíř",
+  "half-plate-armor": "Poloplátová zbroj",
+  "ring-mail": "Kroužkovaná zbroj",
+  "chain-mail": "Drátěná zbroj",
+  "splint-armor": "Pásová zbroj",
+  "plate-armor": "Plátová zbroj",
+  shield: "Štít",
+  // Common adventuring gear (starting kits)
+  arrow: "Šíp",
+  "crossbow-bolt": "Šipka do kuše",
+  backpack: "Batoh",
+  bedroll: "Spací podložka",
+  "rations-1-day": "Příděly jídla (1 den)",
+  "rope-hempen-50-feet": "Konopné lano (50 stop)",
+  "rope-silk-50-feet": "Hedvábné lano (50 stop)",
+  torch: "Pochodeň",
+  waterskin: "Měch na vodu",
+  tinderbox: "Křesadlo",
+  candle: "Svíce",
+  "lantern-hooded": "Krytá lucerna",
+  "lantern-bullseye": "Reflektorová lucerna",
+  "oil-flask": "Lampový olej (lahvička)",
+  crowbar: "Páčidlo",
+  hammer: "Kladivo",
+  piton: "Skoba",
+  "grappling-hook": "Lezecký hák",
+  pouch: "Váček",
+  quiver: "Toulec",
+  "holy-water-flask": "Svěcená voda (lahvička)",
+  "healers-kit": "Léčitelská brašna",
+  spellbook: "Kniha kouzel",
+  "component-pouch": "Váček se sesílacími přísadami",
+  "thieves-tools": "Zlodějské náčiní",
+  "mess-kit": "Jídelní souprava",
+  "clothes-common": "Prostý oděv",
+  "clothes-fine": "Vznešený oděv",
+  "clothes-travelers": "Cestovní oděv",
+  robes: "Hábit",
+  // Equipment packs
+  "explorers-pack": "Průzkumnický balíček",
+  "dungeoneers-pack": "Jeskyňářský balíček",
+  "burglars-pack": "Lupičský balíček",
+  "diplomats-pack": "Diplomatický balíček",
+  "entertainers-pack": "Bavičský balíček",
+  "priests-pack": "Kněžský balíček",
+  "scholars-pack": "Učenecký balíček",
+};
+
+/**
+ * Short Czech descriptions of the eight schools of magic (#45c). Static, so
+ * tooltips and the rules reference read Czech with no dataset mounted.
+ */
+export const SPELL_SCHOOL_DESC_CS: Record<string, string> = {
+  abjuration: "Ochranná magie: štíty, bariéry a rušení jiných kouzel.",
+  conjuration: "Přivolávání tvorů a předmětů či přemísťování na dálku.",
+  divination: "Odhalování pravdy, skrytého a budoucího.",
+  enchantment: "Ovlivňování mysli — okouzlení, rozkazy a klam.",
+  evocation: "Zkrocení živlů do ničivé energie (oheň, blesk, mráz).",
+  illusion: "Klamy smyslů — obrazy, zvuky a falešné vjemy.",
+  necromancy: "Magie života a smrti, nemrtvých a vysávání sil.",
+  transmutation: "Proměna podstaty věcí, tvorů a hmoty.",
+};
+
+/**
+ * Short Czech descriptions of the eighteen skills (#45c), for hover tooltips
+ * and the rules reference. Keyed by the same SRD ids as {@link SKILL_CS}.
+ */
+export const SKILL_DESC_CS: Record<string, string> = {
+  athletics: "Šplh, skok, plavání a zápas — fyzické zdolávání překážek (Síla).",
+  acrobatics: "Rovnováha, kotouly a hbité úhyby na nejisté noze (Obratnost).",
+  "sleight-of-hand": "Kapsářství, žonglování a nenápadné triky s rukama (Obratnost).",
+  stealth: "Plížení, schovávání a tichý pohyb bez povšimnutí (Obratnost).",
+  arcana: "Znalost magie, kouzel, run a tajemných bytostí (Inteligence).",
+  history: "Znalost dějin, válek, panovníků a dávných civilizací (Inteligence).",
+  investigation: "Hledání stop, vyvozování a luštění hádanek (Inteligence).",
+  nature: "Znalost přírody, rostlin, zvířat a počasí (Inteligence).",
+  religion: "Znalost božstev, obřadů, kultů a nemrtvých (Inteligence).",
+  "animal-handling": "Uklidnění, výcvik a porozumění zvířatům (Moudrost).",
+  insight: "Odhalení lži, nálad a skutečných úmyslů druhých (Moudrost).",
+  medicine: "Stabilizace umírajících a rozpoznání nemocí (Moudrost).",
+  perception: "Všímání si okolí zrakem, sluchem a čichem (Moudrost).",
+  survival: "Stopování, hledání cesty a přežití v divočině (Moudrost).",
+  deception: "Přesvědčivé lhaní, přetvářka a klamání (Charisma).",
+  intimidation: "Vynucení si poslušnosti hrozbami a nátlakem (Charisma).",
+  performance: "Bavení publika hudbou, tancem a vystoupením (Charisma).",
+  persuasion: "Získání druhých na svou stranu taktem a argumenty (Charisma).",
+};
+
+/** Prettify an SRD id ("fire-bolt") into a readable English fallback label. */
+function prettyId(id: string): string {
+  return id.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 /** Translate a possibly-unknown key, falling back to the original string. */
 export function csDamage(type?: string): string {
   if (!type) return "";
@@ -321,6 +552,25 @@ export function csFeat(id: string, fallback?: string): string {
 export function csSpellSchool(id?: string): string {
   if (!id) return "";
   return SPELL_SCHOOL_CS[id] ?? id;
+}
+export function csSpellSchoolDesc(id?: string): string {
+  if (!id) return "";
+  return SPELL_SCHOOL_DESC_CS[id] ?? "";
+}
+export function csSkillDesc(skill: string): string {
+  return SKILL_DESC_CS[skill] ?? "";
+}
+/**
+ * Player-facing spell name (#45b): Czech where translated, else a prettified
+ * English fallback (or the caller's `fallback`, e.g. the SRD's own name). Ids
+ * stay English; only the label changes.
+ */
+export function csSpellName(id: string, fallback?: string): string {
+  return SPELL_NAME_CS[id] ?? fallback ?? prettyId(id);
+}
+/** Player-facing equipment/item name (#45b), same fallback chain as spells. */
+export function csItemName(id: string, fallback?: string): string {
+  return ITEM_NAME_CS[id] ?? fallback ?? prettyId(id);
 }
 
 /** Quest lifecycle status → Czech (#19). */

@@ -6,8 +6,16 @@ import {
   CONDITION_DESC_CS,
   DAMAGE_CS,
   DAMAGE_DESC_CS,
+  SKILL_CS,
+  SKILL_DESC_CS,
+  SPELL_SCHOOL_CS,
+  SPELL_SCHOOL_DESC_CS,
   csAlignment,
   csDamageDesc,
+  csItemName,
+  csSkillDesc,
+  csSpellName,
+  csSpellSchoolDesc,
   csWeaponProperty,
   csWeaponPropertyDesc,
 } from "../src/index.js";
@@ -56,5 +64,36 @@ describe("Czech label completeness (#21)", () => {
     expect(csAlignment("unaligned")).toBe("bez přesvědčení");
     expect(csAlignment(undefined)).toBe("");
     expect(csAlignment("weird")).toBe("weird");
+  });
+
+  it("describes every skill and magic school (#45c)", () => {
+    for (const id of Object.keys(SKILL_CS)) {
+      expect(SKILL_DESC_CS[id], `skill desc for ${id}`).toBeTruthy();
+      expect(csSkillDesc(id)).toBe(SKILL_DESC_CS[id]);
+    }
+    for (const id of Object.keys(SPELL_SCHOOL_CS)) {
+      expect(SPELL_SCHOOL_DESC_CS[id], `school desc for ${id}`).toBeTruthy();
+      expect(csSpellSchoolDesc(id)).toBe(SPELL_SCHOOL_DESC_CS[id]);
+    }
+  });
+});
+
+/**
+ * SRD-entity name translations (#45b). Ids stay English (determinism); only the
+ * player-facing label is Czech, with a prettified English fallback for the long
+ * tail this curated layer doesn't yet cover.
+ */
+describe("SRD name translation layer (#45b)", () => {
+  it("translates known spell/item ids to Czech", () => {
+    expect(csSpellName("fire-bolt")).toBe("Ohnivá střela");
+    expect(csSpellName("cure-wounds")).toBe("Léčení ran");
+    expect(csItemName("longsword")).toBe("Dlouhý meč");
+    expect(csItemName("leather-armor")).toBe("Kožená zbroj");
+  });
+
+  it("falls back to the given English name, then a prettified id", () => {
+    expect(csSpellName("teleportation-circle", "Teleportation Circle")).toBe("Teleportation Circle");
+    expect(csSpellName("teleportation-circle")).toBe("Teleportation Circle");
+    expect(csItemName("potion-of-healing")).toBe("Potion Of Healing");
   });
 });

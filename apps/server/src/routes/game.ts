@@ -25,6 +25,7 @@ import {
 } from "../vault/snapshots.js";
 import { applySettings, loadConfig, type Config } from "../config.js";
 import { loadSettings, saveSettings, type Settings } from "../settings.js";
+import { csSpellName, csItemName } from "@adm/schemas";
 
 export interface GameContext {
   manager: SessionManager;
@@ -660,15 +661,16 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
   app.get<{ Querystring: { ids?: string } }>("/api/srd/items", async (req) => {
     const srd = ctx.manager.srd();
     const ids = (req.query?.ids ?? "").split(",").map((s) => s.trim()).filter(Boolean);
-    const out: Record<string, { name: string; category?: string; rarity?: string; magic: boolean; description?: string; properties?: string[] }> = {};
+    const out: Record<string, { name: string; nameCs: string; category?: string; rarity?: string; magic: boolean; description?: string; properties?: string[] }> = {};
     for (const id of ids) {
       const eq = srd.equipment(id);
       if (eq) {
-        out[id] = { name: eq.name, category: eq.category, magic: false, properties: eq.properties };
+        // nameCs: Czech where translated, else the SRD's English name (#45b).
+        out[id] = { name: eq.name, nameCs: csItemName(id, eq.name), category: eq.category, magic: false, properties: eq.properties };
         continue;
       }
       const mi = srd.magicItem(id);
-      if (mi) out[id] = { name: mi.name, category: mi.category, rarity: mi.rarity, magic: true, description: mi.description };
+      if (mi) out[id] = { name: mi.name, nameCs: csItemName(id, mi.name), category: mi.category, rarity: mi.rarity, magic: true, description: mi.description };
     }
     return out;
   });
@@ -679,7 +681,8 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
    *  or the spell is unknown; the client falls back to showing the raw id. */
   app.get<{ Params: { id: string } }>("/api/srd/spell/:id", (req) => {
     const spell = ctx.manager.srd().spell(req.params.id);
-    return spell ?? {};
+    // Attach the player-facing Czech name (#45b); ids/name stay English.
+    return spell ? { ...spell, nameCs: csSpellName(spell.id, spell.name) } : {};
   });
 
   /** Batch spell lookup by comma-separated ids (for sheet/picker tooltips). */
@@ -689,7 +692,7 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
     const srd = ctx.manager.srd();
     for (const id of ids) {
       const s = srd.spell(id);
-      if (s) out[id] = s;
+      if (s) out[id] = { ...s, nameCs: csSpellName(s.id, s.name) };
     }
     return out;
   });

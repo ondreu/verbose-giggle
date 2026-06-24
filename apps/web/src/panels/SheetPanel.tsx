@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { csCondition, csConditionDesc, csAbility, csAbilityAbbr, csClass, csFeat, csLineage, csSkill, type AbilityKey } from "@adm/schemas";
+import { csCondition, csConditionDesc, csAbility, csAbilityAbbr, csClass, csFeat, csLineage, csSkill, csSpellName, csItemName, type AbilityKey } from "@adm/schemas";
 import { useGame } from "../store/store";
 import { Icon } from "../components/Icon";
 import { LevelUpModal } from "../components/LevelUpModal";
@@ -15,9 +15,8 @@ export function targetClause(t: PickedTarget): string {
 
 const mod = (score: number) => Math.floor((score - 10) / 2);
 const fmt = (m: number) => (m >= 0 ? `+${m}` : `${m}`);
-const pretty = (id: string) => id.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-/** Prettify an SRD spell id ("fire-bolt") into a readable label. */
-const prettySpell = pretty;
+/** Player-facing spell label: Czech name where known, else prettified id (#45b). */
+const prettySpell = (id: string) => csSpellName(id);
 
 /** Armor/shields are not attacks (#43c). */
 const ARMOR_RE = /(armor|shield|mail|plate|breastplate)/i;
@@ -321,15 +320,18 @@ export function SheetPanel() {
               onClick={() => void aim("Cíl útoku", (c) => `Zaútočím vybranou zbraní${c}.`, false)}
             />
           </Tip>
-          {equipped.map((i) => (
-            <Tip key={i.id} content={<p className="font-body text-sm leading-snug text-text">Útok zbraní {pretty(i.id)}.</p>}>
+          {equipped.map((i) => {
+            const wpn = csItemName(i.id); // Czech weapon name where known (#45b)
+            return (
+            <Tip key={i.id} content={<p className="font-body text-sm leading-snug text-text">Útok zbraní {wpn}.</p>}>
               <ActionChip
-                label={pretty(i.id)}
+                label={wpn}
                 disabled={disabled}
-                onClick={() => void aim(`Cíl pro ${pretty(i.id)}`, (c) => `Zaútočím zbraní ${pretty(i.id)} (${i.id})${c}.`, false)}
+                onClick={() => void aim(`Cíl pro ${wpn}`, (c) => `Zaútočím zbraní ${wpn} (${i.id})${c}.`, false)}
               />
             </Tip>
-          ))}
+          );
+          })}
           <Tip content={<p className="font-body text-sm leading-snug text-text">Úder pěstí nebo kolenem. Zásah: 1 + mod. Síly drtivého poškození.</p>}>
             <ActionChip label="Beze zbraně" disabled={disabled}
               onClick={() => void aim("Cíl útoku beze zbraně", (c) => `Zaútočím beze zbraně (unarmed strike)${c}.`, false)} />
