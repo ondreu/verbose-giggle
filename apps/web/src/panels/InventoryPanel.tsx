@@ -23,7 +23,10 @@ export function InventoryPanel() {
   const session = useGame((s) => s.session);
   const actors = useGame((s) => s.actors);
   const sendCommand = useGame((s) => s.sendCommand);
-  const actor = session?.active_player ? actors[session.active_player] : null;
+  // Follow the party tab strip selection (#47): viewed member, else active player.
+  const viewedPlayer = useGame((s) => s.viewedPlayer);
+  const actorId = viewedPlayer ?? session?.active_player ?? null;
+  const actor = actorId ? actors[actorId] : null;
 
   const [resolved, setResolved] = useState<Record<string, ResolvedItem>>({});
   const ids = (actor?.inventory ?? []).map((i) => i.id).join(",");

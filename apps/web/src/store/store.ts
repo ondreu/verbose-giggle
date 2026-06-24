@@ -119,8 +119,14 @@ interface GameStore {
   snapshots: SnapshotMeta[];
   /** Active target request (drives the global TargetPicker + map click-to-target). */
   targetRequest: { title: string; allowNone: boolean } | null;
+  /** Party tab the rail is currently showing (#47). Out of combat this tracks the
+   *  active player; in combat it can point at another member for view-only
+   *  inspection without changing whose turn it is. `null` = follow active_player. */
+  viewedPlayer: string | null;
 
   setView: (v: View) => void;
+  /** Select which party member the rail (sheet/inventory) displays (#47). */
+  setViewedPlayer: (id: string | null) => void;
   /** Ask the player to choose a target (list / free-text / map click). */
   requestTarget: (title: string, allowNone?: boolean) => Promise<TargetResult>;
   /** Fulfil the active target request (called by the picker or a map click). */
@@ -216,8 +222,11 @@ export const useGame = create<GameStore>((set, get) => ({
   campaigns: [],
   snapshots: [],
   targetRequest: null,
+  viewedPlayer: null,
 
   setView: (v) => set({ view: v }),
+
+  setViewedPlayer: (id) => set({ viewedPlayer: id }),
 
   requestTarget: (title, allowNone = true) =>
     new Promise<TargetResult>((resolve) => {
@@ -322,7 +331,14 @@ export const useGame = create<GameStore>((set, get) => ({
       // Clear the "AI is acting" banner once the pointer rests on a human.
       const active = state.combat?.order[state.combat.turn_index]?.actor;
       const activeIsHuman = active ? get().actors[active]?.controller === "human" : true;
-      set({ session: state, thinking: null, aiActing: activeIsHuman ? null : get().aiActing });
+      // The view-only party selection only applies during combat; out of combat
+      // the rail follows the active (hotseat) player (#47).
+      set({
+        session: state,
+        thinking: null,
+        aiActing: activeIsHuman ? null : get().aiActing,
+        viewedPlayer: state.combat ? get().viewedPlayer : null,
+      });
     });
     source.addEventListener("thinking", (e) => {
       const { tool } = JSON.parse((e as MessageEvent).data);
