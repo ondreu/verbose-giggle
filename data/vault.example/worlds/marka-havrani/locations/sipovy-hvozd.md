@@ -10,6 +10,12 @@ connections:
     travel: { distance_km: 30, days: 1, terrain: wilderness, danger: medium }
   - to: kostnicni-vrch
     travel: { distance_km: 22, days: 1, terrain: wilderness, danger: medium }
+  - to: poustevna-u-studanky
+    travel: { distance_km: 8, days: 0, terrain: wilderness, danger: medium }
+  - to: sokoli-skala
+    travel: { distance_km: 24, days: 1, terrain: wilderness, danger: medium }
+  - to: obesencuv-dub
+    travel: { distance_km: 20, days: 1, terrain: wilderness, danger: medium }
 discovered: false
 ---
 # Šípový hvozd

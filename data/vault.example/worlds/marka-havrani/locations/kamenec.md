@@ -10,6 +10,8 @@ connections:
     travel: { distance_km: 60, days: 2, terrain: road, danger: low }
   - to: stribrne-doly
     travel: { distance_km: 6, days: 0, terrain: road, danger: medium }
+  - to: sokoli-skala
+    travel: { distance_km: 22, days: 1, terrain: wilderness, danger: medium }
 discovered: false
 ---
 # Kamenec

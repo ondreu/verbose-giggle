@@ -16,6 +16,10 @@ connections:
     travel: { distance_km: 30, days: 1, terrain: wilderness, danger: medium }
   - to: rozcesti
     travel: { distance_km: 30, days: 1, terrain: road, danger: low }
+  - to: vydri-brod
+    travel: { distance_km: 20, days: 1, terrain: road, danger: low }
+  - to: stara-hlaska
+    travel: { distance_km: 18, days: 1, terrain: road, danger: low }
 discovered: true
 ---
 # Novigrad

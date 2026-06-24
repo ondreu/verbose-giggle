@@ -8,6 +8,8 @@ coords: { x: 0.79, y: 0.43 }
 connections:
   - to: mlzne-blato
     travel: { distance_km: 15, days: 1, terrain: wilderness, danger: high }
+  - to: potopena-ves
+    travel: { distance_km: 12, days: 1, terrain: wilderness, danger: high }
 encounter_table: vrani-hrad
 discovered: false
 ---

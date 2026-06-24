@@ -8,9 +8,10 @@ a jejich obsah se vrství NAD světový (kampaň přebíjí svět při shodě `i
 
 ## Co svět obsahuje
 
-Rozsah (aktuálně): **24 lokací**, **9 frakcí**, **47 NPC**, dějiny + 4 světové
-události. Města mají vnitřní lokace (čtvrti a stavby s `parent`) a každé je
-zabydlené jmenovanými obyvateli.
+Rozsah (aktuálně): **36 lokací**, **9 frakcí**, **61 NPC**, dějiny + 4 světové
+události. Města mají vnitřní lokace (čtvrti a stavby s `parent`), divočina je
+protkaná drobnými body zájmu (poustevna, mohyly, bludičkova tůň, potopená ves…)
+a každé místo je zabydlené jmenovanými obyvateli.
 
 - `locations/` — kraje, města, vsi, divočina, ruiny a doupata. Souřadnice jsou
   poměry **0..1** na mapě světa (nezávislé na rozlišení). `connections` tvoří
@@ -45,17 +46,25 @@ jiného nepřežije.
 - **Novigrad** (město, ~5000 duší) — hlavní město. Vnitřní lokace: *Přístavní
   čtvrť* (tržiště, clo, podsvětí), *Hostinec U Tří havranů* (najímání, zvěsti),
   *Věž stříbrného plamene* (Řád, špitál, archiv), *Cechovní dům* (Kupecký cech),
-  *Stoky a Podhradí* (Šedé kápě). Nejhustěji obydlené — purkmistr, cechmistr,
-  velmistr, kněžna, Pavučina a tucet dalších.
+  *Stoky a Podhradí* (Šedé kápě), *Loděnice a lodní hřbitov* (pašování),
+  *Katova bašta* (žalář, šibenice). Nejhustěji obydlené — purkmistr, cechmistr,
+  velmistr, kněžna, Pavučina, kat, mastičkář a víc než tucet dalších.
 - **Černý Brod** (město) — mýtný uzel na cestě do Velenu. *Vranovská tvrz* (rod
-  Vranovský, rodinný archiv), *Mýtnice u brodu* (clo, převozníci, pašeráci).
-- **Kamenec** (hornické město) — *Dům Cechu havířů*, *Výčep U Sirné lampy*; nad
-  ním *Stříbrné doly* se zazděnou starou chodbou a Železnou rotou u vchodů.
+  Vranovský, rodinný archiv), *Mýtnice u brodu* (clo, převozníci, pašeráci),
+  *Převoznický šenk U Vydry* (pašerácká „kancelář").
+- **Kamenec** (hornické město) — *Dům Cechu havířů*, *Výčep U Sirné lampy*,
+  *Stříbrná huť* (tavba, mizející stříbro); nad ním *Stříbrné doly* se zazděnou
+  starou chodbou a Železnou rotou u vchodů.
 - **Vřesoviště** (ves) — *Gregorův dvůr a modlitebna*, poslední bašta před blaty.
 - **Rozcestí** (zájezdní hostinec) — křižovatka cest, kde se najímá doprovod a
   sbírají zprávy z celé marky.
-- **Velen, Dlouhý luh, Šípový hvozd, Mlžné blato, Vlčí rokle, Vraní hrad,
-  Kostniční vrch** — kraje a divočina s vlastními obyvateli a hrozbami.
+- **Body zájmu v divočině** — *Vydří brod* (rybáři na dolní Stříbřence), *Stará
+  hláska* (rozpadlá strážní věž se záhadným ohněm), *Sokolí skála* (vyhlídka a
+  sokolník), *Poustevna u Studánky* (Silvanus, léčivý pramen), *Kamenný kruh*
+  (menhiry staré víry spjaté s pečetí), *Oběšencův dub* (šibenice na hranici
+  území Krvavých klů), *Bludičkova tůň* a *Potopená ves* (hrůzy Mlžného blata).
+- **Velen, Dlouhý luh, Šípový hvozd, Vlčí rokle, Vraní hrad, Kostniční vrch** —
+  kraje, lesy, doupata a ruiny s vlastními obyvateli a hrozbami.
 
 Každé místo má jmenované obyvatele v `npcs/` (kdo to je, kde bývá, co chce, háček).
 

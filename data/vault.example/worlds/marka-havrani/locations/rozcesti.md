@@ -12,6 +12,8 @@ connections:
     travel: { distance_km: 12, days: 1, terrain: road, danger: low }
   - to: dlouhy-luh
     travel: { distance_km: 16, days: 1, terrain: road, danger: low }
+  - to: kamenny-kruh
+    travel: { distance_km: 14, days: 1, terrain: wilderness, danger: medium }
 encounter_table: velen-divocina
 discovered: false
 ---

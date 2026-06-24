@@ -10,6 +10,10 @@ connections:
     travel: { distance_km: 18, days: 1, terrain: wilderness, danger: high }
   - to: vrani-hrad
     travel: { distance_km: 15, days: 1, terrain: wilderness, danger: high }
+  - to: bludickova-tun
+    travel: { distance_km: 8, days: 0, terrain: wilderness, danger: high }
+  - to: potopena-ves
+    travel: { distance_km: 10, days: 1, terrain: wilderness, danger: high }
 discovered: false
 ---
 # Mlžné blato
