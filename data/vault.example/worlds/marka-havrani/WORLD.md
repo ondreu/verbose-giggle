@@ -8,10 +8,13 @@ a jejich obsah se vrství NAD světový (kampaň přebíjí svět při shodě `i
 
 ## Co svět obsahuje
 
-Rozsah (aktuálně): **36 lokací**, **9 frakcí**, **61 NPC**, dějiny + 4 světové
-události. Města mají vnitřní lokace (čtvrti a stavby s `parent`), divočina je
+Rozsah (aktuálně): **52 lokací**, **11 frakcí**, **79 NPC**, dějiny + 5 světových
+událostí. Města mají vnitřní lokace (čtvrti a stavby s `parent`), divočina je
 protkaná drobnými body zájmu (poustevna, mohyly, bludičkova tůň, potopená ves…)
-a každé místo je zabydlené jmenovanými obyvateli.
+a každé místo je zabydlené jmenovanými obyvateli. Tři největší sídla — Novigrad,
+Černý Brod a Kamenec — mají hustou síť POI (radnice, brána, lázeň, tržnice,
+kovárna, kaple, vážnice, síň vdov, kasárna…), z nichž každé obývá jmenovaný
+obyvatel s vlastním háčkem.
 
 - `locations/` — kraje, města, vsi, divočina, ruiny a doupata. Souřadnice jsou
   poměry **0..1** na mapě světa (nezávislé na rozlišení). `connections` tvoří
@@ -47,14 +50,26 @@ jiného nepřežije.
   čtvrť* (tržiště, clo, podsvětí), *Hostinec U Tří havranů* (najímání, zvěsti),
   *Věž stříbrného plamene* (Řád, špitál, archiv), *Cechovní dům* (Kupecký cech),
   *Stoky a Podhradí* (Šedé kápě), *Loděnice a lodní hřbitov* (pašování),
-  *Katova bašta* (žalář, šibenice). Nejhustěji obydlené — purkmistr, cechmistr,
-  velmistr, kněžna, Pavučina, kat, mastičkář a víc než tucet dalších.
+  *Katova bašta* (žalář, šibenice), *Radnice na Knížecím náměstí* (purkmistr,
+  biřic), *Vraní brána a strážnice* (hlídka, branný), *Lazebna U Tří kbelíků*
+  (felčar, drby, diskrétní rány), *Solná tržnice U městské váhy* (cech, ceny).
+  Nejhustěji obydlené — purkmistr, cechmistr, velmistr, kněžna, Pavučina, kat,
+  mastičkář a víc než dva tucty dalších.
 - **Černý Brod** (město) — mýtný uzel na cestě do Velenu. *Vranovská tvrz* (rod
   Vranovský, rodinný archiv), *Mýtnice u brodu* (clo, převozníci, pašeráci),
-  *Převoznický šenk U Vydry* (pašerácká „kancelář").
+  *Převoznický šenk U Vydry* (pašerácká „kancelář"), *Brodský rynk* (trh,
+  rychtář), *Kovárna U Podkovy* (koně, vozy, tichá ocel), *Brodská kaple*
+  (kazatel, mizející poutníci).
 - **Kamenec** (hornické město) — *Dům Cechu havířů*, *Výčep U Sirné lampy*,
-  *Stříbrná huť* (tavba, mizející stříbro); nad ním *Stříbrné doly* se zazděnou
-  starou chodbou a Železnou rotou u vchodů.
+  *Stříbrná huť* (tavba, mizející stříbro), *Vážnice a prubířský dům* (váha,
+  schodek stříbra), *Síň vdov* (podpory, žal, hlas proti cechu), *Kasárna
+  Železné roty* (znudění žoldnéři); nad ním *Stříbrné doly* se zazděnou starou
+  chodbou a Železnou rotou u vchodů.
+- **Mrazný hřeben** (sever) — vrcholové patro Stříbrných vrchů nad Kamencem:
+  *Hadí sedlo* (jediný průsmyk, výspa Železné roty), *Studený dvůr* (poslední ves
+  na severu, pastýři a rudokopové), *Žulová brána* a *Žulová hlubina* (ztracené
+  sídlo horního lidu — odkud vede tesaná chodba do dolů a kde přebývá **Tiché
+  kladivo**), *Ledová studna* (horské pleso, „mokré dveře" do hlubiny).
 - **Vřesoviště** (ves) — *Gregorův dvůr a modlitebna*, poslední bašta před blaty.
 - **Rozcestí** (zájezdní hostinec) — křižovatka cest, kde se najímá doprovod a
   sbírají zprávy z celé marky.

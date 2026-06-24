@@ -12,6 +12,8 @@ connections:
     travel: { distance_km: 6, days: 0, terrain: road, danger: medium }
   - to: sokoli-skala
     travel: { distance_km: 22, days: 1, terrain: wilderness, danger: medium }
+  - to: hadi-sedlo
+    travel: { distance_km: 14, days: 1, terrain: mountain, danger: medium }
 discovered: false
 ---
 # Kamenec

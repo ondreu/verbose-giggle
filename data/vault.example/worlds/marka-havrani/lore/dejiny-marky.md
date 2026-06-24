@@ -4,6 +4,12 @@ name: Dějiny Havraní marky
 ---
 # Dějiny Havraní marky
 
+**Dávno před markou** patřily Stříbrné vrchy **hornímu lidu** — kamenickému
+národu, který delvoval stříbro hluboko pod Mrazným hřebenem dřív, než sem vkročil
+první člověk. Jejich Žulová hlubina se po věcích uzavřela a svět na ně zapomněl;
+kamenecká žíla, na níž marka zbohatne, je jen okrajem jejich starého díla (viz
+`horni-lid`).
+
 **Před třemi sty lety** rozšířilo Novigradské knížectví své hranice na východ a
 zřídilo Havraní marku jako pohraniční panství proti divočině. Markrabím byl
 ustanoven mocný **rod Vranovský**, jenž si na skalním ostrohu nad blaty postavil

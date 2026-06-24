@@ -15,6 +15,10 @@ drží i starší víry.
   chrám, jen kapličky u cest a svátky po žních. Nejsilnější v Dlouhém Luhu.
 - **Paní hvozdů** — bezejmenná duše divočiny, kterou ctí hajníci a poustevníci.
   Žádné modlitby, jen úcta: nebrat víc, než les dá, a nechodit, kam tě nezve.
+- **Otec Kámen** — prastará víra horního lidu, dnes už jen pověra pastýřů na
+  Mrazném hřebeni: dech a paměť hory. Nemá kněze, jen pravidla — nečíst runy
+  nahlas, nebrat z hloubky víc, než hora dá, a nehledět dlouho do Ledové studny.
+  Stará Hedvika ze Studeného dvora říká, že Otec Kámen neusnul, jen ztichl.
 - **Marakáthé, Hlad pod kořeny** — starobožstvo tlení, hladu a „očištění", spící
   pod Vraním hradem od časů před markou. Vzývat ho je zakázáno a trestáno; přesto
   **Kult Marakáthé** v něm vidí spásu skrze konec. Řád učí, že Marakáthé není bůh,
