@@ -59,6 +59,17 @@ export function levelUp(state: GameState, args: { actor: string }): LevelUpResul
   const actor = getActor(state, args.actor);
   if (actor.level >= 20) return { error: `${actor.name} is already level 20` };
 
+  // Levels are earned, never granted at will: refuse unless the actor has at
+  // least the cumulative XP the next level requires. The DM awards XP with
+  // `award_xp` (which then auto-levels through this same path once the
+  // threshold is met), so play can never out-run earned experience.
+  const needed = XP_THRESHOLDS[actor.level] ?? Infinity;
+  if (actor.xp < needed) {
+    return {
+      error: `${actor.name} nemá dost zkušeností na úroveň ${actor.level + 1} (${actor.xp}/${needed} XP). Úroveň se získává jen za zkušenosti (award_xp).`,
+    };
+  }
+
   actor.level += 1;
   actor.proficiency_bonus = proficiencyForLevel(actor.level);
 

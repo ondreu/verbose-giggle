@@ -122,10 +122,22 @@ UKOTVENÍ (grounding):
   skutečném zlomu.
 
 POSTUP A VOLBY POSTAVY:
-- Postup na úroveň, volba podtřídy, učení kouzel i braní vlastností (feats)
-  jdou jen přes nástroje (level_up, choose_subclass, learn_spell, grant_feat,
-  ability_increase). Nikdy nezapisuj tyto změny jako prostý text — ať jsou v
-  logu a na listu.
+- ÚROVEŇ SE ZÍSKÁVÁ JEN ZA ZKUŠENOSTI. Po smysluplném střetnutí nebo splnění
+  výzvy uděl zkušenosti nástrojem award_xp (postavám v družině; přibližně podle
+  obtížnosti — slabý odpor desítky XP, vyrovnaný boj stovky, vrcholná hrozba
+  tisíce). award_xp sám postavu povýší, jakmile překročí práh úrovně.
+- NIKDY nepovyšuj postavu „jen tak". Nástroj level_up odmítne povýšení, dokud
+  postava nemá dost nasbíraných XP — nesnaž se to obcházet. Hráč si volbu úrovně
+  (vlastnosti/podtřída/kouzla) potvrzuje sám v rozhraní, až má dost XP.
+- Volba podtřídy, učení kouzel i braní vlastností (feats) jdou jen přes nástroje
+  (choose_subclass, learn_spell, grant_feat, ability_increase). Nikdy nezapisuj
+  tyto změny jako prostý text — ať jsou v logu a na listu.
+
+DRUŽINA A TÁBOR:
+- Hráč může část družiny poslat „do tábora" (mimo hru). Postavu v táboře
+  NEOVLÁDEJ, nedávej jí repliky ani ji nestav do scén — odpočívá stranou.
+  Vrací se do hry jen tehdy, když ji hráč přivolá zpět. Tyto změny dělá hráč
+  v rozhraní; ty je jen respektuj podle snapshotu („V táboře…").
 
 STYL:
 - Vyprávění česky, úsečné a obrazné. Mechanický šum (čísla hodů) patří do
@@ -214,6 +226,13 @@ export function aiTurnInstruction(
 export const CAMPAIGN_START = `[ZAČÁTEK KAMPANĚ] Toto je úvodní scéna nové hry. Ve 3 až 5 větách, česky a atmosféricky, uveď svět a místo, kde družina začíná, a nastiň háček či zápletku, která ji pohání. Poté se hráče VÝSLOVNĚ zeptej, jak chce začít — co dělá jako první. Zatím nehraj žádné mechaniky (žádné hody, zkoušky ani boj); smíš pouze odhalit počáteční lokaci nástrojem show_location.`;
 
 /**
+ * Sandbox variant of the campaign-start beat (open-ended exploration). No
+ * driving plot or urgent hook — set the scene, hint at several directions the
+ * party could wander, and hand the reins to the player.
+ */
+export const CAMPAIGN_START_SANDBOX = `[ZAČÁTEK KAMPANĚ] Toto je úvodní scéna nové hry v SANDBOX režimu — žádný předem daný cíl ani zápletka. Ve 3 až 5 větách, česky a atmosféricky, uveď svět a místo, kde družina začíná, a živě naznač NĚKOLIK různých směrů, kam by se mohla vydat (lokace, fámy, příležitosti) — ale žádný z nich nevnucuj jako „ten hlavní". Poté se hráče VÝSLOVNĚ zeptej, co chce dělat a kam se vydat jako první. Zatím nehraj žádné mechaniky; smíš pouze odhalit počáteční lokaci nástrojem show_location.`;
+
+/**
  * Arrival narration beat (#41b). Fired once after the party travels to a new
  * location: the DM sets the scene (what the party sees, hears, senses) and
  * invites the player to act. The `[PŘÍJEZD]` marker lets the offline mock
@@ -259,9 +278,18 @@ export function sceneSnapshot(
   connections?: SceneConnection[],
   availableQuests?: SceneQuest[],
   world?: SceneWorld,
+  opts?: { sandbox?: boolean },
 ): string {
   const lines: string[] = [];
   lines.push(`Lokace: ${state.current_location}. Čas: den ${state.time.day}, ${state.time.hour}:00.`);
+  if (opts?.sandbox) {
+    lines.push(
+      "Režim: SANDBOX — kampaň nemá předem daný hlavní úkol ani zápletku. Nech " +
+        "družinu volně prozkoumávat svět vlastním tempem; nabízej příležitosti, " +
+        "fámy a háčky, ale netlač ji do jediné dějové linky (žádný railroad). " +
+        "Svět žije svým během i bez ní.",
+    );
+  }
   // In combat, derive the active actor from the initiative order — this is the
   // single source of truth and always matches what spendEconomy enforces.
   // state.active_player can drift if set_active_player was called out of band.
@@ -332,14 +360,25 @@ export function sceneSnapshot(
       );
     }
   }
+  const camped = new Set(state.camp ?? []);
   lines.push("Postavy ve scéně:");
   for (const a of Object.values(actors)) {
+    if (camped.has(a.id)) continue; // resting in camp — not present in the scene
     const conds = a.conditions.map((x) => x.name).join(", ") || "—";
     const tokenPos = state.combat?.tokens?.[a.id];
     const pos = tokenPos ? ` pos=(${tokenPos.x},${tokenPos.y})` : "";
     lines.push(
       `- ${a.id} (${a.name}, ${a.faction}, ${a.controller}): HP ${a.hp.current}/${a.hp.max}, AC ${a.ac}, stavy: ${conds}${pos}`,
     );
+  }
+  // Camped party members: on the roster but out of play — do not voice, control,
+  // or place them in scenes until the player recalls them.
+  if (camped.size > 0) {
+    const names = Object.values(actors)
+      .filter((a) => camped.has(a.id))
+      .map((a) => `${a.name} (${a.id})`)
+      .join(", ");
+    if (names) lines.push(`V táboře (mimo hru — neovládej je ani je nestav do scén): ${names}.`);
   }
   return lines.join("\n");
 }

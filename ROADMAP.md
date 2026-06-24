@@ -692,6 +692,27 @@ kampaně v něm:
 
 ---
 
+## P1 — Playtest feedback (2026-06-24)
+
+- **[x] #51 — Správa družiny + tábor.** Party members can now be sent to "camp"
+  and recalled at will: a reversible `session.camp` overlay, engine tools
+  `send_to_camp` / `recall_from_camp` (out-of-combat only, refuses the last
+  awake member), camped heroes are excluded from encounters, the active-player
+  rotation and the DM's scene (the prompt won't voice/control them). New
+  `PartyPanel` (right rail) lists the whole party out of combat with HP, lets
+  you switch the active hero, camp/recall, and add a new character mid-campaign.
+- **[x] #52 — Postup jen za zkušenosti.** `levelUp` now refuses unless the actor
+  has the cumulative XP the next level requires, so the DM/UI can't level a hero
+  at will. The DM prompt directs awarding XP via `award_xp` after encounters
+  (which auto-levels once a threshold is crossed) and never to free-level.
+- **[x] #53 — Sandbox kampaň.** Forge wizard gained a *Sandbox* toggle:
+  `campaign.sandbox` skips the main quest arc entirely, writes an
+  exploration-first opening, and the DM prompt switches to open-ended mode (offer
+  opportunities, no railroad). The world (locations, NPCs, factions, roaming
+  encounters) is still generated.
+
+---
+
 ## Deliverables the user can provide
 
 - **Showcase vault** — see `docs/SHOWCASE.md` for exactly what to author, the

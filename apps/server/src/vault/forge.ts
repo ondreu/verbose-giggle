@@ -30,6 +30,13 @@ export interface ForgeInput {
   world?: string;
   /** When building in a world, share its live state across campaigns (#49). */
   world_shared?: boolean;
+  /**
+   * Open-ended sandbox campaign: skip the main quest arc entirely and write an
+   * exploration-first opening. The world (locations, NPCs, factions, roaming
+   * encounters) is still built, but nothing railroads the party — they pick
+   * their own direction and pace, and the DM plays accordingly.
+   */
+  sandbox?: boolean;
 }
 
 /** Called after each generation phase so callers can stream progress. */
@@ -101,6 +108,8 @@ interface WorldBible {
   world?: string;
   /** Whether the campaign shares the world's live state across campaigns (#49). */
   worldShared?: boolean;
+  /** Open-ended sandbox: no main quest arc, exploration-first opening. */
+  sandbox?: boolean;
   /** Location/NPC ids that come from the world and must NOT be re-authored. */
   externalLocations: Set<string>;
   externalNpcs: Set<string>;
@@ -357,13 +366,32 @@ async function phase5(llm: Llm, bible: WorldBible): Promise<z.infer<typeof P5Sch
 }
 
 async function phase6(llm: Llm, bible: WorldBible): Promise<string> {
+  const startLoc = bible.locations[0]?.name ?? "výchozím místě";
+  const sys =
+    "Jsi mistr vypravěč D&D 5e. Piš česky, atmosfericky. Bez emoji. Vrať POUZE prózu, žádný JSON.";
+  // Sandbox: open-ended scene that invites free exploration, no driving plot.
+  if (bible.sandbox) {
+    const locList = bible.locations.slice(0, 4).map((l) => l.name).join(", ");
+    const user =
+      `Svět: ${bible.pitch}. Tón: ${bible.tone}. ` +
+      `Výchozí lokace: ${startLoc}. Okolní místa k prozkoumání: ${locList}. ` +
+      "Napiš úvodní scénu (3 odstavce) pro SANDBOX hru BEZ hlavního úkolu: (1) zasadit družinu do světa a " +
+      "výchozího místa, (2) živě naznačit několik různých směrů a příležitostí (fámy, lokace, lidé), aniž bys " +
+      "některý vnucoval jako „ten hlavní“, (3) otevřená výzva hráči, ať se rozhodne, co a kam podnikne jako první. " +
+      "Žádná urgentní zápletka ani zadavatel úkolu.";
+    const resp = await llm.chat(
+      [
+        { role: "system", content: sys },
+        { role: "user", content: user },
+      ],
+      [],
+    );
+    return resp.content ?? "";
+  }
   const hookNpc = bible.npcs.find(
     (n) => bible.quest.hook_npc && n.name.includes(bible.quest.hook_npc),
   );
-  const startLoc = bible.locations[0]?.name ?? "výchozím místě";
   const foreshadowing = bible.quest.foreshadowing.slice(0, 2).join("; ");
-  const sys =
-    "Jsi mistr vypravěč D&D 5e. Piš česky, atmosfericky. Bez emoji. Vrať POUZE prózu, žádný JSON.";
   const user =
     `Svět: ${bible.pitch}. Tón: ${bible.tone}. ` +
     `Výchozí lokace: ${startLoc}. ` +
@@ -546,8 +574,21 @@ function templatePhase5(locs: LocSpec[], monsters: MonsterSpec[]): z.infer<typeo
 }
 
 function templateOpening(input: ForgeInput, bible: WorldBible): string {
-  const theme = input.premise?.trim() || "tajemství";
   const startLoc = bible.locations[0]?.name ?? "osadě";
+  // Sandbox: no quest hook — set the scene and open the world to the player.
+  if (bible.sandbox) {
+    const around = bible.locations.slice(1, 4).map((l) => l.name).join(", ");
+    return (
+      `Cesty vás přivedly do ${startLoc}. Svět kolem je širý a nikdo vám neurčuje, kam dál — ` +
+      `čas i směr jsou jen vaše.\n\n` +
+      (around
+        ? `Z místních řečí zaslechnete o několika místech: ${around}. Každé slibuje něco jiného — ` +
+          `obchod, nebezpečí i tajemství.\n\n`
+        : `Kraj nabízí spoustu míst k prozkoumání.\n\n`) +
+      `Kam se vydáte a co podniknete jako první?`
+    );
+  }
+  const theme = input.premise?.trim() || "tajemství";
   const hookNpc = bible.npcs[0]?.name ?? "místní";
   const fore = bible.quest.foreshadowing[0] ?? "napětí ve vzduchu";
   return (
@@ -663,16 +704,18 @@ async function writeBibleToVault(dir: string, bible: WorldBible): Promise<void> 
     );
   }
 
-  // Quest
-  await writeNoteRaw(
-    noteFile(dir, "lore", "hlavni-ukol"),
-    { id: "hlavni-ukol", name: bible.quest.title, type: "quest", giver: bible.quest.hook_npc },
-    `# ${bible.quest.title}\n\n${bible.quest.summary}\n\n` +
-      bible.quest.objectives.map((o) => `- [ ] ${o}`).join("\n") +
-      (bible.quest.foreshadowing.length > 0
-        ? `\n\n## Foreshadowing\n\n${bible.quest.foreshadowing.map((f) => `- ${f}`).join("\n")}`
-        : ""),
-  );
+  // Quest — sandbox campaigns have no authored main quest (no plot to follow).
+  if (!bible.sandbox && bible.quest.title) {
+    await writeNoteRaw(
+      noteFile(dir, "lore", "hlavni-ukol"),
+      { id: "hlavni-ukol", name: bible.quest.title, type: "quest", giver: bible.quest.hook_npc },
+      `# ${bible.quest.title}\n\n${bible.quest.summary}\n\n` +
+        bible.quest.objectives.map((o) => `- [ ] ${o}`).join("\n") +
+        (bible.quest.foreshadowing.length > 0
+          ? `\n\n## Foreshadowing\n\n${bible.quest.foreshadowing.map((f) => `- ${f}`).join("\n")}`
+          : ""),
+    );
+  }
 
   // Encounters
   const spawnSlots = [
@@ -734,6 +777,7 @@ async function writeBibleToVault(dir: string, bible: WorldBible): Promise<void> 
     name: bible.name,
     ruleset: "dnd5e-srd",
     ...(bible.world ? { world: bible.world, world_shared: bible.worldShared === true } : {}),
+    ...(bible.sandbox ? { sandbox: true } : {}),
     starting_location: bible.locations[0]?.id ?? "start",
     party: [] as string[],
     companions: [] as string[],
@@ -780,6 +824,7 @@ export async function forgeCampaign(
     quest: { title: "", summary: "", objectives: [], foreshadowing: [] },
     encounters: [],
     opening: "",
+    sandbox: input.sandbox === true,
     externalLocations: new Set<string>(),
     externalNpcs: new Set<string>(),
   };
@@ -872,7 +917,10 @@ export async function forgeCampaign(
     }));
   }
 
-  // Phase 4: Quest arc
+  // Phase 4: Quest arc — skipped entirely for a sandbox campaign (no plot).
+  if (bible.sandbox) {
+    notify("Úkol", "Sandbox — žádný hlavní úkol, družina si volí cestu sama.");
+  } else {
   notify("Úkol", "Generuji quest arc s foreshadowingem…");
   try {
     const p4 = await phase4(llm, bible);
@@ -895,6 +943,7 @@ export async function forgeCampaign(
       foreshadowing: fb.foreshadowing,
       climax_location: fb.climax_location,
     };
+  }
   }
 
   // Phase 5: Encounters

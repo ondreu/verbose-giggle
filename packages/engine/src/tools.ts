@@ -17,6 +17,7 @@ import { endCombat, nextTurn, startCombat } from "./turns.js";
 import { longRest, shortRest } from "./rest.js";
 import { advanceTime } from "./time.js";
 import { applyAbilityIncrease, awardXp, chooseSubclass, grantFeats, learnSpells, levelUp } from "./leveling.js";
+import { recallFromCamp, sendToCamp } from "./camp.js";
 import { advanceQuest, completeQuest, failQuest, startQuest } from "./quests.js";
 import { advanceFaction, setFactionRelation, setLocationDanger, triggerWorldEvent } from "./world.js";
 
@@ -751,9 +752,32 @@ export const TOOLS: ToolDef[] = [
           );
         }
       }
+      if ((state.session.camp ?? []).includes(args.actor)) {
+        throw new Error(
+          `${args.actor} je v táboře — nejdřív ho přivolej zpět (recall_from_camp), pak ho lze aktivovat.`,
+        );
+      }
       state.session.active_player = args.actor;
       return { active_player: args.actor };
     },
+  }),
+  def({
+    name: "send_to_camp",
+    description:
+      "Send a party member to camp (out-of-combat only): they stay on the roster but leave active play — " +
+      "not placed in encounters, never take a turn, can't be the active character — until recalled.",
+    readOnly: false,
+    schema: z.object({ actor: z.string() }),
+    parameters: { type: "object", properties: { actor: { type: "string" } }, required: ["actor"] },
+    handler: (state, args) => sendToCamp(state, args),
+  }),
+  def({
+    name: "recall_from_camp",
+    description: "Recall a party member from camp back into active play.",
+    readOnly: false,
+    schema: z.object({ actor: z.string() }),
+    parameters: { type: "object", properties: { actor: { type: "string" } }, required: ["actor"] },
+    handler: (state, args) => recallFromCamp(state, args),
   }),
   def({
     name: "quest_start",
