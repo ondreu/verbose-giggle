@@ -773,24 +773,24 @@ kampaně v něm:
 > `LoginScreen` (email/heslo/registrace) i záložky *Účet*/*Kredity* v
 > `SettingsModal` už existují jako UI stuby — chybí backend.
 
-### ⚠️ Rozhodnutí, která musíme udělat PŘED implementací
+### ✅ Rozhodnutí (rozhodnuto 2026-06-24)
 
-Všechno níže visí na třech volbách. Bez nich nemá smysl psát kód:
+1. **Plný multi-tenant jako placená služba.** Každý uživatel má **vlastní
+   izolovaná data** (kampaně, postavy, sezení). Kredity jsou **reálná měna**:
+   cena = náklad na tokeny (LLM/obrázky/TTS) + **přirážka**.
+2. **Dvě edice ze stejného kódu:**
+   - **Hosted (provozuje autor):** uživatel si **nezadává vlastní API klíč** —
+     jen kupuje kredity. Klíče vlastní provozovatel, účtuje cost + markup.
+   - **Self-hosted:** uživatel si **přinese vlastní API klíče (BYO)**.
+     Volitelně může self-hoster zapnout i kredity + přirážku, aby pokryl
+     náklady na server (stejný billing modul, jen zapnutý) — proto musí být
+     metering/billing (#56) modulární, ne hardcoded jen pro hosted.
+3. **Self-hosted single-user/BYO režim zůstává plně podporovaný** a je gated
+   flagem (`AUTH_MODE`/edition). Hosted multi-tenant je nadstavba; stávající NAS
+   nasazení (#50) musí jet beze změny s vypnutými účty.
 
-1. **Multi-tenant vs. „přihlášení jen jako zámek"?** Buď (a) appka zůstane
-   jednou instancí s jedním sdíleným vaultem a účty jsou jen autentizační vrstva
-   (jednoduché, ale „kredity per uživatel" pak skoro nedávají smysl), nebo
-   (b) plný multi-tenant: každý uživatel má **vlastní izolovaná data** (kampaně,
-   postavy, sezení). (b) je to, co kredity + nastavení účtu implikují, a je to
-   výrazně větší práce (izolace vaultu, autorizace na každém endpointu).
-2. **Kdo platí LLM/obrázky/TTS?** Dnes provozovatel. Možnosti: (a) **kredity =
-   provozovatel platí API, uživatel utrácí kredity** (potřeba metering + billing
-   + ochrana proti zneužití), nebo (b) **BYO-key** (uživatel zadá vlastní klíč,
-   kredity jsou jen kosmetika/limit), nebo (c) hybrid. Tohle určuje, jestli
-   „kredity" je reálná měna nebo jen rate-limit.
-3. **Self-hosted single-user zůstává podporovaný?** Pokud ano, všechno nové musí
-   jít **vypnout** (`AUTH_MODE=off`), aby stávající NAS nasazení (#50) fungovala
-   beze změny. Doporučení: ano, feature-flag `multiuser` default off.
+Důsledek pro pořadí práce: izolace dat (#55f) a metering kreditů (#56) jsou
+povinné pro hosted edici, takže nejsou „nice to have" — jsou součástí MVP služby.
 
 ### #55 — Email registrace + autentizace
 
@@ -822,12 +822,16 @@ Všechno níže visí na třech volbách. Bez nich nemá smysl psát kód:
 - **#56a — Kreditní účet + transakce.** Tabulka `credit_ledger`
   (user_id, delta, důvod, ref, timestamp) — kredity jako **append-only ledger**,
   ne jen čítač (auditovatelné, nerozbije se při souběhu). Zůstatek = součet.
-- **#56b — Měření spotřeby.** Kde se kredity strhávají: LLM tah (per token nebo
-  per akce?), generování obrázku, TTS. Potřeba zachytit usage z `LlmClient.chat`
-  / `ImageClient` / `/api/tts` a převést na kredity podle ceníku. **Pozor na
-  determinismus (#12):** strhávání kreditů je vedlejší efekt mimo engine — nesmí
-  ovlivnit herní stav, jen ho obalit. Musí zvládnout i selhání volání (nestrhávat
-  za chybu) a streaming (#32 — účtovat až po dokončení tahu).
+- **#56b — Měření spotřeby.** Kredity se strhávají **per reálná spotřeba tokenů**
+  (LLM tah, obrázek, TTS) přepočtená na kredity = cost + markup. Zachytit usage
+  z `LlmClient.chat` / `ImageClient` / `/api/tts` (skutečné token/usage počty z
+  odpovědi poskytovatele, ne odhad). **Pozor na determinismus (#12):** strhávání
+  kreditů je vedlejší efekt mimo engine — nesmí ovlivnit herní stav, jen ho
+  obalit. Musí zvládnout i selhání volání (nestrhávat za chybu) a streaming
+  (#32 — účtovat až po dokončení tahu, podle finálního usage).
+  - **BYO-key (self-hosted):** když uživatel/instance používá vlastní klíč,
+    metering se **přeskakuje** (nebo jen loguje pro přehled) — neplatí provozovatel.
+    Hosted edice BYO nikdy nepovolí (rozhodnutí #2).
 - **#56c — Vynucení limitu.** Před drahou operací zkontrolovat zůstatek; při 0
   vrátit čistý 402/„došly kredity" stav do UI (ne pád). Rozhodnout chování:
   tvrdý stop vs. degradace na mock narrator.
@@ -861,8 +865,10 @@ Všechno níže visí na třech volbách. Bez nich nemá smysl psát kód:
 - **#58b — Per-uživatel preference.** Dnes jsou voice toggly v `localStorage` a
   zbytek v server-wide `settings.json`. V multi-user světě musí být
   **uživatelské** preference vázané na účet (jazyk #48, hlas, jiná než globální
-  nastavení), zatímco provider-klíče zůstanou globální (op-only) nebo BYO-key
-  per uživatel (rozhodnutí #2).
+  nastavení). Provider-klíče: v **hosted** edici jen globální (op-only, uživatel
+  je nevidí ani nezadává); v **self-hosted** můžou být BYO per instance/uživatel
+  (rozhodnutí #2). Záložka *Účet* tedy v hosted edici **nesmí** nabízet pole pro
+  vlastní API klíč.
 - **#58c — Oddělit „globální" a „uživatelská" nastavení.** Refaktor `settings.ts`:
   to, co je dnes jedno JSON pro celý server, se rozpadne na server-config
   (admin, #57) vs. per-user-config (#58). Důležité, ať se to nerozbije pro
@@ -885,10 +891,14 @@ Všechno níže visí na třech volbách. Bez nich nemá smysl psát kód:
   uživatel (souvisí s #55f).
 - **Cena LLM vs. kredity:** potřeba reálný ceník (kolik kreditů = tah/obrázek/TTS)
   navázaný na skutečné náklady poskytovatele, jinak provozovatel prodělává.
-- **Doporučené pořadí:** rozhodnutí #1–#3 → #55 (auth, bez něj nic nedává smysl)
-  → #58 (nastavení účtu, levné nad auth) → #57 (admin panel, umožní ruční kredity)
-  → #56 (kredity/metering, nejtěžší, ať je až nad stabilní auth+admin). Platby
-  (#56d Stripe) až úplně nakonec.
+- **Doporučené pořadí (rozhodnutí jsou hotová):**
+  1. **#55 auth + #55f izolace dat per uživatel** — základ, bez něj nic.
+  2. **#58 nastavení účtu** — levné nad auth; v hosted edici skrýt BYO-key pole.
+  3. **#57 admin panel** — umožní ručně přidělovat kredity, sledovat náklady.
+  4. **#56 kredity/metering** — pro hosted edici **povinné MVP** (placená služba),
+     ne volitelné. Ceník = skutečný cost tokenů + přirážka.
+  5. **#56d platby (Stripe)** — až nakonec; do té doby kredity přidává admin
+     ručně (#57). Self-hosted BYO edice může jít do provozu i bez kroku 4–5.
 
 ---
 
