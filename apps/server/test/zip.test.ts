@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { listFiles, zipDir } from "../src/vault/zip.js";
 
 const CAMPAIGN = fileURLToPath(
-  new URL("../../../data/vault.example/campaigns/velen-roads", import.meta.url),
+  new URL("../../../data/vault.example/campaigns/konvoj-do-vresoviste", import.meta.url),
 );
 
 describe("vault zip/export (#35)", () => {

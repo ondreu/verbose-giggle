@@ -10,14 +10,14 @@ import type { EventBus } from "../src/session/events.js";
 import type { LlmClient } from "../src/llm/client.js";
 
 const SOURCE = fileURLToPath(
-  new URL("../../../data/vault.example/campaigns/velen-roads", import.meta.url),
+  new URL("../../../data/vault.example/campaigns/konvoj-do-vresoviste", import.meta.url),
 );
 
 // Each test gets its own throwaway copy so persisted session.json never leaks
 // between tests, and the committed vault is never touched.
 const tmpDirs: string[] = [];
 async function freshCampaign(): Promise<string> {
-  const dir = path.join(await fs.mkdtemp(path.join(os.tmpdir(), "adm-test-")), "velen-roads");
+  const dir = path.join(await fs.mkdtemp(path.join(os.tmpdir(), "adm-test-")), "konvoj-do-vresoviste");
   await fs.cp(SOURCE, dir, { recursive: true });
   tmpDirs.push(path.dirname(dir));
   return dir;
@@ -29,7 +29,7 @@ afterAll(async () => {
 describe("SessionManager + example vault", () => {
   it("loads the example campaign actors and config", async () => {
     const mgr = await SessionManager.open(await freshCampaign());
-    expect(mgr.campaign.config.name).toBe("The Velen Roads");
+    expect(mgr.campaign.config.name).toBe("Konvoj do Vřesoviště");
     expect(mgr.campaign.actors.thorin?.name).toBe("Thorin");
     expect(mgr.campaign.actors["goblin-boss"]?.faction).toBe("hostile");
   });
@@ -37,7 +37,7 @@ describe("SessionManager + example vault", () => {
   it("loads homebrew items and lore notes, resolving items in the engine", async () => {
     const mgr = await SessionManager.open(await freshCampaign());
     expect(mgr.campaign.items["cint-rodu"]?.name).toBe("Čepel rodu");
-    expect(Object.keys(mgr.campaign.lore)).toContain("goblini-z-mlyna");
+    expect(Object.keys(mgr.campaign.lore)).toContain("konvoj");
     // Homebrew item is merged into the engine's equipment index.
     const gs = mgr.buildGameState();
     expect(gs.srd.equipment("cint-rodu")?.damage).toBe("1d8+1");
@@ -45,25 +45,25 @@ describe("SessionManager + example vault", () => {
 
   it("loads authored quests and enriches quest_start from the note (#19)", async () => {
     const mgr = await SessionManager.open(await freshCampaign());
-    const quest = mgr.campaign.quests["goblini-z-mlyna"];
-    expect(quest?.title).toBe("Goblini ze Starého mlýna");
-    expect(quest?.objectives.map((o) => o.id)).toContain("porazit-vudce");
+    const quest = mgr.campaign.quests["dovez-konvoj"];
+    expect(quest?.title).toBe("Konvoj do Vřesoviště");
+    expect(quest?.objectives.map((o) => o.id)).toContain("odraz-prepad");
 
     // Starting by id alone pulls title/giver/objectives from the authored note.
     const gs = mgr.buildGameState();
-    const res = await mgr.applyTool(gs, "quest_start", { id: "goblini-z-mlyna", title: "" });
+    const res = await mgr.applyTool(gs, "quest_start", { id: "dovez-konvoj", title: "" });
     expect(res.ok).toBe(true);
-    const live = mgr.session.quests["goblini-z-mlyna"];
-    expect(live?.title).toBe("Goblini ze Starého mlýna");
-    expect(live?.giver).toBe("starosta-rozcesti");
+    const live = mgr.session.quests["dovez-konvoj"];
+    expect(live?.title).toBe("Konvoj do Vřesoviště");
+    expect(live?.giver).toBe("factor-radun");
     expect(live?.objectives.length).toBe(3);
     expect(mgr.session.log.some((l) => l.kind === "quest")).toBe(true);
 
     // Advance + complete flow runs through the engine and is logged.
-    await mgr.applyTool(gs, "quest_advance", { id: "goblini-z-mlyna", objective: "porazit-vudce" });
-    expect(mgr.session.quests["goblini-z-mlyna"]?.objectives.find((o) => o.id === "porazit-vudce")?.done).toBe(true);
-    await mgr.applyTool(gs, "quest_complete", { id: "goblini-z-mlyna" });
-    expect(mgr.session.quests["goblini-z-mlyna"]?.status).toBe("completed");
+    await mgr.applyTool(gs, "quest_advance", { id: "dovez-konvoj", objective: "odraz-prepad" });
+    expect(mgr.session.quests["dovez-konvoj"]?.objectives.find((o) => o.id === "odraz-prepad")?.done).toBe(true);
+    await mgr.applyTool(gs, "quest_complete", { id: "dovez-konvoj" });
+    expect(mgr.session.quests["dovez-konvoj"]?.status).toBe("completed");
   });
 
   it("dispatches a deterministic engine command and records the dice log", async () => {
@@ -239,16 +239,16 @@ describe("LLM turn loop (mocked model)", () => {
     const { startEncounter } = await import("../src/session/encounter.js");
     const mgr = await SessionManager.open(await freshCampaign());
     const gs = mgr.buildGameState();
-    const res = await startEncounter(mgr, gs, "mill-ambush");
+    const res = await startEncounter(mgr, gs, "prepad-na-ceste");
     expect(res.ok).toBe(true);
     const combat = mgr.session.combat!;
     expect(combat).not.toBeNull();
     // Party placed at party_start; spawns placed at their cells.
-    expect(combat.tokens["thorin"]).toEqual({ x: 2, y: 7 });
-    expect(combat.tokens["goblin-boss"]).toEqual({ x: 7, y: 3 });
+    expect(combat.tokens["thorin"]).toEqual({ x: 2, y: 5 });
+    expect(combat.tokens["goblin-boss"]).toEqual({ x: 11, y: 2 });
     // Encounter terrain carried into the combat snapshot.
-    expect(combat.terrain.some((t) => t.kind === "wall")).toBe(true);
-    expect(combat.grid.w).toBe(12);
+    expect(combat.terrain.some((t) => t.kind === "difficult")).toBe(true);
+    expect(combat.grid.w).toBe(14);
   });
 
   it("generates a recap from the story so far (mock)", async () => {

@@ -4,6 +4,7 @@ import YAML from "yaml";
 import { z } from "zod";
 import type { Llm } from "../llm/client.js";
 import { ensureCampaignDir, slugify } from "./scaffold.js";
+import { loadWorld, worldDir, type LoadedWorld } from "./world.js";
 
 /**
  * AI-assisted campaign builder ("Postavit si vlastní kampaň"). Runs in 6 phases,
@@ -18,6 +19,17 @@ export interface ForgeInput {
   premise?: string;
   length?: "short" | "medium" | "long";
   detail?: "sparse" | "normal" | "rich";
+  /**
+   * Build the campaign INSIDE an existing shared world (#49d). When set, the
+   * generator uses the world's factions, locations and NPCs as canonical
+   * context instead of inventing its own — quest hooks grow from existing
+   * faction tensions, the climax lands at a real world location, and the
+   * campaign opts in via `world:` in campaign.yaml. World content is NOT
+   * re-authored into the campaign folder.
+   */
+  world?: string;
+  /** When building in a world, share its live state across campaigns (#49). */
+  world_shared?: boolean;
 }
 
 /** Called after each generation phase so callers can stream progress. */
@@ -85,6 +97,57 @@ interface WorldBible {
   quest: QuestSpec;
   encounters: EncounterSpec[];
   opening: string;
+  /** Shared world this campaign is built inside (#49d), written to campaign.yaml. */
+  world?: string;
+  /** Whether the campaign shares the world's live state across campaigns (#49). */
+  worldShared?: boolean;
+  /** Location/NPC ids that come from the world and must NOT be re-authored. */
+  externalLocations: Set<string>;
+  externalNpcs: Set<string>;
+}
+
+const KIND_MAP: Record<string, LocSpec["kind"]> = {
+  continent: "region",
+  region: "region",
+  city: "city",
+  town: "town",
+  village: "village",
+  landmark: "landmark",
+  dungeon: "dungeon",
+};
+
+/**
+ * Seed the bible from an existing world (#49d): factions, locations and NPCs
+ * become canonical context the generator builds on rather than reinventing.
+ * Locations are ordered so a city/town hub leads (used as starting_location).
+ */
+function seedFromWorld(bible: WorldBible, world: LoadedWorld): void {
+  bible.world = world.name;
+  bible.factions = Object.values(world.factions).map((f) => ({ name: f.name, role: f.goal }));
+
+  const locs = Object.values(world.locations)
+    .filter((l) => l.kind !== "region" && l.kind !== "continent")
+    .map((l) => ({
+      id: l.id,
+      name: l.name,
+      kind: KIND_MAP[l.kind] ?? "landmark",
+      description: "",
+      faction: undefined,
+    }));
+  const hubRank = (k: string) => (k === "city" ? 0 : k === "town" ? 1 : k === "village" ? 2 : 3);
+  locs.sort((a, b) => hubRank(a.kind) - hubRank(b.kind));
+  bible.locations = locs;
+  for (const l of locs) bible.externalLocations.add(l.id);
+
+  bible.npcs = Object.values(world.npcs).map((n) => ({
+    id: n.id,
+    name: n.name,
+    role: n.title ?? n.occupation ?? "obyvatel světa",
+    location: world.locations[n.location ?? ""]?.name ?? "",
+    faction: n.faction ?? undefined,
+    secrets: undefined,
+  }));
+  for (const n of bible.npcs) bible.externalNpcs.add(n.id);
 }
 
 // ---------------------------------------------------------------------------
@@ -528,9 +591,11 @@ async function writeNoteRaw(
 // ---------------------------------------------------------------------------
 
 async function writeBibleToVault(dir: string, bible: WorldBible): Promise<void> {
-  // Locations
+  // Locations — world locations (#49d) already exist in the world; only write
+  // campaign-authored ones.
   for (let i = 0; i < bible.locations.length; i++) {
     const l = bible.locations[i]!;
+    if (bible.externalLocations.has(l.id)) continue;
     const connections = new Set<string>();
     if (i !== 0) connections.add(bible.locations[0]!.id);
     if (bible.locations[i + 1]) connections.add(bible.locations[i + 1]!.id);
@@ -586,8 +651,9 @@ async function writeBibleToVault(dir: string, bible: WorldBible): Promise<void> 
     );
   }
 
-  // NPC lore notes
+  // NPC lore notes — skip world NPCs (#49d), they already live in the world.
   for (const npc of bible.npcs) {
+    if (bible.externalNpcs.has(npc.id)) continue;
     await writeNoteRaw(
       noteFile(dir, "lore", `npc-${npc.id}`),
       { id: `npc-${npc.id}`, name: npc.name, type: "npc", location: npc.location, faction: npc.faction },
@@ -663,10 +729,11 @@ async function writeBibleToVault(dir: string, bible: WorldBible): Promise<void> 
     );
   }
 
-  // Campaign config
-  const config = {
+  // Campaign config — opt into the shared world when one was used (#49d).
+  const config: Record<string, unknown> = {
     name: bible.name,
     ruleset: "dnd5e-srd",
+    ...(bible.world ? { world: bible.world, world_shared: bible.worldShared === true } : {}),
     starting_location: bible.locations[0]?.id ?? "start",
     party: [] as string[],
     companions: [] as string[],
@@ -713,7 +780,30 @@ export async function forgeCampaign(
     quest: { title: "", summary: "", objectives: [], foreshadowing: [] },
     encounters: [],
     opening: "",
+    externalLocations: new Set<string>(),
+    externalNpcs: new Set<string>(),
   };
+
+  // Build INSIDE an existing world when asked (#49d): seed factions/locations/
+  // NPCs from the world so later phases reference real content instead of
+  // inventing a parallel one. Falls back to a self-contained world on failure.
+  let worldCtx: LoadedWorld | null = null;
+  if (input.world) {
+    notify("Svět", `Načítám svět „${input.world}"…`);
+    try {
+      worldCtx = await loadWorld(worldDir(vaultPath, input.world), input.world);
+      seedFromWorld(bible, worldCtx);
+      bible.worldShared = input.world_shared === true;
+      notify(
+        "Svět",
+        `Stavím na světě „${input.world}" — ${bible.locations.length} lokací, ` +
+          `${bible.factions.length} frakcí, ${bible.npcs.length} NPC.`,
+      );
+    } catch {
+      worldCtx = null;
+      notify("Svět", `Svět „${input.world}" se nepodařilo načíst — generuji vlastní.`);
+    }
+  }
 
   // Phase 1: World foundation
   notify("Základ světa", "Generuji premisu, tón a frakce…");
@@ -721,42 +811,48 @@ export async function forgeCampaign(
     const p1 = await phase1(llm, input);
     bible.pitch = p1.pitch;
     bible.tone = p1.tone;
-    bible.factions = p1.factions;
+    // In a shared world the factions are canonical — keep them, take only flavour.
+    if (!worldCtx) bible.factions = p1.factions;
     usedLlm = true;
   } catch {
     const fb = templatePhase1(input);
     bible.pitch = fb.pitch;
     bible.tone = fb.tone;
-    bible.factions = fb.factions;
+    if (!worldCtx) bible.factions = fb.factions;
   }
 
-  // Phase 2: Locations
-  notify("Lokace", `Generuji ${count} lokací…`);
-  try {
-    const p2 = await phase2(llm, bible, count);
-    const seen = new Set<string>();
-    bible.locations = p2.locations.map((l, i) => {
-      let id = slugify(l.name) || `lokace-${i + 1}`;
-      while (seen.has(id)) id = `${id}-${i}`;
-      seen.add(id);
-      return { ...l, id };
-    });
-    if (bible.locations.length > 0) usedLlm = true;
-  } catch {
-    bible.locations = templateLocations(input, count);
+  // Phase 2: Locations — skipped in a shared world (locations come from it).
+  if (!worldCtx) {
+    notify("Lokace", `Generuji ${count} lokací…`);
+    try {
+      const p2 = await phase2(llm, bible, count);
+      const seen = new Set<string>();
+      bible.locations = p2.locations.map((l, i) => {
+        let id = slugify(l.name) || `lokace-${i + 1}`;
+        while (seen.has(id)) id = `${id}-${i}`;
+        seen.add(id);
+        return { ...l, id };
+      });
+      if (bible.locations.length > 0) usedLlm = true;
+    } catch {
+      bible.locations = templateLocations(input, count);
+    }
   }
 
-  // Phase 3: NPCs and monsters
+  // Phase 3: NPCs and monsters. In a shared world the NPCs are canonical (from
+  // the world); we only generate campaign-specific monsters.
   notify("Postavy", "Generuji NPC a nepřátele…");
   try {
     const p3 = await phase3(llm, bible);
-    const seenNpc = new Set<string>();
-    bible.npcs = p3.npcs.map((n, i) => {
-      let id = slugify(n.name) || `npc-${i + 1}`;
-      while (seenNpc.has(id)) id = `${id}-${i}`;
-      seenNpc.add(id);
-      return { ...n, id };
-    });
+    if (!worldCtx) {
+      const seenNpc = new Set<string>();
+      bible.npcs = p3.npcs.map((n, i) => {
+        let id = slugify(n.name) || `npc-${i + 1}`;
+        while (seenNpc.has(id)) id = `${id}-${i}`;
+        seenNpc.add(id);
+        return { ...n, id };
+      });
+    }
     const seenMon = new Set<string>();
     bible.monsters = p3.monsters.map((m, i) => {
       let id = slugify(m.name) || `monster-${i + 1}`;
@@ -764,10 +860,12 @@ export async function forgeCampaign(
       seenMon.add(id);
       return { ...m, id };
     });
-    if (bible.npcs.length > 0) usedLlm = true;
+    if (bible.monsters.length > 0) usedLlm = true;
   } catch {
     const fb = templatePhase3();
-    bible.npcs = fb.npcs.map((n, i) => ({ ...n, id: slugify(n.name) || `npc-${i + 1}` }));
+    if (!worldCtx) {
+      bible.npcs = fb.npcs.map((n, i) => ({ ...n, id: slugify(n.name) || `npc-${i + 1}` }));
+    }
     bible.monsters = fb.monsters.map((m, i) => ({
       ...m,
       id: slugify(m.name) || `monster-${i + 1}`,

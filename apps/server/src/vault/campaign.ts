@@ -5,18 +5,25 @@ import {
   ActorSchema,
   CampaignSchema,
   EncounterSchema,
+  FactionSchema,
   ItemSchema,
   LocationSchema,
+  NpcSchema,
   QuestSchema,
   SessionState,
   type Actor,
   type Campaign,
   type Encounter,
+  type Faction,
+  type FactionRuntime,
   type Item,
   type Location,
+  type Npc,
   type Quest,
+  type WorldEvent,
 } from "@adm/schemas";
 import { listNotes, readNote, writeNote, type Note } from "./notes.js";
+import { loadWorld, worldDir, type LoadedWorld } from "./world.js";
 
 export interface LoadedCampaign {
   dir: string;
@@ -31,6 +38,14 @@ export interface LoadedCampaign {
   quests: Record<string, Quest>;
   /** Free lore notes (factions, quests) for narration grounding (§6). */
   lore: Record<string, { id: string; name: string; body: string }>;
+  /** Authored factions (campaign + merged world, #49); live progress in session. */
+  factions: Record<string, Faction>;
+  /** Gazetteer NPCs from the shared world (#49). */
+  npcs: Record<string, Npc>;
+  /** Authored world events from the shared world (#49). */
+  worldEvents: Record<string, WorldEvent>;
+  /** The shared world this campaign plays in, when `config.world` is set (#49a). */
+  world: LoadedWorld | null;
 }
 
 async function loadActorsFrom(dir: string): Promise<{ actors: Actor[]; files: Record<string, string> }> {
@@ -101,7 +116,73 @@ export async function loadCampaign(campaignDir: string): Promise<LoadedCampaign>
     lore[id] = { id, name: note.data.name ?? id, body: note.body };
   }
 
-  return { dir: campaignDir, config, actors, actorFiles, locations, encounters, items, quests, lore };
+  // Load the shared world (#49a) and merge it UNDER the campaign: world content
+  // is the baseline, campaign notes override on id collision. A campaign without
+  // `world:` is unchanged (backward compatible). The vault root is two levels up
+  // from the campaign folder (`<vault>/campaigns/<folder>`).
+  let world: LoadedWorld | null = null;
+  const factions: Record<string, Faction> = {};
+  const npcs: Record<string, Npc> = {};
+  const worldEvents: Record<string, WorldEvent> = {};
+  if (config.world) {
+    const vaultRoot = path.dirname(path.dirname(campaignDir));
+    try {
+      world = await loadWorld(worldDir(vaultRoot, config.world), config.world);
+      Object.assign(locations, world.locations);
+      Object.assign(lore, world.lore);
+      Object.assign(factions, world.factions);
+      Object.assign(npcs, world.npcs);
+      Object.assign(worldEvents, world.worldEvents);
+    } catch (err) {
+      console.warn(`[vault] world "${config.world}" failed to load: ${(err as Error).message}`);
+    }
+  }
+
+  // Campaign-local factions / NPCs override the world's (so a campaign can recast
+  // a faction leader or add its own players in the world).
+  for (const file of await listNotes(path.join(campaignDir, "factions"))) {
+    const note = await readNote(file);
+    const parsed = FactionSchema.safeParse({ type: "faction", ...(note.data as object) });
+    if (parsed.success) factions[parsed.data.id] = parsed.data;
+    else console.warn(`[vault] skipping invalid faction ${file}: ${parsed.error.message}`);
+  }
+  for (const file of await listNotes(path.join(campaignDir, "npcs"))) {
+    const note = await readNote(file);
+    const parsed = NpcSchema.safeParse({ type: "npc", ...(note.data as object) });
+    if (parsed.success) npcs[parsed.data.id] = parsed.data;
+    else console.warn(`[vault] skipping invalid npc ${file}: ${parsed.error.message}`);
+  }
+
+  return {
+    dir: campaignDir,
+    config,
+    actors,
+    actorFiles,
+    locations,
+    encounters,
+    items,
+    quests,
+    lore,
+    factions,
+    npcs,
+    worldEvents,
+    world,
+  };
+}
+
+/** Seed live faction runtime from authored faction notes (#49). */
+export function seedFactions(c: LoadedCampaign): Record<string, FactionRuntime> {
+  const seeded: Record<string, FactionRuntime> = {};
+  for (const f of Object.values(c.factions)) {
+    seeded[f.id] = {
+      id: f.id,
+      name: f.name,
+      resources: f.resources,
+      relationships: { ...f.relationships },
+      progress: f.progress,
+    };
+  }
+  return seeded;
 }
 
 const sessionPath = (dir: string) => path.join(dir, "state", "session.json");
@@ -123,6 +204,9 @@ export async function loadSession(c: LoadedCampaign): Promise<SessionState> {
       log: [],
       chat: [],
       quests: {},
+      factions: seedFactions(c),
+      world_events: {},
+      location_danger: {},
       ending: null,
     };
     return SessionState.parse(seeded);

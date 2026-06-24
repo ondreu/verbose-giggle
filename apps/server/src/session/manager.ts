@@ -8,8 +8,10 @@ import {
   loadCampaign,
   loadSession,
   saveSession,
+  seedFactions,
   type LoadedCampaign,
 } from "../vault/campaign.js";
+import { loadWorldState, saveWorldState, worldStateFromSession } from "../vault/world-state.js";
 
 function clone<T>(v: T): T {
   return JSON.parse(JSON.stringify(v));
@@ -45,7 +47,31 @@ export class SessionManager {
       };
       dataset.equipment[item.id] = eq;
     }
-    return new SessionManager(campaign, session, dataset);
+    // Backfill live faction state for any authored faction not yet in the session
+    // (a fresh world, or factions added after the session was first created, #49).
+    const seeded = seedFactions(campaign);
+    if (!session.factions) session.factions = {};
+    for (const [id, runtime] of Object.entries(seeded)) {
+      if (!session.factions[id]) session.factions[id] = runtime;
+    }
+    const mgr = new SessionManager(campaign, session, dataset);
+    // When this campaign shares the world's living state (#49), overlay the
+    // common world.json on top of the seeded session so faction progress /
+    // events / danger carry over from other campaigns in the same world.
+    if (mgr.sharesWorld()) {
+      const shared = await loadWorldState(campaign.world!.dir);
+      if (shared) {
+        Object.assign(session.factions, shared.factions);
+        session.world_events = { ...session.world_events, ...shared.world_events };
+        session.location_danger = { ...session.location_danger, ...shared.location_danger };
+      }
+    }
+    return mgr;
+  }
+
+  /** True when this campaign reads/writes the world's SHARED live state (#49). */
+  sharesWorld(): boolean {
+    return this.campaign.config.world_shared === true && this.campaign.world != null;
   }
 
   /** Build a fresh engine GameState with actors resolved from base + overlay. */
@@ -122,6 +148,23 @@ export class SessionManager {
     };
   }
 
+  /** Fill a `world_event_trigger` call from the authored world event note (#49). */
+  private enrichWorldEvent(args: unknown): unknown {
+    if (!args || typeof args !== "object") return args;
+    const a = args as { id?: unknown; name?: unknown; consequences?: unknown };
+    if (typeof a.id !== "string") return args;
+    const authored = this.campaign.worldEvents[a.id];
+    if (!authored) return args;
+    return {
+      ...a,
+      name: typeof a.name === "string" && a.name ? a.name : authored.name,
+      consequences:
+        Array.isArray(a.consequences) && a.consequences.length > 0
+          ? a.consequences
+          : authored.consequences,
+    };
+  }
+
   /** Capture mutable actor state back into the session overlay after engine work. */
   private syncOverlay(gs: GameState): void {
     for (const [id, actor] of Object.entries(gs.actors)) {
@@ -141,6 +184,7 @@ export class SessionManager {
     // objectives from the vault note so the model need only reference the id
     // (#19). Explicit args from the model still win.
     if (name === "quest_start") args = this.enrichQuestStart(args);
+    if (name === "world_event_trigger") args = this.enrichWorldEvent(args);
     const result = dispatch(gs, name, args);
     // A solo hero's death ends the campaign; the roster lives in the config,
     // so the engine can't decide this on its own (#23).
@@ -151,6 +195,11 @@ export class SessionManager {
 
   async persist(): Promise<void> {
     await saveSession(this.campaign, this.session);
+    // Mirror the living-world slice back to the shared world.json so other
+    // campaigns in the same world inherit the changes (#49).
+    if (this.sharesWorld()) {
+      await saveWorldState(this.campaign.world!.dir, worldStateFromSession(this.session));
+    }
   }
 
   /**

@@ -101,6 +101,18 @@ export const CampaignSchema = z
     type: z.literal("campaign"),
     name: z.string(),
     ruleset: z.string().default("dnd5e-srd"),
+    /** Shared living world this campaign plays out in (#49a). Resolves to
+     *  `<vault>/worlds/<world>/`; its locations/factions/NPCs/lore merge under
+     *  the campaign's own (campaign content wins on id collision). Omit for a
+     *  self-contained campaign (backward compatible). */
+    world: Slug.optional(),
+    /** Per-campaign toggle for living-world state (#49). When true, this
+     *  campaign reads and writes the world's SHARED live state
+     *  (`worlds/<world>/state/world.json`), so faction progress / events carry
+     *  across campaigns in the same world — one can affect another. When false
+     *  (default) each campaign keeps its OWN isolated copy in its session, seeded
+     *  from the authored notes. No effect without `world`. */
+    world_shared: z.boolean().default(false),
     world_map: z.string().optional(),
     starting_location: Slug,
     party: z.array(Slug).default([]),

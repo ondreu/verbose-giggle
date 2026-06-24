@@ -42,8 +42,10 @@ bind mount **hides** the baked-in vault. So:
 ## 2. Showcase vault — what to author
 
 A campaign is one folder under `<vault>/campaigns/<slug>/`. Use the bundled
-**`data/vault.example/campaigns/velen-roads/`** as the working template, and
-its `CAMPAIGN.md` as the schema legend. Each entity is one Markdown note:
+**`data/vault.example/campaigns/konvoj-do-vresoviste/`** as the working template
+(a short ~30 min demo), and its `CAMPAIGN.md` as the schema legend. A campaign can
+also opt into a shared world via `world:` in `campaign.yaml` — see
+`data/vault.example/worlds/marka-havrani/` and its `WORLD.md` (#49). Each entity is one Markdown note:
 **frontmatter = machine truth (the engine reads it), body = flavour (the LLM
 reads it for narration).**
 
@@ -67,10 +69,11 @@ campaigns/<your-slug>/
 ### `campaign.yaml` (copy & edit)
 
 ```yaml
-name: The Velen Roads
+name: Konvoj do Vřesoviště
 ruleset: dnd5e-srd
-world_map: maps/continent.svg        # path within the campaign folder
-starting_location: rozcesti           # a location id
+world: marka-havrani                   # optional: build inside a shared world (#49)
+world_map: maps/marka-overview.svg        # path within the campaign folder
+starting_location: cerny-brod         # a location id
 party: [thorin, elara]                # character ids
 companions: [shadowpaw]               # companion ids
 language: cs
@@ -84,17 +87,17 @@ variant_rules: { flanking: false, diagonals: "5-5-5" }
 ```markdown
 ---
 type: location
-id: rozcesti
-name: Rozcestí
-kind: landmark
-coords: { x: 0.42, y: 0.55 }          # 0..1 over the map image — REQUIRED to plot it
+id: cerny-brod
+name: Černý Brod
+kind: town
+coords: { x: 0.48, y: 0.55 }          # 0..1 over the map image — REQUIRED to plot it
 connections:
   - to: novigrad
-    travel: { distance_km: 30, days: 1, terrain: road, danger: low }
-encounter_table: velen-roads
+    travel: { distance_km: 35, days: 1, terrain: road, danger: low }
+encounter_table: velen-divocina
 discovered: true
 ---
-# Rozcestí
+# Černý Brod
 Atmospheric prose the DM reads / narrates from.
 ```
 
@@ -137,6 +140,11 @@ Aim for a 30–45 min demo arc:
 
 ### Where to get map & art assets
 
+- **Bundled example:** the world ships with a hand-authored, dependency-free
+  parchment overworld at `worlds/marka-havrani/maps/marka-overview.svg`. Its terrain,
+  rivers, roads and place icons are drawn in the SAME 0..1 → 1000px space the engine
+  uses for `coords` (y-down), so the interactive location pins land exactly on the
+  drawn settlements. Copy it into a campaign's `maps/` and point `world_map` at it.
 - **Overworld maps (free generators):** [Azgaar's Fantasy Map Generator](https://azgaar.github.io/Fantasy-Map-Generator/)
   (export PNG), [watabou's procgen](https://watabou.itch.io/) (regions, cities,
   villages), or [Inkarnate](https://inkarnate.com) (free tier, export PNG). Drop

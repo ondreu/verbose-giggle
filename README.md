@@ -169,5 +169,5 @@ Authoring & deployment how-to (showcase vault, SRD asset database, NAS updating)
 ## Documentation & licensing
 
 - **Authoritative spec:** [`ai-dungeon-master-spec.md`](ai-dungeon-master-spec.md).
-- **Per-campaign schema legend:** each campaign folder ships a `CAMPAIGN.md` (e.g. [`data/vault.example/campaigns/velen-roads/CAMPAIGN.md`](data/vault.example/campaigns/velen-roads/CAMPAIGN.md)) so any human or LLM can pick the game up.
+- **Per-campaign schema legend:** each campaign folder ships a `CAMPAIGN.md` (e.g. [`data/vault.example/campaigns/konvoj-do-vresoviste/CAMPAIGN.md`](data/vault.example/campaigns/konvoj-do-vresoviste/CAMPAIGN.md)) so any human or LLM can pick the game up.
 - **Licenses & attribution:** see [`LICENSES.md`](LICENSES.md) (project license, D&D 5e SRD 5.1 attribution, third-party libraries).

@@ -1,5 +1,5 @@
 ---
-description: Multi-phase D&D 5e campaign writer. Generates a full, narratively consistent campaign in the ADM vault schema (locations, NPC lore, bestiary, encounters, quest arc, session zero). Args: [--name "<name>"] [--setting "<tone/premise>"] [--sessions <2-8>] [--detail sparse|normal|rich] [--output <path>]
+description: Multi-phase D&D 5e campaign writer. Generates a full, narratively consistent campaign in the ADM vault schema (locations, NPC lore, bestiary, encounters, quest arc, session zero). Can build INSIDE an existing shared world (--world). Args: [--name "<name>"] [--setting "<tone/premise>"] [--sessions <2-8>] [--detail sparse|normal|rich] [--world <name>] [--output <path>]
 allowed-tools: Write, Read, Bash, Glob
 ---
 
@@ -17,9 +17,36 @@ Extract from `$ARGUMENTS`:
 - `--setting "<text>"` — tone/premise, e.g. "gothic horror mystery" or "goblins stole the mayor's pig"
 - `--sessions <N>` — number of sessions (2–8, default 5; maps to location count)
 - `--detail sparse|normal|rich` — description depth (default normal)
+- `--world <name>` — build the campaign INSIDE an existing shared world (#49d).
+  When given, the campaign reuses the world's factions, locations and NPCs as
+  canon instead of inventing new ones, and opts in via `world:` in campaign.yaml.
 - `--output <path>` — override output directory
 
 If `--name` is missing, ask: "Jak se bude kampaň jmenovat?" and wait before continuing.
+
+## Step 1b — Load the world (only if `--world` was given)
+
+When `--world <name>` is set, the campaign is a story told **inside** an existing
+world — do **not** invent a parallel one. Load the world first and treat it as
+canon:
+
+```bash
+WORLD=<name>
+# Find the world folder in the vault (ADM project layout):
+ls -d data/vault*/worlds/$WORLD 2>/dev/null
+```
+
+Read the world so later phases reference real content:
+- `worlds/<name>/WORLD.md` — premise/tone of the world (use it; don't contradict).
+- `worlds/<name>/factions/*.md` — the factions, their goals, `progress`, relationships.
+- `worlds/<name>/locations/*.md` — the places (use their **ids** verbatim).
+- `worlds/<name>/npcs/*.md` — the inhabitants (quest givers, contacts).
+- `worlds/<name>/lore/` (+ `lore/events/`) — history, deities, world events.
+
+With a world loaded, the phases below change as noted under **„(svět)"**. The
+golden rule: **reference, don't recreate.** A campaign in a world adds only what
+is specific to *this* story (pre-made PCs, campaign bestiary, the quest, tactical
+encounters, a couple of campaign-only NPCs). Everything else comes from the world.
 
 ## Step 2 — Detect output target
 
@@ -54,6 +81,10 @@ Decide on:
 
 Quality rule: pitch must establish stakes, not just setting. "A land of ancient ruins and forgotten gods, where three factions race to claim a power that should stay buried." is a pitch. "A fantasy world" is not.
 
+**(svět):** Don't invent factions — use the world's. The pitch is *this campaign's*
+hook within the world (a specific conflict among existing factions), tone matches
+`WORLD.md`. Pick a driving tension from the factions' goals/relationships as the spine.
+
 ### Phase 2 — Locations
 
 Generate exactly `--sessions` locations (default 5).
@@ -73,6 +104,12 @@ Coordinates: hub at `{x: 0.5, y: 0.5}`. Place others in a ring at radius ~0.3.
 Connections: hub connects to all locations; each location also connects to the next
 in the chain. Use `{to: "<slug>", travel: {days: 1}}`.
 
+**(svět):** Do **not** create location notes. Choose the campaign's hub and stops
+from the world's existing locations and reference them by their real **ids**. You
+may add a campaign-only *interior* (a specific dungeon room of an existing ruin)
+as a new location whose `parent` is the world location — but never duplicate a
+place the world already defines.
+
 ### Phase 3 — NPCs and monsters
 
 **NPCs** (1–2 per location, minimum 2 total):
@@ -89,6 +126,12 @@ in the chain. Use `{to: "<slug>", travel: {days: 1}}`.
 
 Slug: monster name → slug, e.g. "Goblin" → `goblin`, "Temný kultista" → temny-kultista`
 
+**(svět):** NPCs are the world's — use existing ones as quest givers and contacts
+(reference by their real ids; do not rewrite their notes). Add at most 1–2
+campaign-only NPCs if the story truly needs someone new (a victim, a defector),
+and put them in `npcs/`. Monsters ARE campaign-specific — author them normally
+(or `srd_ref` standard ones); boss "stat cards" for a named world NPC are fine.
+
 ### Phase 4 — Quest arc
 
 Generate:
@@ -100,6 +143,11 @@ Generate:
 - `climax_location`: name of the dungeon/dangerous location from Phase 2
 
 Consistency check: every objective must mention a real NPC or location name defined above.
+
+**(svět):** The hook NPC and climax location are the **world's**. Grow the quest
+from a real faction tension (e.g. one faction's `goal`/relationship) so resolving
+it would plausibly shift `faction.progress` — that shift is the after-action in
+Step 6. Reference world NPCs and locations by their real ids.
 
 ### Phase 5 — Encounters
 
@@ -134,6 +182,7 @@ Then write every file below. Write them one by one — do not batch into a singl
 ```yaml
 name: "<Campaign Name>"
 ruleset: dnd5e-srd
+# world: <name>          # ← include ONLY when --world was given (#49d)
 starting_location: <hub-slug>
 party: []
 companions: []
@@ -145,6 +194,13 @@ variant_rules:
   diagonals: "5-5-5"
   grid_shape: square
 ```
+
+**(svět):** add the `world: <name>` line and make `starting_location` one of the
+world's location ids. Do **not** write `locations/` notes for world locations, and
+do **not** write `lore/npc-*` notes for world NPCs — they already exist in the
+world and would shadow the canon. Write only campaign-specific files (bestiary,
+quest, encounters, campaign-only NPCs/interiors, intro). Encounter `location:`
+fields use the world's location ids.
 
 ### `locations/<slug>.md`
 ```markdown
@@ -333,6 +389,27 @@ Výstup: <output-path>/
 
 **If standalone:**
 "Zkopírujte složku do `<vault>/campaigns/` vašeho ADM serveru, nebo spusťte server s `VAULT_PATH=./` prostředím."
+
+## Step 6 — Po kampani: svět se poučí z důsledků (only with `--world`)
+
+A world is living — what happens in one campaign should leave a mark the next one
+inherits. After writing the campaign, surface (don't silently apply) how its
+resolution would move the world, so the DM can author it or let the engine tools
+do it at play time:
+
+- For each world faction the quest touches, note the plausible `progress` shift
+  (e.g. "Pokud družina zmaří plán kultu → `kult-marakathe.progress` klesne ~0.3").
+  These map to the engine `faction_advance` tool the DM calls during play.
+- If the quest's climax matches an authored **world event** (`worlds/<name>/lore/
+  events/*.md`), name it and its trigger, so the DM fires `world_event_trigger`
+  when it comes true.
+- If the campaign would change a place's danger or two factions' relations, note
+  the `location_danger` / `faction_relation` change.
+
+Print this as a short "Dopady na svět" list. Do **not** edit the world's faction
+notes yourself — live progress lives in the session and is changed only through
+the engine tools (determinism, #12/#49). You are proposing the wiring, not
+rewriting canon.
 
 ## Quality rules (enforce throughout)
 

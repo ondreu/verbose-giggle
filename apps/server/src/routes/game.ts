@@ -241,6 +241,31 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
     return { active, campaigns };
   });
 
+  /** List shared worlds available in the vault, for the forge picker (#49). */
+  app.get("/api/worlds", async () => {
+    const root = path.join(config.vaultPath, "worlds");
+    let names: string[] = [];
+    try {
+      const entries = await fs.readdir(root, { withFileTypes: true });
+      names = entries.filter((e) => e.isDirectory()).map((e) => e.name);
+    } catch {
+      return { worlds: [] };
+    }
+    const worlds = [];
+    for (const id of names) {
+      let name = id;
+      try {
+        const raw = await fs.readFile(path.join(root, id, "WORLD.md"), "utf8");
+        const m = raw.match(/^#\s+(.+)$/m);
+        if (m) name = m[1]!.replace(/\s*[—-].*$/, "").trim();
+      } catch {
+        /* no WORLD.md — fall back to folder name */
+      }
+      worlds.push({ id, name });
+    }
+    return { worlds };
+  });
+
   /** Create a fresh campaign folder (optionally switch to it). */
   app.post<{ Body: { name: string; folder?: string; startingLocationName?: string; select?: boolean } }>(
     "/api/campaigns",
@@ -602,6 +627,9 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
     encounters: ctx.manager.campaign.encounters,
     items: ctx.manager.campaign.items,
     lore: ctx.manager.campaign.lore,
+    factions: ctx.manager.campaign.factions,
+    npcs: ctx.manager.campaign.npcs,
+    worldEvents: ctx.manager.campaign.worldEvents,
   }));
 
   /** Instantiate an authored encounter into live combat, then auto-resolve AI. */

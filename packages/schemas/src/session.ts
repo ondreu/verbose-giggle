@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { ActiveCondition, Position, Slug } from "./primitives.js";
 import { QuestRuntime } from "./quest.js";
+import { FactionResource, FactionRuntime } from "./faction.js";
 
 /** A single dice/event log entry — the auditable trust surface (§8.4). */
 export const LogEntry = z.object({
@@ -79,6 +80,14 @@ export const SessionState = z.object({
   /** Live quest progress, keyed by quest id (#19). Seeded from authored quest
    *  notes when started; mutated only through the engine quest tools. */
   quests: z.record(z.string(), QuestRuntime).default({}),
+  /** Live faction progress/relationships for the shared world (#49). Seeded from
+   *  authored faction notes when the world loads; mutated only through the
+   *  faction engine tools so every shift hits the dice log. */
+  factions: z.record(z.string(), FactionRuntime).default({}),
+  /** Which authored world events have already fired (#49), so they don't repeat. */
+  world_events: z.record(z.string(), z.object({ triggered: z.boolean() })).default({}),
+  /** Runtime danger overrides for locations, set by world events / the DM (#49). */
+  location_danger: z.record(z.string(), FactionResource).default({}),
   /** Set when the campaign reaches a terminal state (e.g. the party is wiped
    *  out, #23). The UI shows a game-over screen and offers a rollback. */
   ending: z

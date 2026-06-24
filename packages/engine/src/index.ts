@@ -11,4 +11,5 @@ export * from "./rest.js";
 export * from "./time.js";
 export * from "./leveling.js";
 export * from "./quests.js";
+export * from "./world.js";
 export * from "./tools.js";

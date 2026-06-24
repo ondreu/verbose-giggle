@@ -18,6 +18,7 @@ import { longRest, shortRest } from "./rest.js";
 import { advanceTime } from "./time.js";
 import { applyAbilityIncrease, awardXp, chooseSubclass, grantFeats, learnSpells, levelUp } from "./leveling.js";
 import { advanceQuest, completeQuest, failQuest, startQuest } from "./quests.js";
+import { advanceFaction, setFactionRelation, setLocationDanger, triggerWorldEvent } from "./world.js";
 
 const Advantage = z.enum(["advantage", "disadvantage", "none"]).optional();
 
@@ -815,6 +816,96 @@ export const TOOLS: ToolDef[] = [
     schema: z.object({ id: z.string() }),
     parameters: { type: "object", properties: { id: { type: "string" } }, required: ["id"] },
     handler: (state, args) => failQuest(state, args),
+  }),
+  def({
+    name: "faction_advance",
+    description:
+      "Move a world faction toward (positive delta) or away from (negative) its goal when narration shows it gained or lost ground. delta is a fraction in [-1,1] (e.g. 0.1 = a notable step). Logged to the visible world/dice log (#49).",
+    readOnly: false,
+    schema: z.object({
+      id: z.string(),
+      delta: z.number().min(-1).max(1),
+      reason: z.string().optional(),
+    }),
+    parameters: {
+      type: "object",
+      properties: {
+        id: { type: "string", description: "Faction id" },
+        delta: { type: "number", minimum: -1, maximum: 1, description: "Progress change, e.g. 0.1 / -0.15" },
+        reason: { type: "string", description: "Short cause, e.g. 'družina zmařila přepadení'" },
+      },
+      required: ["id", "delta"],
+    },
+    handler: (state, args) => advanceFaction(state, args),
+  }),
+  def({
+    name: "faction_relation",
+    description:
+      "Set the mutual stance between two world factions when narration changes how they regard each other (#49). The relationship is symmetric.",
+    readOnly: false,
+    schema: z.object({
+      a: z.string(),
+      b: z.string(),
+      stance: z.enum(["allied", "friendly", "neutral", "unfriendly", "hostile"]),
+      reason: z.string().optional(),
+    }),
+    parameters: {
+      type: "object",
+      properties: {
+        a: { type: "string", description: "First faction id" },
+        b: { type: "string", description: "Second faction id" },
+        stance: { type: "string", enum: ["allied", "friendly", "neutral", "unfriendly", "hostile"] },
+        reason: { type: "string" },
+      },
+      required: ["a", "b", "stance"],
+    },
+    handler: (state, args) => setFactionRelation(state, args),
+  }),
+  def({
+    name: "world_event_trigger",
+    description:
+      "Fire an authored world event when its trigger condition comes true (#49). Use the authored event id; its consequences (faction progress/resources/relations, location danger) are applied deterministically. Idempotent — an event fires once.",
+    readOnly: false,
+    schema: z.object({
+      id: z.string(),
+      name: z.string().optional(),
+      consequences: z.array(z.string()).optional(),
+    }),
+    parameters: {
+      type: "object",
+      properties: {
+        id: { type: "string", description: "World event id (authored event id)" },
+        name: { type: "string", description: "Player-facing event name (filled from the note when omitted)" },
+        consequences: {
+          type: "array",
+          items: { type: "string" },
+          description: "Structured effects, e.g. 'location.x.danger: high' (filled from the note when omitted)",
+        },
+      },
+      required: ["id"],
+    },
+    handler: (state, args) => triggerWorldEvent(state, args),
+  }),
+  def({
+    name: "location_danger",
+    description:
+      "Set a location's current danger level (low/medium/high) when the world shifts around it — raids, a cleared road, a collapsing front (#49).",
+    readOnly: false,
+    schema: z.object({
+      id: z.string(),
+      level: z.enum(["low", "medium", "high"]),
+      reason: z.string().optional(),
+    }),
+    parameters: {
+      type: "object",
+      properties: {
+        id: { type: "string", description: "Location id" },
+        level: { type: "string", enum: ["low", "medium", "high"] },
+        reason: { type: "string" },
+      },
+      required: ["id", "level"],
+    },
+    handler: (state, args) => setLocationDanger(state, args),
   }),
   def({
     name: "lookup",
