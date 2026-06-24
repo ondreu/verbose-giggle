@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { SpellSlotTier } from "./actor.js";
 import { ActiveCondition, Position, Slug } from "./primitives.js";
 import { QuestRuntime } from "./quest.js";
 import { FactionResource, FactionRuntime } from "./faction.js";
@@ -32,6 +33,9 @@ export const ActorOverlay = z.object({
     .object({ spell: z.string(), dc_to_maintain: z.number().int().optional() })
     .nullable()
     .optional(),
+  /** Live spell-slot usage so cast slots persist across turns/reloads and reach
+   *  the UI — without this overlay each rebuild reset slots to the sheet (#9). */
+  spell_slots: z.record(z.string(), SpellSlotTier).optional(),
   /** Persisted death flag so a fallen hero stays dead across reloads (#23). */
   dead: z.boolean().optional(),
 });

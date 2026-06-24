@@ -9,6 +9,7 @@ import { StartMenu } from "./components/StartMenu";
 import { GameOverModal } from "./components/GameOverModal";
 import { EmberField } from "./components/EmberField";
 import { LoginScreen } from "./components/LoginScreen";
+import { ReferenceModal } from "./panels/ReferenceModal";
 
 export default function App() {
   const hydrate = useGame((s) => s.hydrate);
@@ -21,6 +22,7 @@ export default function App() {
   const intro = useGame((s) => s.intro);
   const narrationLen = useGame((s) => s.narration.length);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [refOpen, setRefOpen] = useState(false);
   // Pre-prepared auth gate (#auth, stub): shown first, but fully bypassable —
   // "continue without account" enters the app exactly as before. No backend yet.
   const [authed, setAuthed] = useState(false);
@@ -55,6 +57,7 @@ export default function App() {
         <ImageModal />
       <GameOverModal />
       {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
+      {refOpen && <ReferenceModal onClose={() => setRefOpen(false)} />}
       <header className="flex items-center gap-3 border-b border-black bg-bg-mantle px-4 py-2">
         <button
           className="text-subtext0 transition-colors hover:text-gold"
@@ -85,6 +88,14 @@ export default function App() {
         >
           <Icon name="compass" size={14} />
           Nabídka
+        </button>
+        <button
+          className="btn-ghost text-xs"
+          title="Rejstřík pravidel (stavy, zranění, dovednosti…)"
+          onClick={() => setRefOpen(true)}
+        >
+          <Icon name="document" size={14} />
+          Pravidla
         </button>
         <button
           className="text-subtext0 transition-colors hover:text-gold"

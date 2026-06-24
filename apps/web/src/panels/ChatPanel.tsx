@@ -4,7 +4,6 @@ import { Icon } from "../components/Icon";
 import { Markdown } from "../components/Markdown";
 import { DiaryModal } from "./DiaryModal";
 import { QuestLogModal } from "./QuestLogModal";
-import { ReferenceModal } from "./ReferenceModal";
 
 export function ChatPanel() {
   const narration = useGame((s) => s.narration);
@@ -34,7 +33,6 @@ export function ChatPanel() {
   const [input, setInput] = useState("");
   const [diaryOpen, setDiaryOpen] = useState(false);
   const [questsOpen, setQuestsOpen] = useState(false);
-  const [refOpen, setRefOpen] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
   // Follow streaming text: the last line grows without changing array length,
   // so key the scroll on its text length too (#32).
@@ -63,8 +61,9 @@ export function ChatPanel() {
 
   return (
     <section className="panel flex h-full flex-col">
-      {/* Top row: log & reference navigation (Shrnutí · Deník · Úkoly · Pravidla),
-          with the global narration toggle anchored at the right. */}
+      {/* Top row: log & reference navigation (Shrnutí · Deník · Úkoly),
+          with the global narration toggle anchored at the right. Pravidla
+          (rules reference) lives in the app header next to Nabídka (#5). */}
       <header className="panel-title flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2">
         <span className="flex items-center gap-1.5">
           <Icon name="scroll" size={14} />
@@ -72,9 +71,8 @@ export function ChatPanel() {
         </span>
         <div className="flex items-center gap-2.5">
           <NavBtn icon="document" label="shrnutí" title="Shrnout dosavadní děj" onClick={() => void recap()} disabled={busy} />
-          <NavBtn icon="scroll" label="deník" title="Otevřít deník výpravy" onClick={() => setDiaryOpen(true)} />
+          <NavBtn icon="book" label="deník" title="Otevřít deník výpravy" onClick={() => setDiaryOpen(true)} />
           <NavBtn icon="quest" label="úkoly" title="Otevřít deník úkolů" onClick={() => setQuestsOpen(true)} badge={activeQuests} />
-          <NavBtn icon="document" label="pravidla" title="Rejstřík pravidel (stavy, zranění, dovednosti…)" onClick={() => setRefOpen(true)} />
         </div>
         <div className="ml-auto flex items-center gap-2.5">
           {speaking && (
@@ -110,7 +108,6 @@ export function ChatPanel() {
       </header>
       {diaryOpen && <DiaryModal onClose={() => setDiaryOpen(false)} />}
       {questsOpen && <QuestLogModal onClose={() => setQuestsOpen(false)} />}
-      {refOpen && <ReferenceModal onClose={() => setRefOpen(false)} />}
 
       <div className="flex-1 overflow-y-auto px-4 py-3">
         {narration.length === 0 && (

@@ -87,10 +87,14 @@ export function castSpell(
     return { slot_consumed: null, affected: [], concentration: false, detail, error: detail };
   }
 
-  // Consume a slot (cantrips are level 0, free).
+  // Consume a slot (cantrips are level 0, free). A spell can never be cast below
+  // its own base level, so clamp the requested slot up to the spell's level —
+  // this also covers the DM omitting slot_level (it defaults to 0), which would
+  // otherwise wrongly look for a non-existent level-0 slot and never spend one (#9).
   let slotConsumed: number | null = null;
   if (spell.level > 0) {
-    const tier = String(args.slot_level);
+    const slotLevel = Math.max(args.slot_level, spell.level);
+    const tier = String(slotLevel);
     const slot = caster.spell_slots[tier];
     if (!slot || slot.used >= slot.max) {
       return {
@@ -98,11 +102,11 @@ export function castSpell(
         affected: [],
         concentration: false,
         detail: "",
-        error: `No level ${args.slot_level} slot available`,
+        error: `No level ${slotLevel} slot available`,
       };
     }
     slot.used += 1;
-    slotConsumed = args.slot_level;
+    slotConsumed = slotLevel;
   }
 
   const targets = args.targets ?? [];

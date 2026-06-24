@@ -10,8 +10,14 @@ const PATHS: Record<string, string> = {
     "M12 2 4 5v6c0 5 3.4 8.5 8 11 4.6-2.5 8-6 8-11V5l-8-3Zm0 2.2 6 2.25V11c0 3.7-2.4 6.5-6 8.6V4.2Z",
   heart:
     "M12 21S4 14.5 4 8.8C4 6 6 4 8.5 4 10.2 4 11.5 5 12 6.2 12.5 5 13.8 4 15.5 4 18 4 20 6 20 8.8 20 14.5 12 21 12 21Z",
+  // Parchment/scroll with two text lines. The line cut-outs are wound opposite
+  // to the body so they punch through under the default nonzero fill (the old
+  // path's inner cut wound the same way and filled in as a solid square).
   scroll:
-    "M5 4h11a2 2 0 0 1 2 2v11a3 3 0 0 0 3 3H8a3 3 0 0 1-3-3V4Zm2 2v11a1 1 0 0 0 1 1h8.2A3 3 0 0 1 16 17V6H7Z",
+    "M6 3h10a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm2 5v2h8V8H8Zm0 4v2h6v-2H8Z",
+  // Bound journal/diary — distinct from the scroll used elsewhere (#deník).
+  book:
+    "M6 2h11a2 2 0 0 1 2 2v16a1 1 0 0 1-1.45.9L13 18.6l-4.55 2.3A1 1 0 0 1 7 20V4H6a1 1 0 0 1 0-2Zm3 2v13.4l3.55-1.8a1 1 0 0 1 .9 0L17 17.4V4H9Zm2 3h4v2h-4V7Z",
   footprints:
     "M8 3c1.5 0 2.5 1.6 2.5 3.6S9.5 10 8 10 5.5 8.6 5.5 6.6 6.5 3 8 3Zm0 9c1.7 0 3 1 3 2.6 0 1.8-1 3.4-3 3.4s-3-1.6-3-3.4C5 13 6.3 12 8 12Zm8-9c1.5 0 2.5 1.6 2.5 3.6S17.5 10 16 10s-2.5-1.4-2.5-3.4S14.5 3 16 3Z",
   skull:
@@ -22,6 +28,9 @@ const PATHS: Record<string, string> = {
     "M12 2c1 3-2 4-2 7a2 2 0 0 0 4 0c2 2 3 3.5 3 6a5 5 0 0 1-10 0c0-3 2-5 3-7 1-2 1-4 -1-6 2 0 4 1 5 0Z",
   compass:
     "M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm0 2.5A7.5 7.5 0 1 1 4.5 12 7.5 7.5 0 0 1 12 4.5Zm3.8 3.7-5 2-2 5 5-2 2-5Zm-3.8 2.5a1.3 1.3 0 1 1 0 2.6 1.3 1.3 0 0 1 0-2.6Z",
+  // Globe — shared worlds (#worlds). Outer circle with meridian + parallels.
+  globe:
+    "M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm6.9 7h-3.3a14.7 14.7 0 0 0-1.6-4.3A8 8 0 0 1 18.9 9ZM12 4.2c.9 1 1.6 2.7 2 4.8h-4c.4-2.1 1.1-3.8 2-4.8ZM4.3 13a8 8 0 0 1 0-2h3.4a17 17 0 0 0 0 2H4.3Zm.8 2h3.3a14.7 14.7 0 0 0 1.6 4.3A8 8 0 0 1 5.1 15Zm3.3-6H5.1a8 8 0 0 1 5-3.3A14.7 14.7 0 0 0 8.4 9ZM12 19.8c-.9-1-1.6-2.7-2-4.8h4c-.4 2.1-1.1 3.8-2 4.8Zm2.3-6.8h-4.6a15 15 0 0 1 0-2h4.6a15 15 0 0 1 0 2Zm-.4 6.3a14.7 14.7 0 0 0 1.6-4.3h3.3a8 8 0 0 1-4.9 4.3ZM16.3 13a17 17 0 0 0 0-2h3.4a8 8 0 0 1 0 2h-3.4Z",
   hourglass:
     "M6 2h12v2l-4 6 4 6v2H6v-2l4-6-4-6V2Zm3.2 2L12 8l2.8-4H9.2Z",
   gear:

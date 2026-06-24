@@ -3,6 +3,7 @@ import { useGame, type CampaignInfo } from "../store/store";
 import { Icon } from "./Icon";
 import { CharacterCreate } from "./CharacterCreate";
 import { CampaignManager } from "./CampaignManager";
+import { WorldManager, type WorldInfo } from "./WorldManager";
 
 /**
  * First-run / home screen (#2, restructured per the #47 wireframes into a
@@ -11,11 +12,12 @@ import { CampaignManager } from "./CampaignManager";
  * (snapshots), with Nastavení anchored at the bottom. Entering play is still
  * `setView("play")`.
  */
-type Section = "campaigns" | "new" | "backups";
+type Section = "campaigns" | "new" | "worlds" | "backups";
 
 const NAV: { id: Section; label: string; icon: string }[] = [
   { id: "campaigns", label: "Kampaně", icon: "compass" },
   { id: "new", label: "Nová kampaň", icon: "plus" },
+  { id: "worlds", label: "Správa světů", icon: "globe" },
   { id: "backups", label: "Zálohy", icon: "archive" },
 ];
 
@@ -77,6 +79,7 @@ export function StartMenu({ onSettings }: { onSettings: () => void }) {
               <CampaignsSection onPlay={() => setCreateChar(true)} />
             )}
             {section === "new" && <NewCampaignSection />}
+            {section === "worlds" && <WorldsSection />}
             {section === "backups" && <RollbackPanel />}
           </div>
         </div>
@@ -194,7 +197,7 @@ type NewMode = "empty" | "ai" | "template" | "import";
 const NEW_OPTIONS: { id: NewMode; title: string; desc: string; icon: string; ready: boolean }[] = [
   { id: "empty", title: "Nová prázdná kampaň", desc: "Začni s čistým světem a postav si ho po svém.", icon: "scroll", ready: true },
   { id: "ai", title: "Nová AI generovaná kampaň", desc: "AI postaví svět, NPC i úvodní úkol podle tvého zadání.", icon: "flame", ready: true },
-  { id: "template", title: "Kampaň ze šablony", desc: "Vyber si připravený scénář a rovnou hraj.", icon: "document", ready: false },
+  { id: "template", title: "Kampaň ze šablony", desc: "Vyber si připravený scénář a rovnou hraj.", icon: "document", ready: true },
   { id: "import", title: "Importovat složku kampaně", desc: "Načti existující vault složku z disku.", icon: "upload", ready: false },
 ];
 
@@ -234,7 +237,13 @@ function NewCampaignSection() {
             </button>
             {open && o.ready && (
               <div className="border-t border-surface1 px-4 pb-4 pt-3">
-                {o.id === "empty" ? <EmptyCampaignForm /> : <ForgeForm />}
+                {o.id === "empty" ? (
+                  <EmptyCampaignForm />
+                ) : o.id === "template" ? (
+                  <TemplateForm />
+                ) : (
+                  <ForgeForm />
+                )}
               </div>
             )}
           </section>
@@ -288,6 +297,103 @@ function EmptyCampaignForm() {
       <div className="mt-1 flex justify-end">
         <button className="btn-gold px-4 py-2 text-sm" disabled={!name.trim() || working} onClick={() => void submit()}>
           {working ? "…" : "Vytvořit a otevřít"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+interface TemplateInfo {
+  folder: string;
+  name: string;
+  party: number;
+  world?: string;
+}
+
+/** Pick a built-in template scenario and instantiate it into a fresh, persistent campaign (#3). */
+function TemplateForm() {
+  const createFromTemplate = useGame((s) => s.createFromTemplate);
+  const busy = useGame((s) => s.busy);
+  const [templates, setTemplates] = useState<TemplateInfo[] | null>(null);
+  const [selected, setSelected] = useState<string | null>(null);
+  const [name, setName] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [working, setWorking] = useState(false);
+
+  useEffect(() => {
+    void fetch("/api/templates")
+      .then((r) => (r.ok ? r.json() : { templates: [] }))
+      .then((d) => setTemplates(Array.isArray(d.templates) ? d.templates : []))
+      .catch(() => setTemplates([]));
+  }, []);
+
+  const submit = async () => {
+    if (!selected || working) return;
+    setWorking(true);
+    setError(null);
+    const res = await createFromTemplate({ template: selected, name: name.trim() || undefined });
+    setWorking(false);
+    if (!res.ok) {
+      setError(res.error ?? "Vytvoření kampaně ze šablony selhalo");
+      return;
+    }
+    // Server emits `reload`; the new campaign becomes active.
+    setName("");
+    setSelected(null);
+  };
+
+  if (templates === null) {
+    return <p className="font-body text-sm italic text-subtext0">Načítám šablony…</p>;
+  }
+  if (templates.length === 0) {
+    return <p className="font-body text-sm italic text-subtext0">Žádné vestavěné šablony nejsou k dispozici.</p>;
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      <p className="font-body text-sm text-subtext0">
+        Vyber připravený scénář. Vznikne tvoje vlastní kopie, která se ukládá samostatně — postup se
+        nikdy neztratí ani po restartu serveru.
+      </p>
+      <ul className="flex flex-col gap-1.5">
+        {templates.map((t) => (
+          <li key={t.folder}>
+            <button
+              onClick={() => setSelected(t.folder)}
+              className={`hover-lift flex w-full items-center gap-3 rounded-sm border px-3 py-2 text-left transition-colors ${
+                selected === t.folder ? "border-gold/60 bg-gold/10" : "border-surface1 bg-bg-mantle/40 hover:border-gold/30"
+              }`}
+            >
+              <Icon name="document" size={15} className={selected === t.folder ? "text-gold" : "text-subtext0"} />
+              <div className="min-w-0 flex-1">
+                <div className="truncate font-body text-text">{t.name}</div>
+                <div className="font-log text-[10px] text-subtext0">
+                  {t.party} postav{t.world ? ` · svět ${t.world}` : ""}
+                </div>
+              </div>
+            </button>
+          </li>
+        ))}
+      </ul>
+      {selected && (
+        <>
+          <label className="font-log text-[11px] uppercase tracking-wider text-subtext0">Název kopie (volitelné)</label>
+          <input
+            className="settings-input bg-bg-crust text-text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder={templates.find((t) => t.folder === selected)?.name ?? "Název kampaně"}
+          />
+        </>
+      )}
+      {error && <p className="font-log text-xs text-blood">{error}</p>}
+      <div className="mt-1 flex justify-end">
+        <button
+          className="btn-gold px-4 py-2 text-sm"
+          disabled={!selected || working || busy}
+          onClick={() => void submit()}
+        >
+          {working ? "…" : "Vytvořit a hrát"}
         </button>
       </div>
     </div>
@@ -513,6 +619,75 @@ function ForgeForm() {
           {working ? "…" : "Postavit a otevřít"}
         </button>
       </div>
+    </div>
+  );
+}
+
+/* ── Správa světů ────────────────────────────────────────────────────────── */
+
+function WorldsSection() {
+  const [worlds, setWorlds] = useState<WorldInfo[] | null>(null);
+  const [manage, setManage] = useState<WorldInfo | null>(null);
+
+  useEffect(() => {
+    void fetch("/api/worlds")
+      .then((r) => (r.ok ? r.json() : { worlds: [] }))
+      .then((d) => setWorlds(Array.isArray(d.worlds) ? d.worlds : []))
+      .catch(() => setWorlds([]));
+  }, []);
+
+  return (
+    <div className="flex flex-col gap-5">
+      {manage && <WorldManager world={manage} onClose={() => setManage(null)} />}
+
+      <section className="panel p-4">
+        <div className="mb-3 flex items-center gap-2">
+          <Icon name="globe" size={15} className="text-gold" />
+          <h2 className="panel-title pb-0">Sdílené světy</h2>
+        </div>
+        <p className="mb-3 font-body text-sm text-subtext0">
+          Svět existuje nezávisle na kampaních — kampaň se k němu přihlásí. Tady můžeš procházet a upravovat
+          jeho soubory (lokace, frakce, NPC, kroniku), stáhnout celý svět jako zálohu nebo nahrát jeho úpravu.
+        </p>
+
+        {worlds === null ? (
+          <p className="font-body italic text-subtext0">Načítám světy…</p>
+        ) : worlds.length === 0 ? (
+          <p className="font-body text-sm italic text-subtext0">
+            Žádné světy ve trezoru. Světy žijí ve složce <code className="font-log text-xs">worlds/</code> trezoru.
+          </p>
+        ) : (
+          <ul className="flex flex-col gap-1.5">
+            {worlds.map((w) => (
+              <li
+                key={w.id}
+                className="hover-lift flex items-center gap-3 rounded-sm border border-surface1 bg-bg-mantle/40 px-3 py-2"
+              >
+                <Icon name="globe" size={15} className="text-subtext0" />
+                <div className="min-w-0 flex-1">
+                  <div className="truncate font-body text-text">{w.name}</div>
+                  <div className="font-log text-[10px] text-subtext0">{w.id}</div>
+                </div>
+                <button
+                  className="btn-ghost text-[11px]"
+                  onClick={() => setManage(w)}
+                  title="Procházet, upravovat, stáhnout nebo nahrát soubory světa"
+                >
+                  spravovat
+                </button>
+                <a
+                  className="btn-ghost text-[11px]"
+                  href={`/api/worlds/${encodeURIComponent(w.id)}/export`}
+                  download={`${w.id}.zip`}
+                  title="Stáhnout svět jako ZIP"
+                >
+                  stáhnout
+                </a>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
     </div>
   );
 }

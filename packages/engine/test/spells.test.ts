@@ -77,6 +77,26 @@ describe("cast_spell sheet validation (#29)", () => {
     expect(r.saves?.[0]?.success ? dmg === 50 : dmg === 100).toBe(true);
   });
 
+  it("clamps an omitted/too-low slot_level up to the spell's base level (#9)", () => {
+    const cleric = makeActor({
+      id: "c",
+      name: "Sora",
+      class: "cleric",
+      spells_known: ["cure-wounds"],
+      spell_slots: { "1": { max: 2, used: 0 } },
+    });
+    const ally = makeActor({ id: "a", name: "Druh", hp: { max: 20, current: 5, temp: 0 } });
+    const state = makeState([cleric, ally], "clamp-slot");
+
+    // slot_level 0 (the schema default) on a level-1 spell must still spend a
+    // level-1 slot rather than failing to find a non-existent level-0 slot.
+    const r = castSpell(state, { caster: "c", spell: "cure-wounds", slot_level: 0, targets: ["a"] });
+
+    expect(r.error).toBeUndefined();
+    expect(r.slot_consumed).toBe(1);
+    expect(cleric.spell_slots["1"]!.used).toBe(1);
+  });
+
   it("does not gate monster (statblock) casters on spells_known", () => {
     const monster = makeActor({
       id: "m",

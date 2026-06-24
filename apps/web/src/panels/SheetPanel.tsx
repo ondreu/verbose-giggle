@@ -79,6 +79,9 @@ export function SheetPanel() {
 
   const overlayHp = session?.actors[actor.id]?.hp?.current ?? actor.hp.current;
   const conditions = session?.actors[actor.id]?.conditions ?? actor.conditions;
+  // Live spell-slot usage lives in the session overlay; fall back to the sheet
+  // when no slots have been spent yet this session (#9).
+  const spellSlots = session?.actors[actor.id]?.spell_slots ?? actor.spell_slots;
   const hpPct = Math.max(0, Math.min(100, (overlayHp / actor.hp.max) * 100));
   const downed = overlayHp <= 0;
   const ds = actor.death_saves ?? { success: 0, fail: 0 };
@@ -204,11 +207,11 @@ export function SheetPanel() {
       </div>
 
       {/* Spell slots (casters) */}
-      {Object.keys(actor.spell_slots).length > 0 && (
+      {Object.keys(spellSlots).length > 0 && (
         <div className="mt-3">
           <div className="mb-1 text-[11px] uppercase tracking-wider text-ink/60">Kouzelné sloty</div>
           <div className="flex flex-wrap gap-2">
-            {Object.entries(actor.spell_slots).map(([lvl, slot]) => (
+            {Object.entries(spellSlots).map(([lvl, slot]) => (
               <div key={lvl} className="flex items-center gap-1">
                 <span className="font-log text-xs text-ink/70">{lvl}.</span>
                 {Array.from({ length: slot.max }).map((_, i) => (
@@ -386,18 +389,38 @@ function humanizeId(id: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-function TagRow({ label, items }: { label: string; items: string[] }) {
+/**
+ * Collapsible header + body for the sheet's passive blocks (features, feats,
+ * languages). Collapsed by default so static "passive" info doesn't crowd the
+ * action hub (#8); click the header to expand.
+ */
+function CollapsibleRow({ label, count, children }: { label: string; count: number; children: React.ReactNode }) {
+  const [open, setOpen] = useState(false);
   return (
     <div className="mt-3">
-      <div className="mb-1 text-[11px] uppercase tracking-wider text-ink/60">{label}</div>
-      <div className="flex flex-wrap gap-1.5">
-        {items.map((t, i) => (
-          <span key={`${t}-${i}`} className="rounded-sm border border-ink/20 bg-ink/5 px-1.5 py-0.5 font-log text-[11px] text-ink/80">
-            {t}
-          </span>
-        ))}
-      </div>
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="flex w-full items-center gap-1 text-[11px] uppercase tracking-wider text-ink/60 transition-colors hover:text-ink/90"
+        aria-expanded={open}
+      >
+        <span className="text-ink/40">{open ? "▾" : "▸"}</span>
+        {label}
+        <span className="font-log lowercase tracking-normal text-ink/45">({count})</span>
+      </button>
+      {open && <div className="mt-1 flex flex-wrap gap-1.5">{children}</div>}
     </div>
+  );
+}
+
+function TagRow({ label, items }: { label: string; items: string[] }) {
+  return (
+    <CollapsibleRow label={label} count={items.length}>
+      {items.map((t, i) => (
+        <span key={`${t}-${i}`} className="rounded-sm border border-ink/20 bg-ink/5 px-1.5 py-0.5 font-log text-[11px] text-ink/80">
+          {t}
+        </span>
+      ))}
+    </CollapsibleRow>
   );
 }
 
@@ -438,38 +461,32 @@ function ActionChip({ label, onClick, disabled, accent, title }: {
   );
 }
 
-/** Feats row with SRD hover cards (#42c). */
+/** Feats row with SRD hover cards (#42c), collapsible (#8). */
 function FeatTagRow({ label, ids }: { label: string; ids: string[] }) {
   return (
-    <div className="mt-3">
-      <div className="mb-1 text-[11px] uppercase tracking-wider text-ink/60">{label}</div>
-      <div className="flex flex-wrap gap-1.5">
-        {ids.map((id) => (
-          <FeatCard key={id} id={id}>
-            <span className="cursor-default rounded-sm border border-ink/20 bg-ink/5 px-1.5 py-0.5 font-log text-[11px] text-ink/80 hover:border-gold/40 hover:text-ink/100">
-              {csFeat(id, humanizeId(id))}
-            </span>
-          </FeatCard>
-        ))}
-      </div>
-    </div>
+    <CollapsibleRow label={label} count={ids.length}>
+      {ids.map((id) => (
+        <FeatCard key={id} id={id}>
+          <span className="cursor-default rounded-sm border border-ink/20 bg-ink/5 px-1.5 py-0.5 font-log text-[11px] text-ink/80 hover:border-gold/40 hover:text-ink/100">
+            {csFeat(id, humanizeId(id))}
+          </span>
+        </FeatCard>
+      ))}
+    </CollapsibleRow>
   );
 }
 
-/** Class/racial features row with SRD hover cards (#42c). */
+/** Class/racial features row with SRD hover cards (#42c), collapsible (#8). */
 function FeatureTagRow({ label, ids }: { label: string; ids: string[] }) {
   return (
-    <div className="mt-3">
-      <div className="mb-1 text-[11px] uppercase tracking-wider text-ink/60">{label}</div>
-      <div className="flex flex-wrap gap-1.5">
-        {ids.map((id) => (
-          <FeatureCard key={id} id={id}>
-            <span className="cursor-default rounded-sm border border-ink/20 bg-ink/5 px-1.5 py-0.5 font-log text-[11px] text-ink/80 hover:border-gold/40 hover:text-ink/100">
-              {humanizeId(id)}
-            </span>
-          </FeatureCard>
-        ))}
-      </div>
-    </div>
+    <CollapsibleRow label={label} count={ids.length}>
+      {ids.map((id) => (
+        <FeatureCard key={id} id={id}>
+          <span className="cursor-default rounded-sm border border-ink/20 bg-ink/5 px-1.5 py-0.5 font-log text-[11px] text-ink/80 hover:border-gold/40 hover:text-ink/100">
+            {humanizeId(id)}
+          </span>
+        </FeatureCard>
+      ))}
+    </CollapsibleRow>
   );
 }

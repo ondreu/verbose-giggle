@@ -175,7 +175,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
       onClick={onClose}
     >
       <div
-        className="parchment flex max-h-[88vh] w-full max-w-3xl flex-col p-0"
+        className="parchment flex h-[88vh] w-full max-w-3xl flex-col p-0"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center gap-2 border-b border-ink/20 px-6 py-3">
