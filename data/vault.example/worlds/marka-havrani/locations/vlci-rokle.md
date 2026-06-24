@@ -8,7 +8,7 @@ coords: { x: 0.68, y: 0.36 }
 connections:
   - to: sipovy-hvozd
     travel: { distance_km: 28, days: 1, terrain: wilderness, danger: high }
-encounter_table: velen-roads
+encounter_table: velen-divocina
 discovered: false
 ---
 # Vlčí rokle

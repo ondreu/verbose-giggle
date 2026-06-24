@@ -638,11 +638,18 @@ frakce přiblížila/vzdálila cíli a volat příslušný nástroj — stejný 
 princip jako u HP/spelů (#12). Scene snapshot vypisuje frakce (postup, zdroje,
 cíl), nebezpečí lokace a hrozící události.
 
-#### #49d — Modifikovaný `/campaign` skill pro svět-aware generování
+#### [x] #49d — Modifikovaný `/campaign` skill pro svět-aware generování
 
-**Zbývá** (infrastruktura #49a–c je hotová a připravená: loader sloučí
-`worlds/<name>/`, frakce/události jedou přes engine tools). Rozšíření `/campaign`
-skillu o volitelný parametr `--world <name>`:
+**Hotovo.** Server-side `forgeCampaign` (`apps/server/src/vault/forge.ts`) přijímá
+`world?` v `ForgeInput`: když je zadán, `seedFromWorld` naseje World Bible z
+existujícího světa (frakce, lokace, NPC), fáze 2/3 už negenerují vlastní lokace/NPC,
+quest hook roste z reálných frakcí a klimax míří na reálnou světovou lokaci.
+Zapisovač přeskočí světové lokace/NPC (nepřepisuje kánon) a do `campaign.yaml`
+zapíše `world:`. Kryto `forge.test.ts` („builds inside an existing world"). Skill
+`.claude/commands/campaign.md` má `--world <name>` s per-fázovými „(svět)"
+pravidly (reference, nerecyklovat) a krokem „Po kampani: svět se poučí z důsledků"
+(navrhne posuny `faction.progress`/world-events, neaplikuje je ručně). Rozšíření
+`/campaign` skillu o volitelný parametr `--world <name>`:
 - Načte existující `worlds/<name>/` jako kontext
 - Kampaňové lokace/NPC/frakce navazují na světové
 - Quest hooky vyrůstají z faction tensions ze světa
@@ -652,14 +659,20 @@ skillu o volitelný parametr `--world <name>`:
 #### Závislosti a pořadí
 
 ```
-#49a (vault layout) ✓ → #49b (schémata) ✓ → #49c (engine tools) ✓ → #49d (world-aware /campaign) — zbývá
+#49a (vault layout) ✓ → #49b (schémata) ✓ → #49c (engine tools) ✓ → #49d (world-aware /campaign) ✓
 ```
 
 #49a–b jsou čisté přidání (neruší stávající kampaně). #49c rozšiřuje engine
 bez změny existujících nástrojů. Svět si DM authorizuje ručně — žádná AI
-generace světa, jen infrastruktura pro jeho načtení a využití. **Hotovo #49a–c
-+ kompletní autorský svět „Havraní marka"**; zbývá už jen #49d (napojení
-`/campaign --world`).
+generace světa, jen infrastruktura pro jeho načtení a využití. **Hotovo celé #49**:
+infrastruktura #49a–d + kompletní autorský svět „Havraní marka" + dvě ukázkové
+kampaně v něm:
+
+- **`konvoj-do-vresoviste`** — krátká (~30 min) kampaň: rozhovor, smlouvání,
+  obchod, cesta a boj cestou z Černého Brodu do Vřesoviště. (Nahradila starou
+  `velen-roads`, která byla odstraněna; testy přepojeny.)
+- **`stiny-vraniho-hradu`** — delší (3–5 sezení) kampaň o kultu Marakáthé;
+  vyšetřování → cesta → klimax u pečeti, s rozuzlením měnícím stav světa.
 
 ---
 

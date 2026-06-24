@@ -13,12 +13,12 @@ import {
 import { createCampaign, slugify } from "../src/vault/scaffold.js";
 
 const SOURCE = fileURLToPath(
-  new URL("../../../data/vault.example/campaigns/velen-roads", import.meta.url),
+  new URL("../../../data/vault.example/campaigns/konvoj-do-vresoviste", import.meta.url),
 );
 
 const tmpRoots: string[] = [];
 async function freshCampaign(): Promise<string> {
-  const dir = path.join(await fs.mkdtemp(path.join(os.tmpdir(), "adm-rb-")), "velen-roads");
+  const dir = path.join(await fs.mkdtemp(path.join(os.tmpdir(), "adm-rb-")), "konvoj-do-vresoviste");
   await fs.cp(SOURCE, dir, { recursive: true });
   tmpRoots.push(path.dirname(dir));
   return dir;
@@ -32,18 +32,18 @@ describe("campaign rollback via snapshots", () => {
     const dir = await freshCampaign();
     const sessionFile = path.join(dir, "state", "session.json");
     await fs.mkdir(path.dirname(sessionFile), { recursive: true });
-    await fs.writeFile(sessionFile, JSON.stringify({ current_location: "rozcesti", time: { day: 1 } }), "utf8");
+    await fs.writeFile(sessionFile, JSON.stringify({ current_location: "cerny-brod", time: { day: 1 } }), "utf8");
 
     const snap = await createSnapshot(dir, { label: "Před bojem" });
     expect(snap.label).toBe("Před bojem");
-    expect(snap.location).toBe("rozcesti");
+    expect(snap.location).toBe("cerny-brod");
 
     // Mutate the live state, then roll back.
-    await fs.writeFile(sessionFile, JSON.stringify({ current_location: "stary-mlyn", time: { day: 9 } }), "utf8");
+    await fs.writeFile(sessionFile, JSON.stringify({ current_location: "vresoviste", time: { day: 9 } }), "utf8");
     await restoreSnapshot(dir, snap.id);
 
     const restored = JSON.parse(await fs.readFile(sessionFile, "utf8"));
-    expect(restored.current_location).toBe("rozcesti");
+    expect(restored.current_location).toBe("cerny-brod");
     expect(restored.time.day).toBe(1);
   });
 

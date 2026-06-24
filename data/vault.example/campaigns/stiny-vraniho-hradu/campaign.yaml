@@ -1,0 +1,11 @@
+name: Stíny Vraního hradu
+ruleset: dnd5e-srd
+world: marka-havrani
+world_map: maps/continent.svg
+starting_location: novigrad
+party: [bram, kira]
+companions: [halbrecht]
+language: cs
+tts: { enabled: true, voice: cs_CZ-jirka-medium }
+llm: { model: mistral-medium-3.5 }
+variant_rules: { flanking: false, diagonals: "5-5-5", grid_shape: hex }

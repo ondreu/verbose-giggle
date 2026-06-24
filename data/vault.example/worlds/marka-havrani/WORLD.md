@@ -38,8 +38,15 @@ jiného nepřežije.
 
 ## Kampaně v tomto světě
 
-Ukázková kampaň **„The Velen Roads"** (`campaigns/velen-roads`) se odehrává v
-kraji **Velen** na východě marky a vyrůstá z napětí mezi **Krvavými kly** a
-**Kultem Marakáthé**. Další kampaně mohou sdílet stejný svět, navazovat na
-důsledky té první a nést je dál — frakce, kterou jedna družina oslabí, začne
-druhá kampaň slabší.
+Tento svět používají dvě ukázkové kampaně:
+
+- **„Konvoj do Vřesoviště"** (`campaigns/konvoj-do-vresoviste`) — krátká úvodní
+  kampaň (~30 min), která provede hráče rozhovorem, smlouváním, obchodem,
+  cestou a bojem cestou z Černého Brodu do odříznutého Vřesoviště.
+- **„Stíny Vraního hradu"** (`campaigns/stiny-vraniho-hradu`) — delší dějová
+  kampaň (3–5 sezení) o kultu Marakáthé, která vrcholí u pečeti pod Vraním
+  hradem a jejíž rozuzlení mění stav světa.
+
+Obě sdílejí stejný svět: frakci, kterou jedna družina oslabí, začne druhá
+kampaň slabší. Háček z krátké kampaně (placka kultu u goblinů) vede přímo do
+té delší.

@@ -6,7 +6,7 @@ import { afterAll, describe, expect, it } from "vitest";
 import { SessionManager } from "../src/session/manager.js";
 
 // The whole example vault, so `worlds/marka-havrani` resolves relative to the
-// campaign folder (`<vault>/campaigns/velen-roads` → `<vault>/worlds/...`).
+// campaign folder (`<vault>/campaigns/konvoj-do-vresoviste` → `<vault>/worlds/...`).
 const VAULT = fileURLToPath(new URL("../../../data/vault.example", import.meta.url));
 
 const tmpDirs: string[] = [];
@@ -14,7 +14,7 @@ async function freshVaultCampaign(): Promise<string> {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "adm-world-"));
   await fs.cp(VAULT, path.join(root, "vault"), { recursive: true });
   tmpDirs.push(root);
-  return path.join(root, "vault", "campaigns", "velen-roads");
+  return path.join(root, "vault", "campaigns", "konvoj-do-vresoviste");
 }
 afterAll(async () => {
   await Promise.all(tmpDirs.map((d) => fs.rm(d, { recursive: true, force: true })));
@@ -26,7 +26,7 @@ describe("living world layer (#49)", () => {
     expect(mgr.campaign.world?.name).toBe("marka-havrani");
     // World locations + campaign locations coexist (campaign would win on collision).
     expect(mgr.campaign.locations["novigrad"]?.kind).toBe("city");
-    expect(mgr.campaign.locations["rozcesti"]?.name).toBe("Rozcestí");
+    expect(mgr.campaign.locations["vresoviste"]?.name).toBe("Vřesoviště");
     // Factions, NPCs and world events come from the world.
     expect(mgr.campaign.factions["kult-marakathe"]?.goal).toMatch(/pečeť|Marakáthé/i);
     expect(mgr.campaign.npcs["prorok-vethis"]?.faction).toBe("kult-marakathe");

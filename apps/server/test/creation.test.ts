@@ -8,12 +8,12 @@ import { SessionManager } from "../src/session/manager.js";
 import { createCharacter, creationOptions } from "../src/vault/creation.js";
 
 const SOURCE = fileURLToPath(
-  new URL("../../../data/vault.example/campaigns/velen-roads", import.meta.url),
+  new URL("../../../data/vault.example/campaigns/konvoj-do-vresoviste", import.meta.url),
 );
 
 const tmpRoots: string[] = [];
 async function freshCampaign(): Promise<string> {
-  const dir = path.join(await fs.mkdtemp(path.join(os.tmpdir(), "adm-cc-")), "velen-roads");
+  const dir = path.join(await fs.mkdtemp(path.join(os.tmpdir(), "adm-cc-")), "konvoj-do-vresoviste");
   await fs.cp(SOURCE, dir, { recursive: true });
   tmpRoots.push(path.dirname(dir));
   return dir;

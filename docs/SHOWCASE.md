@@ -42,8 +42,10 @@ bind mount **hides** the baked-in vault. So:
 ## 2. Showcase vault — what to author
 
 A campaign is one folder under `<vault>/campaigns/<slug>/`. Use the bundled
-**`data/vault.example/campaigns/velen-roads/`** as the working template, and
-its `CAMPAIGN.md` as the schema legend. Each entity is one Markdown note:
+**`data/vault.example/campaigns/konvoj-do-vresoviste/`** as the working template
+(a short ~30 min demo), and its `CAMPAIGN.md` as the schema legend. A campaign can
+also opt into a shared world via `world:` in `campaign.yaml` — see
+`data/vault.example/worlds/marka-havrani/` and its `WORLD.md` (#49). Each entity is one Markdown note:
 **frontmatter = machine truth (the engine reads it), body = flavour (the LLM
 reads it for narration).**
 
@@ -84,17 +86,17 @@ variant_rules: { flanking: false, diagonals: "5-5-5" }
 ```markdown
 ---
 type: location
-id: rozcesti
-name: Rozcestí
-kind: landmark
-coords: { x: 0.42, y: 0.55 }          # 0..1 over the map image — REQUIRED to plot it
+id: cerny-brod
+name: Černý Brod
+kind: town
+coords: { x: 0.48, y: 0.55 }          # 0..1 over the map image — REQUIRED to plot it
 connections:
   - to: novigrad
-    travel: { distance_km: 30, days: 1, terrain: road, danger: low }
-encounter_table: velen-roads
+    travel: { distance_km: 35, days: 1, terrain: road, danger: low }
+encounter_table: velen-divocina
 discovered: true
 ---
-# Rozcestí
+# Černý Brod
 Atmospheric prose the DM reads / narrates from.
 ```
 

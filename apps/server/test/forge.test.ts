@@ -1,10 +1,13 @@
 import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterAll, describe, expect, it } from "vitest";
 import type { Llm } from "../src/llm/client.js";
 import { forgeCampaign } from "../src/vault/forge.js";
 import { SessionManager } from "../src/session/manager.js";
+
+const EXAMPLE_VAULT = fileURLToPath(new URL("../../../data/vault.example", import.meta.url));
 
 const tmpRoots: string[] = [];
 async function freshVault(): Promise<string> {
@@ -60,5 +63,33 @@ describe("AI campaign builder", () => {
     const mgr = await SessionManager.open(path.join(vault, "campaigns", folder));
     expect(mgr.campaign.locations["lesni-brod"]?.name).toBe("Lesní Brod");
     expect(mgr.campaign.locations["lesni-brod"]?.discovered).toBe(true); // hub starts revealed
+  });
+
+  it("builds inside an existing world without re-authoring its content (#49d)", async () => {
+    // A vault that already contains worlds/marka-havrani.
+    const vault = path.join(await freshVault(), "vault");
+    await fs.cp(EXAMPLE_VAULT, vault, { recursive: true });
+
+    const { folder } = await forgeCampaign(vault, silentLlm, {
+      name: "Krev na Stříbřence",
+      premise: "kupecká válka a stará kletba",
+      length: "short",
+      world: "marka-havrani",
+    });
+    const dir = path.join(vault, "campaigns", folder);
+
+    // World locations are NOT re-authored into the campaign folder.
+    const locFiles = await fs.readdir(path.join(dir, "locations")).catch(() => []);
+    expect(locFiles.length).toBe(0);
+
+    // The campaign opts into the world and starts at a real world location.
+    const mgr = await SessionManager.open(dir);
+    expect(mgr.campaign.config.world).toBe("marka-havrani");
+    expect(mgr.campaign.world?.name).toBe("marka-havrani");
+    expect(mgr.campaign.locations[mgr.campaign.config.starting_location]).toBeDefined();
+    // World factions seeded into the live session (the campaign is in the world).
+    expect(mgr.session.factions["kult-marakathe"]).toBeDefined();
+    // A generated quest exists and its giver is a real world NPC.
+    expect(Object.keys(mgr.campaign.lore)).toContain("hlavni-ukol");
   });
 });
