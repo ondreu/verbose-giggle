@@ -61,7 +61,11 @@ export function SheetPanel() {
     if (t === "cancelled") return;
     void sendAction(`Sešlu kouzlo ${prettySpell(spell)} (${spell})${targetClause(t)}.`);
   };
-  const activeId = session?.active_player ?? null;
+  // The rail shows the party member selected in the tab strip (#47); out of
+  // combat that's always the active player, in combat it may be a view-only peek.
+  const viewedPlayer = useGame((s) => s.viewedPlayer);
+  const activePlayer = session?.active_player ?? null;
+  const activeId = viewedPlayer ?? activePlayer;
   const actor = activeId ? actors[activeId] : null;
 
   if (!actor) {
@@ -88,7 +92,10 @@ export function SheetPanel() {
       ? Math.max(0, Math.min(100, ((actor.xp - curFloor) / (nextFloor - curFloor)) * 100))
       : 100;
   const readyToLevel = nextFloor != null && actor.xp >= nextFloor;
-  const disabled = busy || downed;
+  // When peeking at another member's sheet during combat, their action hub is
+  // inert — actions belong to whoever's turn it actually is (#47).
+  const viewingOther = activePlayer != null && actor.id !== activePlayer;
+  const disabled = busy || downed || viewingOther;
 
   // Action helpers for the consolidated action hub (#43).
   const act = (text: string) => { if (!disabled) void sendAction(text); };
@@ -293,8 +300,13 @@ export function SheetPanel() {
 
       {/* ── Consolidated action hub (#43a) ── */}
       <div className="mt-4 border-t border-ink/15 pt-3">
-        <div className="mb-2 font-display text-[11px] uppercase tracking-widest text-ink/50">
+        <div className="mb-2 flex items-center gap-2 font-display text-[11px] uppercase tracking-widest text-ink/50">
           Akce
+          {viewingOther && (
+            <span className="font-log normal-case tracking-normal text-ink/45">
+              — náhled cizí postavy, akce patří jejímu tahu
+            </span>
+          )}
         </div>
 
         {/* Attacks (#43c: armor filtered out by isWeaponId) */}

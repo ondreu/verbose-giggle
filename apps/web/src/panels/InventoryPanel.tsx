@@ -23,7 +23,10 @@ export function InventoryPanel() {
   const session = useGame((s) => s.session);
   const actors = useGame((s) => s.actors);
   const sendCommand = useGame((s) => s.sendCommand);
-  const actor = session?.active_player ? actors[session.active_player] : null;
+  // Follow the party tab strip selection (#47): viewed member, else active player.
+  const viewedPlayer = useGame((s) => s.viewedPlayer);
+  const actorId = viewedPlayer ?? session?.active_player ?? null;
+  const actor = actorId ? actors[actorId] : null;
 
   const [resolved, setResolved] = useState<Record<string, ResolvedItem>>({});
   const ids = (actor?.inventory ?? []).map((i) => i.id).join(",");
@@ -56,34 +59,34 @@ export function InventoryPanel() {
           připoutáno {actor.attunement.length}/3
         </span>
       </header>
-      <ul className="px-3 py-2">
+      <ul className="grid grid-cols-2 gap-x-3 gap-y-0.5 px-3 py-2">
         {actor.inventory.length === 0 && (
-          <li className="font-body text-sm italic text-subtext0">Prázdný batoh.</li>
+          <li className="col-span-2 font-body text-sm italic text-subtext0">Prázdný batoh.</li>
         )}
         {actor.inventory.map((item) => {
           const info = resolved[item.id];
           const name = info?.name ?? humanize(item.id);
           const props = info?.properties ?? [];
           return (
-            <li key={item.id} className="py-1">
-              <div className="flex items-center gap-2">
+            <li key={item.id} className="min-w-0 py-1">
+              <div className="flex items-center gap-1.5">
                 <span
-                  className={`h-2 w-2 rounded-full ${item.equipped ? "bg-gold" : "bg-surface2"}`}
+                  className={`h-1.5 w-1.5 shrink-0 rounded-full ${item.equipped ? "bg-gold" : "bg-surface2"}`}
                   title={item.equipped ? "vybaveno" : "v batohu"}
                 />
                 <ItemCard id={item.id}>
-                  <span className={`cursor-default font-body ${info?.magic ? "text-arcane" : "text-text"}`}>
+                  <span className={`cursor-default truncate font-body text-sm ${info?.magic ? "text-arcane" : "text-text"}`}>
                     {name}
                   </span>
                 </ItemCard>
                 {info?.magic && (
-                  <span className="font-log text-[9px] uppercase tracking-wider text-arcane/70" title={info.rarity}>
+                  <span className="shrink-0 font-log text-[9px] uppercase tracking-wider text-arcane/70" title={info.rarity}>
                     ✦
                   </span>
                 )}
-                {item.qty > 1 && <span className="font-log text-xs text-subtext0">×{item.qty}</span>}
+                {item.qty > 1 && <span className="shrink-0 font-log text-[11px] text-subtext0">×{item.qty}</span>}
                 <button
-                  className="ml-auto font-log text-[11px] text-subtext0 hover:text-gold"
+                  className="ml-auto shrink-0 font-log text-[10px] text-subtext0 hover:text-gold"
                   onClick={() =>
                     void sendCommand("equip_item", {
                       actor: actor.id,
@@ -97,7 +100,7 @@ export function InventoryPanel() {
               </div>
               {/* Weapon-property chips with Czech rules tooltips (#21). */}
               {props.length > 0 && (
-                <div className="ml-4 mt-0.5 flex flex-wrap gap-1">
+                <div className="ml-3 mt-0.5 flex flex-wrap gap-1">
                   {props.map((p) => (
                     <Tip key={p} content={<p className="font-body text-sm leading-snug text-text">{csWeaponPropertyDesc(p) || csWeaponProperty(p)}</p>}>
                       <span className="cursor-default rounded-sm border border-surface2 px-1 py-px font-log text-[9px] uppercase tracking-wider text-subtext0 hover:border-gold/40">

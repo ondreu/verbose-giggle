@@ -113,13 +113,13 @@ export function PlaySurface() {
         {inCombat && <div className="max-h-[40%] shrink-0 overflow-y-auto"><TurnTracker /></div>}
       </div>
       <Splitter onPointerDown={startDrag("rail")} />
-      {/* Right rail: party controls stay pinned at the top; the sheet (with its
-          actions) and the inventory each scroll on their own so the rail as a
-          whole never scrolls (per the #47 sketch annotations). */}
-      <aside className="flex min-h-0 min-w-0 flex-col gap-3 overflow-hidden">
+      {/* Right rail: the party tab strip stays pinned at the top and sits flush on
+          the parchment sheet; the sheet (with its actions) and the inventory each
+          scroll on their own so the rail as a whole never scrolls (#47). */}
+      <aside className="flex min-h-0 min-w-0 flex-col overflow-hidden">
         <div className="shrink-0"><PartyPanel /></div>
         <div className="min-h-0 flex-1 overflow-y-auto"><SheetPanel /></div>
-        <div className="max-h-[38%] shrink-0 overflow-y-auto"><InventoryPanel /></div>
+        <div className="mt-3 max-h-[38%] shrink-0 overflow-y-auto"><InventoryPanel /></div>
       </aside>
     </main>
   );

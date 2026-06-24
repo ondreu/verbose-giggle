@@ -211,10 +211,23 @@ on old code and items **#15, #17, #18** are likely already resolved by updating.
     (Účet · Kredity · AI DM · TTS · Obrázky · Info · Selfhosting) — Účet/Kredity
     are placeholders, the rest map to the existing `settings.json` fields. The
     play surface (`PlaySurface.tsx`) docks the combat turn-order/HP under the map
-    (middle column) and the right rail now pins the party controls at the top
+    (middle column) and the right rail now pins the **party tab strip** at the top
     with the character sheet (+ its actions) and the inventory each scrolling
-    independently, so the rail as a whole never scrolls. Nav collapses to
-    horizontal tabs below `lg`; splitters/persisted widths (#11) preserved. The
+    independently, so the rail as a whole never scrolls. The party
+    (`PartyPanel.tsx`) is a sticky, horizontal **name-tab strip** (one tab per
+    member, "+" tab to add one) sitting flush on the parchment sheet: picking a tab
+    switches the active character out of combat, or is a **view-only** peek in
+    combat (the active actor follows initiative; `viewedPlayer` in the store drives
+    the sheet/inventory, and the action hub goes inert while peeking). Each tab
+    shows an HP-colour pip (green/amber/red, dark when downed, skull when dead) and
+    a small **kebab menu** for camp/recall (room to grow). Out of combat the chat
+    composer also offers a **speaker toggle** (Postava ↔ Celá družina): the
+    whole-party voice tags the turn so the DM treats the input as coming from the
+    party collectively (`runTurn` injects a turn-scoped system cue; engine tools
+    still target actors by id, so determinism is unaffected). The inventory
+    (`InventoryPanel.tsx`) lays items out in a two-column grid with smaller text.
+    Nav collapses to horizontal tabs below `lg`; splitters/persisted widths (#11)
+    preserved. The
     chat column (`ChatPanel.tsx`) was reworked to the sketch: the flat 9-button
     toolbar is now a clean top row (Shrnutí · Deník · Úkoly · Pravidla + the
     global hlas toggle); player turns render as a distinct labelled block

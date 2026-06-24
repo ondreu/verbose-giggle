@@ -24,6 +24,10 @@ export function ChatPanel() {
   const undoTurn = useGame((s) => s.undoTurn);
   const generateImage = useGame((s) => s.generateImage);
   const imageLoading = useGame((s) => s.imageLoading);
+  const session = useGame((s) => s.session);
+  const actors = useGame((s) => s.actors);
+  const partyVoice = useGame((s) => s.partyVoice);
+  const setPartyVoice = useGame((s) => s.setPartyVoice);
   const activeQuests = useGame(
     (s) => Object.values(s.session?.quests ?? {}).filter((q) => q.status === "active").length,
   );
@@ -49,6 +53,13 @@ export function ChatPanel() {
     void sendAction(text);
     setInput("");
   };
+
+  // Out of combat with more than one party member, let the player choose whether
+  // an action is spoken by the active character or by the whole party (#47).
+  const inCombat = Boolean(session?.combat);
+  const partySize = Object.values(actors).filter((a) => a.faction === "party").length;
+  const activeName = session?.active_player ? actors[session.active_player]?.name : null;
+  const showVoiceToggle = !inCombat && partySize > 1;
 
   return (
     <section className="panel flex h-full flex-col">
@@ -146,7 +157,33 @@ export function ChatPanel() {
         <div className="border-t border-blood/40 bg-blood/10 px-4 py-1.5 font-log text-xs text-blood">{error}</div>
       )}
 
-      <div className="flex gap-2 border-t border-black/60 bg-bg-mantle/60 p-2">
+      <div className="flex flex-col gap-2 border-t border-black/60 bg-bg-mantle/60 p-2">
+        {showVoiceToggle && (
+          <div className="flex items-center gap-2 font-log text-[10px] text-subtext0">
+            <span className="uppercase tracking-wider">Mluví</span>
+            <div className="flex overflow-hidden rounded-sm border border-surface1">
+              <button
+                className={`px-2 py-0.5 transition-colors ${
+                  !partyVoice ? "bg-gold/15 text-gold" : "text-subtext0 hover:text-text"
+                }`}
+                onClick={() => setPartyVoice(false)}
+                title="Akce za aktivní postavu"
+              >
+                {activeName ?? "Postava"}
+              </button>
+              <button
+                className={`border-l border-surface1 px-2 py-0.5 transition-colors ${
+                  partyVoice ? "bg-gold/15 text-gold" : "text-subtext0 hover:text-text"
+                }`}
+                onClick={() => setPartyVoice(true)}
+                title="Akce za celou družinu"
+              >
+                Celá družina
+              </button>
+            </div>
+          </div>
+        )}
+        <div className="flex gap-2">
         <textarea
           className="min-h-[2.6rem] flex-1 resize-none rounded-sm border border-surface1 bg-bg-crust px-3 py-2 font-body text-text outline-none focus:border-gold/60"
           placeholder="Co děláš? (Enter odešle, Shift+Enter nový řádek)"
@@ -163,6 +200,7 @@ export function ChatPanel() {
         <button className="btn-gold px-4 py-2 text-sm" onClick={submit} disabled={busy}>
           {busy ? "…" : "Konat"}
         </button>
+        </div>
       </div>
     </section>
   );

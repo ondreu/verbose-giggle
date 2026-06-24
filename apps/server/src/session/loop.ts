@@ -169,6 +169,8 @@ export async function runTurn(opts: {
   llm: Llm;
   bus: EventBus;
   input: string;
+  /** Out-of-combat: treat the input as spoken by the whole party, not one PC (#47). */
+  partyVoice?: boolean;
 }): Promise<{ narration: string }> {
   const { manager, llm, bus, input } = opts;
   const gs = manager.buildGameState();
@@ -188,10 +190,28 @@ export async function runTurn(opts: {
     (m): ChatMsg => ({ role: m.role, content: m.content, name: m.name, tool_call_id: m.tool_call_id }),
   );
   const turnNote = turnControlMessage(manager, gs);
+  // Whole-party voice (#47): a turn-scoped cue so the DM treats this input as
+  // coming from the party collectively rather than the single active PC. Only
+  // meaningful out of combat — in combat the initiative order owns the turn.
+  const partyMembers = Object.values(gs.actors)
+    .filter((a) => a.faction === "party")
+    .map((a) => a.name)
+    .join(", ");
+  const partyVoiceNote: ChatMsg | null =
+    opts.partyVoice && !combat
+      ? {
+          role: "system",
+          content:
+            "Tento pokyn vyslovuje CELÁ DRUŽINA, ne jen aktivní postava. Vztáhni ho na " +
+            `všechny členy družiny (${partyMembers || "družina"}), kde to dává smysl, a vyřeš `+
+            "případné hody/efekty pro každého dotčeného člena zvlášť přes nástroje.",
+        }
+      : null;
   const messages: ChatMsg[] = [
     { role: "system", content: SYSTEM_PROMPT },
     { role: "system", content: sceneSnapshot(manager.session, gs.actors, sceneConnections(manager), availableQuests(manager), sceneWorld(manager), sceneOpts(manager)) },
     ...(turnNote ? [turnNote] : []),
+    ...(partyVoiceNote ? [partyVoiceNote] : []),
     ...recent,
     { role: "user", content: input },
   ];
