@@ -10,8 +10,11 @@ const PATHS: Record<string, string> = {
     "M12 2 4 5v6c0 5 3.4 8.5 8 11 4.6-2.5 8-6 8-11V5l-8-3Zm0 2.2 6 2.25V11c0 3.7-2.4 6.5-6 8.6V4.2Z",
   heart:
     "M12 21S4 14.5 4 8.8C4 6 6 4 8.5 4 10.2 4 11.5 5 12 6.2 12.5 5 13.8 4 15.5 4 18 4 20 6 20 8.8 20 14.5 12 21 12 21Z",
+  // Parchment/scroll with two text lines. The line cut-outs are wound opposite
+  // to the body so they punch through under the default nonzero fill (the old
+  // path's inner cut wound the same way and filled in as a solid square).
   scroll:
-    "M5 4h11a2 2 0 0 1 2 2v11a3 3 0 0 0 3 3H8a3 3 0 0 1-3-3V4Zm2 2v11a1 1 0 0 0 1 1h8.2A3 3 0 0 1 16 17V6H7Z",
+    "M6 3h10a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm2 5v2h8V8H8Zm0 4v2h6v-2H8Z",
   // Bound journal/diary — distinct from the scroll used elsewhere (#deník).
   book:
     "M6 2h11a2 2 0 0 1 2 2v16a1 1 0 0 1-1.45.9L13 18.6l-4.55 2.3A1 1 0 0 1 7 20V4H6a1 1 0 0 1 0-2Zm3 2v13.4l3.55-1.8a1 1 0 0 1 .9 0L17 17.4V4H9Zm2 3h4v2h-4V7Z",
