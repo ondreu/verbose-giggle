@@ -9,6 +9,7 @@ import { StartMenu } from "./components/StartMenu";
 import { GameOverModal } from "./components/GameOverModal";
 import { EmberField } from "./components/EmberField";
 import { LoginScreen } from "./components/LoginScreen";
+import { AdminPage } from "./components/AdminPage";
 import { ReferenceModal } from "./panels/ReferenceModal";
 import { fetchAuthConfig, fetchCurrentUser, type AuthConfig } from "./auth";
 
@@ -57,6 +58,10 @@ export default function App() {
   useEffect(() => {
     if (view === "play" && campaign && narrationLen === 0) void intro();
   }, [view, campaign, narrationLen, intro]);
+
+  // Admin panel (#57d) lives at /admin; it's gated server-side (its API
+  // returns 403 to non-admins), so render it directly without the login gate.
+  if (window.location.pathname.startsWith("/admin")) return <AdminPage />;
 
   // Hold rendering until the session check resolves (avoids a login flash).
   if (!authChecked) return <div className="fixed inset-0 bg-bg-crust" />;

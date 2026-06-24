@@ -94,3 +94,31 @@ export const changePassword = (currentPassword: string, newPassword: string) =>
   put("/api/account/password", { currentPassword, newPassword });
 
 export const deleteAccount = () => request("DELETE", "/api/account");
+
+// --- Admin (#57d) ----------------------------------------------------------
+
+export interface AdminUser extends AuthUser {
+  createdAt: string;
+}
+export interface AdminOverview {
+  users: number;
+  admins: number;
+  unverified: number;
+}
+export interface AuditEntry {
+  id: string;
+  actorId: string;
+  action: string;
+  targetId: string | null;
+  detail: string | null;
+  createdAt: string;
+}
+
+export const adminListUsers = () => request<{ users: AdminUser[] }>("GET", "/api/admin/users");
+export const adminOverview = () => request<AdminOverview>("GET", "/api/admin/overview");
+export const adminAudit = () => request<{ entries: AuditEntry[] }>("GET", "/api/admin/audit");
+export const adminSetRole = (id: string, role: "admin" | "user") =>
+  put(`/api/admin/users/${id}/role`, { role });
+export const adminSetVerified = (id: string, verified: boolean) =>
+  put(`/api/admin/users/${id}/verify`, { verified });
+export const adminDeleteUser = (id: string) => request("DELETE", `/api/admin/users/${id}`);

@@ -141,8 +141,11 @@ ne „nice to have".
 - **[x] #57c — Audit log.** Append-only tabulka `audit_log` (v3 migrace) +
   `AuditStore`; každá admin mutace (role/verify/delete) zapíše záznam s actorem,
   cílem a detailem. `auth/audit.ts`. Testy v `admin.test.ts`.
-- **#57d — UI.** Samostatná `/admin` routa (gated rolí) — čistší než rozšiřovat
-  `SettingsModal`.
+- **[x] #57d — UI.** Samostatná stránka `AdminPage` na `/admin` (App ji vykreslí
+  podle `location.pathname`; bez client routeru). Gated server-side — `/api/admin/*`
+  vrací 403 ne-adminům, takže ne-admin vidí „přístup odepřen". Tabulka uživatelů
+  (změna role / ověření / smazání), overview počty a audit log. Admin má odkaz
+  na panel v záložce *Účet*.
 
 ### #58 — Nastavení účtu pro uživatele
 

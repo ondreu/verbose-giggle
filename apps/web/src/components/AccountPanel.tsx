@@ -63,6 +63,15 @@ export function AccountPanel() {
         </button>
       </div>
 
+      {user.role === "admin" && (
+        <a
+          href="/admin"
+          className="self-start rounded-sm border border-ink/30 px-3 py-1.5 font-display text-sm hover:bg-ink/10"
+        >
+          Otevřít admin panel
+        </a>
+      )}
+
       <DisplayNameForm user={user} onUpdated={setUser} />
       <EmailForm user={user} onUpdated={setUser} />
       <PasswordForm />
