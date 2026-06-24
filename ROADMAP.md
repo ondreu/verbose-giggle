@@ -521,10 +521,14 @@ Aktuálně aplikace závisí na externě namountovaném datasetu (5e-bits/5e-dat
 a všechna herní terminologie v UI je anglická. Cíl: zabudovat distribuovatelnou
 kopii dat a přeložit ji do češtiny.
 
-- **#45a — Bundled SRD kopie.** Stáhnout a přibalit subset SRD JSON souborů
-  přímo do repozitáře (pod `packages/srd/data/` nebo `apps/server/data/srd/`),
-  aby aplikace fungovala bez nutnosti externího mountování. Zachovat možnost
-  override přes nastavení Cesta k SRD pro uživatele s vlastní databází.
+- **[~] #45a — Bundled SRD kopie.** Místo + drátování hotové; chybí jen
+  commitnout samotné JSON soubory (dělá autor). Bundled složka je
+  **`packages/srd/data/`** (README se seznamem souborů ke stažení + `.gitkeep`).
+  Server ji bere jako **default cestu k SRD** (`bundledSrdDir` v
+  `apps/server/src/config.ts`) když není `SRD_PATH`; Docker image ji nasází do
+  `/data/srd` (`docker/Dockerfile`), takže běží bez mountu. Override přes
+  `SRD_PATH` / in-app *Cesta k SRD* / Compose bind mount zůstává zachován.
+  Soubory pojmenovat `5e-SRD-<Category>.json` (loader je tolerantní k chybějícím).
 - **#45b — Český překlad názvů.** Přeložit jména kouzel, schopností (feats),
   dovedností (skills), ras, povolání, itemů a dalších SRD entit do češtiny.
   Překlad ukládat jako vrstvu nad SRD daty (`packages/srd/src/cs/`) — SRD IDs

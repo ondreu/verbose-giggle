@@ -40,7 +40,7 @@ services:
       # the on-disk path. To access files directly, swap for: ./vault:/data/vault
       - vault_data:/data/vault
       - ./maps:/data/maps                  # map images
-      - ./srd:/data/srd                    # SRD JSON (or rely on the copy bundled in the image)
+      - ./srd:/data/srd                    # optional: your own SRD JSON (else the image's bundled copy, #45a, is used)
       # Live session state is written inside each campaign's state/ folder
       # under vault_data, so it persists with the vault automatically.
     labels:

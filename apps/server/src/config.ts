@@ -1,5 +1,20 @@
 /** Runtime configuration from environment (§9.1, §14.2). */
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import type { Settings } from "./settings.js";
+
+/**
+ * Bundled SRD dataset shipped in-repo (#45a) under `packages/srd/data`, so the
+ * app works with no externally mounted dataset. Resolved relative to this
+ * module: at runtime this file lives at `apps/server/dist/config.js`, in dev at
+ * `apps/server/src/config.ts` — both are three levels under the repo root, so
+ * the same relative hop reaches `packages/srd/data` either way. `SRD_PATH` (env)
+ * and the in-app *Cesta k SRD* setting still override it.
+ */
+export const bundledSrdDir = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "../../../packages/srd/data",
+);
 
 export interface Config {
   port: number;
@@ -62,10 +77,11 @@ export function loadConfig(): Config {
     port: Number(process.env.PORT ?? 3000),
     host: process.env.HOST ?? "0.0.0.0",
     vaultPath,
-    // SRD dataset path. In the Docker image the dataset is mounted at /data/srd
-    // (see docker-compose: ./srd:/data/srd); that is the default so it loads
-    // with no extra config. Override with SRD_PATH (e.g. local dev).
-    srdPath: process.env.SRD_PATH ?? "/data/srd",
+    // SRD dataset path. Defaults to the in-repo bundled copy (#45a) so the app
+    // works with no external mount. Docker sets SRD_PATH=/data/srd (where the
+    // image stages the same bundled copy and Compose can mount a custom one);
+    // local dev with no SRD_PATH falls back to the bundled folder.
+    srdPath: process.env.SRD_PATH ?? bundledSrdDir,
     llm: {
       baseUrl: process.env.LLM_BASE_URL ?? "https://api.mistral.ai/v1",
       apiKey: llmApiKey,
