@@ -214,7 +214,15 @@ on old code and items **#15, #17, #18** are likely already resolved by updating.
     (middle column) and the right rail now pins the party controls at the top
     with the character sheet (+ its actions) and the inventory each scrolling
     independently, so the rail as a whole never scrolls. Nav collapses to
-    horizontal tabs below `lg`; splitters/persisted widths (#11) preserved.
+    horizontal tabs below `lg`; splitters/persisted widths (#11) preserved. The
+    chat column (`ChatPanel.tsx`) was reworked to the sketch: the flat 9-button
+    toolbar is now a clean top row (Shrnutí · Deník · Úkoly · Pravidla + the
+    global hlas toggle); player turns render as a distinct labelled block
+    ("Hráčova zpráva") and each DM line carries a per-message action rail —
+    **Předčíst** (read this line aloud, new `speakLine` store action),
+    **Vrátit tah**, **Regenerovat** and **Jiným modelem** (prepared UI stubs that
+    surface a "připravujeme" hint), and **Vizualizovat** — always shown on the
+    latest line, revealed on hover for older ones.
   - **[x] #47b — Design consistency.** All new chrome reuses the existing tokens
     (`panel`/`panel-title`/`btn-gold`/`btn-ghost`/`settings-input`, the
     gold/blood/arcane accents, the parchment Settings surface) and the original
