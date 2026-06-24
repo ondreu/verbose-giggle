@@ -189,8 +189,8 @@ on old code and items **#15, #17, #18** are likely already resolved by updating.
   options, snapshots), a steady gold **nav-glow** under the active home-nav item,
   and a warm gold **focus-visible ring** on buttons/links for keyboard a11y. No
   emoji, no gratuitous gradients — every effect reads as candlelight on metal.
-- **#7 — Font legibility.** The display font is pretty but hard to read; bump
-  weight/size a touch for body text and lean on Markdown (#1) for structure.
+- **[N/A] ~~#7 — Font legibility.~~** Vyškrtnuto (2026-06-24) — mimo aktuální
+  zaměření; revisit later if needed.
 - **[x] #51 — Deník kostek schovat jako vedlejší panel.** Done. Rušivý byl
   *samostatný* panel `Deník kostek` v pravém railu (dole v `aside` v
   `PlaySurface`), který scrolloval na každý nový záznam — ten byl odstraněn
@@ -264,10 +264,9 @@ on old code and items **#15, #17, #18** are likely already resolved by updating.
   tool for drag-panning** the board, plus native scroll. `cell_ft` stays honest
   for distance math. **Multi-cell creatures** render with an n×n footprint from
   `actor.size` (Large 2×2, Huge 3×3, Gargantuan 4×4) on the square board.
-- **#5 — Bigger, better showcase vault.** More locations/NPCs/encounters/lore so
-  the demo sells the experience. Build guide in `docs/SHOWCASE.md`; the showcase
-  vault content can be authored and dropped into `data/vault.example` (or a new
-  `data/vault.showcase`).
+- **[N/A] ~~#5 — Bigger, better showcase vault.~~** Vyškrtnuto (2026-06-24) —
+  mimo aktuální zaměření; build guide zůstává v `docs/SHOWCASE.md`, kdyby se k
+  tomu chtěl někdo vrátit.
 - **[x] #31 — DM campaign intro and "how to begin" prompt.** Done. A new
   `CAMPAIGN_START` instruction (`apps/server/src/llm/prompt.ts`) has the DM set
   the scene (world/location/hook) in a few sentences and then explicitly ask the
@@ -761,6 +760,135 @@ kampaně v něm:
   for that single call (the UI should let the player pick the model — needs an
   `/api/action` model param threaded into `LlmClient.chat`). Both should reuse
   the existing tool-loop/streaming path so determinism (#12) is unaffected.
+
+---
+
+## P0 — Účty, kredity a provoz (nový směr, 2026-06-24)
+
+> **Status: brainstorm / design — nic z toho se zatím neimplementuje.** Tahle
+> sekce je záměrně dlouhá na "proč" a otázky, ne na "jak v kódu". Posouvá appku
+> z dnešního **single-tenant self-hosted** modelu (jeden vault, jeden Basic-Auth
+> zámek na celý server, klíče k LLM/obrázkům/TTS vlastní provozovatel) k provozu,
+> kde má **více uživatelů vlastní účet, vlastní data a vlastní kredity**.
+> `LoginScreen` (email/heslo/registrace) i záložky *Účet*/*Kredity* v
+> `SettingsModal` už existují jako UI stuby — chybí backend.
+
+### ⚠️ Rozhodnutí, která musíme udělat PŘED implementací
+
+Všechno níže visí na třech volbách. Bez nich nemá smysl psát kód:
+
+1. **Multi-tenant vs. „přihlášení jen jako zámek"?** Buď (a) appka zůstane
+   jednou instancí s jedním sdíleným vaultem a účty jsou jen autentizační vrstva
+   (jednoduché, ale „kredity per uživatel" pak skoro nedávají smysl), nebo
+   (b) plný multi-tenant: každý uživatel má **vlastní izolovaná data** (kampaně,
+   postavy, sezení). (b) je to, co kredity + nastavení účtu implikují, a je to
+   výrazně větší práce (izolace vaultu, autorizace na každém endpointu).
+2. **Kdo platí LLM/obrázky/TTS?** Dnes provozovatel. Možnosti: (a) **kredity =
+   provozovatel platí API, uživatel utrácí kredity** (potřeba metering + billing
+   + ochrana proti zneužití), nebo (b) **BYO-key** (uživatel zadá vlastní klíč,
+   kredity jsou jen kosmetika/limit), nebo (c) hybrid. Tohle určuje, jestli
+   „kredity" je reálná měna nebo jen rate-limit.
+3. **Self-hosted single-user zůstává podporovaný?** Pokud ano, všechno nové musí
+   jít **vypnout** (`AUTH_MODE=off`), aby stávající NAS nasazení (#50) fungovala
+   beze změny. Doporučení: ano, feature-flag `multiuser` default off.
+
+### #55 — Email registrace + autentizace
+
+- **#55a — Datová vrstva uživatelů.** Dnes není kam ukládat uživatele. Návrh:
+  lehká DB (SQLite soubor ve vaultu — žádná nová infra, drží se „file-first"
+  filozofie vaultu) s tabulkou `users` (id, email, `password_hash` (argon2/bcrypt),
+  `email_verified`, `created_at`, role). Alternativa: JSON v `<vault>/users/`,
+  ale DB je správně kvůli unikátnímu emailu, kreditním transakcím a auditu.
+- **#55b — Registrace + ověření emailu.** `POST /api/auth/register` (email +
+  heslo, validace síly, hash), pošle ověřovací odkaz. Potřeba **odesílání emailů**
+  (SMTP konfig v env / nastavení — nová závislost, dnes žádná není). Ověření
+  přes podepsaný token s expirací.
+- **#55c — Login + session.** `POST /api/auth/login` → buď **httpOnly cookie
+  session**, nebo **JWT** (access + refresh). Cookie je bezpečnější default pro
+  webovou appku (odolnější vůči XSS krádeži tokenu). Nahradit/obejít stávající
+  `config.basicAuth` (ten zůstane jako „op-only" zámek pro self-hosted režim).
+- **#55d — Reset hesla.** `POST /api/auth/forgot` + `/reset` přes emailový token
+  (sdílí infra z #55b).
+- **#55e — Napojit `LoginScreen`.** Stub UI už je hotové — jen vyměnit
+  `onContinue()` stub za reálná volání, error stavy, „pokračovat bez přihlášení"
+  ponechat jen v self-hosted režimu.
+- **#55f — Autorizace na endpointech.** Každý `/api/*`, který sahá na data, musí
+  vědět **čí** data čte/píše. Tohle je největší skrytá práce — protáhnout `userId`
+  z session do `SessionManager`/vaultu a izolovat kampaně per uživatel (viz
+  rozhodnutí #1). Bez toho je „registrace" jen kosmetika.
+
+### #56 — Uživatelské kredity / metering
+
+- **#56a — Kreditní účet + transakce.** Tabulka `credit_ledger`
+  (user_id, delta, důvod, ref, timestamp) — kredity jako **append-only ledger**,
+  ne jen čítač (auditovatelné, nerozbije se při souběhu). Zůstatek = součet.
+- **#56b — Měření spotřeby.** Kde se kredity strhávají: LLM tah (per token nebo
+  per akce?), generování obrázku, TTS. Potřeba zachytit usage z `LlmClient.chat`
+  / `ImageClient` / `/api/tts` a převést na kredity podle ceníku. **Pozor na
+  determinismus (#12):** strhávání kreditů je vedlejší efekt mimo engine — nesmí
+  ovlivnit herní stav, jen ho obalit. Musí zvládnout i selhání volání (nestrhávat
+  za chybu) a streaming (#32 — účtovat až po dokončení tahu).
+- **#56c — Vynucení limitu.** Před drahou operací zkontrolovat zůstatek; při 0
+  vrátit čistý 402/„došly kredity" stav do UI (ne pád). Rozhodnout chování:
+  tvrdý stop vs. degradace na mock narrator.
+- **#56d — Dobíjení.** Buď reálná **platební brána** (Stripe…) — velký krok,
+  vlastní compliance — nebo zatím jen **admin grant** (dev panel #57 přidá
+  kredity ručně). Doporučení: začít admin grantem, platby až později.
+- **#56e — UI.** Naplnit záložku *Kredity* v `SettingsModal` (zůstatek, historie
+  transakcí, případně koupit). Ukazatel zůstatku v hlavičce.
+
+### #57 — Dev / admin panel pro správu serveru
+
+- **#57a — Role + ochrana.** `role: admin` na uživateli; admin endpointy za
+  zvláštní autorizací (a ideálně i za stávajícím op-zámkem). Nikdy ne přístupné
+  běžnému uživateli — tohle je bezpečnostně nejcitlivější část.
+- **#57b — Co panel umí.** Návrh rozsahu: seznam uživatelů (+ verifikace, ban,
+  reset hesla), **ruční úprava kreditů** (#56d), přehled spotřeby/nákladů,
+  globální server settings (dnes `settings.json` — model, klíče, ceník kreditů),
+  správa kampaní/vaultů, čtení logů, health/stav (LLM provider dosažitelný,
+  velikost vaultu, aktivní sezení).
+- **#57c — Audit log.** Každá admin akce (grant kreditů, ban, změna settings) se
+  loguje — kdo, co, kdy. Append-only, stejný princip jako dice log / ledger.
+- **#57d — UI.** Buď samostatná `/admin` routa v existující React appce
+  (gated rolí), nebo rozšířit `SettingsModal` o admin-only záložky. Samostatná
+  routa je čistší (oddělené od hráčského UI).
+
+### #58 — Nastavení účtu pro uživatele
+
+- **#58a — Naplnit záložku *Účet*** v `SettingsModal` (dnes placeholder): změna
+  emailu (s re-verifikací), změna hesla, zobrazované jméno, smazání účtu
+  (GDPR — viz níže), odhlášení.
+- **#58b — Per-uživatel preference.** Dnes jsou voice toggly v `localStorage` a
+  zbytek v server-wide `settings.json`. V multi-user světě musí být
+  **uživatelské** preference vázané na účet (jazyk #48, hlas, jiná než globální
+  nastavení), zatímco provider-klíče zůstanou globální (op-only) nebo BYO-key
+  per uživatel (rozhodnutí #2).
+- **#58c — Oddělit „globální" a „uživatelská" nastavení.** Refaktor `settings.ts`:
+  to, co je dnes jedno JSON pro celý server, se rozpadne na server-config
+  (admin, #57) vs. per-user-config (#58). Důležité, ať se to nerozbije pro
+  self-hosted single-user (jeden uživatel = obojí splývá).
+
+### Co dál / co snadno zapomeneme (anything else)
+
+- **Bezpečnost & zneužití:** rate-limiting registrace a login (brute-force),
+  CAPTCHA/throttle, ochrana proti vyčerpání cizích kreditů, CSRF u cookie session,
+  secret management (klíče dnes v `settings.json` — u multi-user to chce zpřísnější
+  ochranu).
+- **Email infra:** dnes nulová. Verifikace/reset/notifikace vyžadují SMTP nebo
+  službu (Resend/SES…) — nová provozní závislost + nová položka v setup docs.
+- **GDPR / data:** mazání účtu musí smazat i jeho vault data; export dat;
+  souhlas. Relevantní, protože UI je české → pravděpodobně EU uživatelé.
+- **Migrace existujících dat:** dnešní vault nemá majitele. Při zapnutí
+  multi-user buď přiřadit vše „adminovi", nebo nechat self-hosted bez vlastnictví.
+- **Souběh:** víc uživatelů = víc souběžných sezení. `SessionManager` dnes
+  předpokládá jeden aktivní vault/kampaň — multi-tenant chce session/kampaň per
+  uživatel (souvisí s #55f).
+- **Cena LLM vs. kredity:** potřeba reálný ceník (kolik kreditů = tah/obrázek/TTS)
+  navázaný na skutečné náklady poskytovatele, jinak provozovatel prodělává.
+- **Doporučené pořadí:** rozhodnutí #1–#3 → #55 (auth, bez něj nic nedává smysl)
+  → #58 (nastavení účtu, levné nad auth) → #57 (admin panel, umožní ruční kredity)
+  → #56 (kredity/metering, nejtěžší, ať je až nad stabilní auth+admin). Platby
+  (#56d Stripe) až úplně nakonec.
 
 ---
 
