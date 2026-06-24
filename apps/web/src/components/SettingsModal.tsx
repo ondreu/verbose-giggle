@@ -5,7 +5,7 @@ import { Icon } from "../components/Icon";
 // Masked settings view returned by GET /api/settings — secret values are
 // never sent down, only whether they are set.
 interface SettingsView {
-  llm: { baseUrl: string; model: string; provider: "auto" | "mock"; apiKeySet: boolean };
+  llm: { baseUrl: string; model: string; provider: "auto" | "mock"; apiKeySet: boolean; altModels: string[] };
   image: { enabled: boolean; baseUrl: string; model: string; apiKeySet: boolean; usesLlmKey: boolean };
   tts: {
     engine: "azure" | "piper" | "off";
@@ -42,6 +42,8 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
   const [provider, setProvider] = useState<"auto" | "mock">("auto");
   const [llmBaseUrl, setLlmBaseUrl] = useState("");
   const [llmModel, setLlmModel] = useState("");
+  // Alternate models for the "Jiným modelem" re-roll (#54), one per line.
+  const [llmAltModels, setLlmAltModels] = useState("");
   const [llmKey, setLlmKey] = useState("");
   const [imageEnabled, setImageEnabled] = useState(false);
   const [imageBaseUrl, setImageBaseUrl] = useState("");
@@ -60,6 +62,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
     setProvider(v.llm.provider);
     setLlmBaseUrl(v.llm.baseUrl);
     setLlmModel(v.llm.model);
+    setLlmAltModels((v.llm.altModels ?? []).join("\n"));
     setLlmKey("");
     setImageEnabled(v.image.enabled);
     setImageBaseUrl(v.image.baseUrl);
@@ -95,6 +98,10 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
           provider,
           baseUrl: llmBaseUrl,
           model: llmModel,
+          altModels: llmAltModels
+            .split(/[\n,]/)
+            .map((m) => m.trim())
+            .filter(Boolean),
           ...(llmKey ? { apiKey: llmKey } : {}),
         },
         image: {
@@ -249,6 +256,18 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                     <Field label="Model">
                       <input className="settings-input" value={llmModel} onChange={(e) => setLlmModel(e.target.value)} />
                     </Field>
+                    <Field label="Alternativní modely (pro „Jiným modelem“)">
+                      <textarea
+                        className="settings-input min-h-[4rem] resize-y font-log text-xs"
+                        placeholder={"Jeden model na řádek, např.\nmistral-large-latest\nopen-mistral-nemo"}
+                        value={llmAltModels}
+                        onChange={(e) => setLlmAltModels(e.target.value)}
+                      />
+                    </Field>
+                    <p className="text-xs italic text-ink/50">
+                      Tyhle modely se nabídnou v chatu u zprávy DM přes „Jiným modelem" — přegenerují
+                      poslední tah zvoleným modelem (stejný klíč i poskytovatel, jen jiný model).
+                    </p>
                   </fieldset>
                 )}
 

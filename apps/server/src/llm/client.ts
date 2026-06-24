@@ -54,9 +54,14 @@ export class LlmClient implements Llm {
   private client: OpenAI;
   private model: string;
 
-  constructor(config: Config) {
+  /**
+   * `modelOverride` swaps the model for this instance only (#54 "Jiným
+   * modelem"): the regenerate route builds a one-off client with a player-chosen
+   * model while the base URL / key stay the configured ones.
+   */
+  constructor(config: Config, modelOverride?: string) {
     this.client = new OpenAI({ apiKey: config.llm.apiKey || "missing", baseURL: config.llm.baseUrl });
-    this.model = config.llm.model;
+    this.model = modelOverride?.trim() || config.llm.model;
   }
 
   async chat(

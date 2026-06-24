@@ -179,6 +179,43 @@ describe("LLM turn loop (mocked model)", () => {
     expect(types).toContain("narration");
   });
 
+  it("regenerates the last turn: rewinds, re-runs the same input, replaces narration (#54)", async () => {
+    const { checkpointTurn, undoLastTurn } = await import("../src/vault/snapshots.js");
+    let mgr = await SessionManager.open(await freshCampaign());
+    const dir = mgr.campaign.dir;
+    const bus = { emit: () => undefined, subscribe: () => () => undefined } as unknown as EventBus;
+
+    // A model whose narration we can flip between runs, to prove the second run
+    // replaces the first rather than stacking.
+    let answer = "První verze vyprávění.";
+    const llm = { async chat() { return { content: answer, toolCalls: [] }; } } as unknown as LlmClient;
+
+    // The live session is always persisted before a turn (intro / prior turns);
+    // flush it so the pre-turn checkpoint captures real on-disk state.
+    await mgr.checkpoint(mgr.buildGameState());
+
+    // First turn (mirrors /api/action: checkpoint pre-turn, then run).
+    await checkpointTurn(dir, "Před: vstup");
+    await runTurn({ manager: mgr, llm, bus, input: "Rozhlédnu se po místnosti." });
+    expect(mgr.session.chat.filter((m) => m.role === "user")).toHaveLength(1);
+    expect(mgr.session.chat.at(-1)?.content).toBe("První verze vyprávění.");
+
+    // Regenerate (mirrors /api/regenerate): capture the last input, rewind,
+    // reopen on the rewound state, re-checkpoint, re-run with a new answer.
+    const lastUser = [...mgr.session.chat].reverse().find((m) => m.role === "user");
+    expect(await undoLastTurn(dir)).toBe(true);
+    mgr = await SessionManager.open(dir);
+    await checkpointTurn(dir, "Před: vstup");
+    answer = "Druhá, čerstvá verze.";
+    await runTurn({ manager: mgr, llm, bus, input: lastUser!.content! });
+
+    // Exactly one user message survives (the rewind dropped the old one before
+    // re-running), and the narration is the fresh one, not the original.
+    expect(mgr.session.chat.filter((m) => m.role === "user")).toHaveLength(1);
+    expect(mgr.session.chat.at(-1)?.content).toBe("Druhá, čerstvá verze.");
+    expect(mgr.session.chat.some((m) => m.content === "První verze vyprávění.")).toBe(false);
+  });
+
   it("runIntro narrates an opening scene and records it once (#31)", async () => {
     const { MockLlmClient } = await import("../src/llm/mock.js");
     const { runIntro } = await import("../src/session/loop.js");

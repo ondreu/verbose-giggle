@@ -23,6 +23,11 @@ export interface Settings {
     model?: string;
     /** "mock" forces the offline narrator even when a key is present. */
     provider?: "auto" | "mock";
+    /**
+     * Alternate model ids the player can re-roll a turn with ("Jiným modelem",
+     * #54). Same provider/key as `model`; only the model name differs.
+     */
+    altModels?: string[];
   };
   image?: {
     enabled?: boolean;

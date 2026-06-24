@@ -757,13 +757,20 @@ kampaně v něm:
   exploration-first opening, and the DM prompt switches to open-ended mode (offer
   opportunities, no railroad). The world (locations, NPCs, factions, roaming
   encounters) is still generated.
-- **#54 — Per-message "Regenerovat" / "Jiným modelem".** The chat message-action
-  menu (#47) already shows both buttons; they need backend wiring. *Regenerovat*
-  = drop the last DM turn and re-run it (undo + resend the prior player action
-  through the DM loop). *Jiným modelem* = same, but with a one-off model override
-  for that single call (the UI should let the player pick the model — needs an
-  `/api/action` model param threaded into `LlmClient.chat`). Both should reuse
-  the existing tool-loop/streaming path so determinism (#12) is unaffected.
+- **[x] #54 — Per-message "Regenerovat" / "Jiným modelem".** Done. New
+  `POST /api/regenerate` drops the last DM turn (rewinds via `undoLastTurn` to the
+  pre-turn checkpoint, re-opens the manager on the rewound state, re-checkpoints)
+  and re-runs the player's prior action through the existing `runTurn` tool-loop
+  — so streaming (#32) and determinism (#12) are unaffected. *Regenerovat* uses
+  the configured model; *Jiným modelem* passes an optional `model` that builds a
+  one-off `LlmClient(config, modelOverride)` (same base URL / key, only the model
+  name differs). The alternates are authored in Settings → AI DM (`llm.altModels`,
+  one per line), surfaced to the chat via `/api/state` `models`, and offered as a
+  submenu under the DM message's "Jiným modelem" action (the menu's re-roll items
+  only show on the latest DM line). The client `regenerate(model?)` store action
+  optimistically trims the last turn's output (keeping the player line) and
+  restores it on failure; the fresh narration streams in over SSE. Covered by a
+  server test (`session.test.ts` → "regenerates the last turn").
 
 ---
 
