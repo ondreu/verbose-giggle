@@ -63,9 +63,12 @@ ENV WEB_DIST=/app/apps/web/dist
 # volumes (see docker-compose.yml). VAULT_PATH defaults here to the bundled
 # example; mount your own vault over /data/vault to use real content.
 RUN mkdir -p /data/vault /data/maps /data/srd /data/state \
-  && cp -r /app/data/vault.example/. /data/vault/ 2>/dev/null || true
+  && cp -r /app/data/vault.example/. /data/vault/ 2>/dev/null || true \
+  && cp -r /app/packages/srd/data/. /data/srd/ 2>/dev/null || true
 ENV VAULT_PATH=/data/vault
-# SRD dataset is mounted here by the Compose stacks (./srd:/data/srd).
+# SRD dataset: the in-repo bundled copy (#45a) is staged here at build time, so
+# the container runs with a full dataset out of the box. A Compose bind mount
+# (./srd:/data/srd) still overrides it for users with their own database.
 ENV SRD_PATH=/data/srd
 
 EXPOSE 3000

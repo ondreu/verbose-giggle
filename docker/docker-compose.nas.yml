@@ -55,7 +55,7 @@ services:
       # named volume se automaticky NEzkopírují — nutná ruční migrace.
       # - ./vault:/data/vault
       - ./maps:/data/maps
-      - ./srd:/data/srd
+      - ./srd:/data/srd                    # volitelné: vlastní SRD JSON (jinak se použije kopie zabalená v image, #45a)
     labels:
       - "com.centurylinklabs.watchtower.enable=true"
     depends_on:
