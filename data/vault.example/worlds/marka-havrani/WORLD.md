@@ -8,6 +8,10 @@ a jejich obsah se vrství NAD světový (kampaň přebíjí svět při shodě `i
 
 ## Co svět obsahuje
 
+Rozsah (aktuálně): **24 lokací**, **9 frakcí**, **47 NPC**, dějiny + 4 světové
+události. Města mají vnitřní lokace (čtvrti a stavby s `parent`) a každé je
+zabydlené jmenovanými obyvateli.
+
 - `locations/` — kraje, města, vsi, divočina, ruiny a doupata. Souřadnice jsou
   poměry **0..1** na mapě světa (nezávislé na rozlišení). `connections` tvoří
   point-crawl síť cest. Lokace přežívají kampaně.
@@ -35,6 +39,25 @@ každý spolek — kupci, zloději, kněží i kult — tahá kraj svým směrem
 
 Znak marky je černý havran na stříbrném poli: pták, který přežije i tam, kde nic
 jiného nepřežije.
+
+## Místa a jejich obsah
+
+- **Novigrad** (město, ~5000 duší) — hlavní město. Vnitřní lokace: *Přístavní
+  čtvrť* (tržiště, clo, podsvětí), *Hostinec U Tří havranů* (najímání, zvěsti),
+  *Věž stříbrného plamene* (Řád, špitál, archiv), *Cechovní dům* (Kupecký cech),
+  *Stoky a Podhradí* (Šedé kápě). Nejhustěji obydlené — purkmistr, cechmistr,
+  velmistr, kněžna, Pavučina a tucet dalších.
+- **Černý Brod** (město) — mýtný uzel na cestě do Velenu. *Vranovská tvrz* (rod
+  Vranovský, rodinný archiv), *Mýtnice u brodu* (clo, převozníci, pašeráci).
+- **Kamenec** (hornické město) — *Dům Cechu havířů*, *Výčep U Sirné lampy*; nad
+  ním *Stříbrné doly* se zazděnou starou chodbou a Železnou rotou u vchodů.
+- **Vřesoviště** (ves) — *Gregorův dvůr a modlitebna*, poslední bašta před blaty.
+- **Rozcestí** (zájezdní hostinec) — křižovatka cest, kde se najímá doprovod a
+  sbírají zprávy z celé marky.
+- **Velen, Dlouhý luh, Šípový hvozd, Mlžné blato, Vlčí rokle, Vraní hrad,
+  Kostniční vrch** — kraje a divočina s vlastními obyvateli a hrozbami.
+
+Každé místo má jmenované obyvatele v `npcs/` (kdo to je, kde bývá, co chce, háček).
 
 ## Kampaně v tomto světě
 
