@@ -35,7 +35,14 @@ export interface Config {
   host: string;
   vaultPath: string;
   srdPath: string;
-  llm: { baseUrl: string; apiKey: string; model: string; provider: "auto" | "mock" };
+  llm: {
+    baseUrl: string;
+    apiKey: string;
+    model: string;
+    provider: "auto" | "mock";
+    /** Alternate models the player can re-roll with (#54); used for pricing too. */
+    altModels: string[];
+  };
   /**
    * Primary TTS: Azure AI Speech (expressive Czech neural voices via SSML).
    * Null disables it; the /api/tts route then falls back to Piper.
@@ -146,6 +153,10 @@ export function loadConfig(): Config {
       apiKey: llmApiKey,
       model: process.env.LLM_MODEL ?? "mistral-medium-3.5",
       provider: process.env.LLM_PROVIDER === "mock" ? "mock" : "auto",
+      altModels: (process.env.LLM_ALT_MODELS ?? "")
+        .split(",")
+        .map((m) => m.trim())
+        .filter(Boolean),
     },
     azureTts,
     piperUrl: process.env.PIPER_URL ?? null,
@@ -163,10 +174,13 @@ export function loadConfig(): Config {
     credits: {
       enabled: process.env.CREDITS_ENABLED === "true",
       pricing: {
-        perThousandPromptTokens: Number(process.env.CREDITS_PER_1K_PROMPT ?? 1),
-        perThousandCompletionTokens: Number(process.env.CREDITS_PER_1K_COMPLETION ?? 3),
+        perMessage: Number(process.env.CREDITS_PER_MESSAGE ?? 10),
+        perModelMessage: {},
+        perCampaign: Number(process.env.CREDITS_PER_CAMPAIGN ?? 200),
         perImage: Number(process.env.CREDITS_PER_IMAGE ?? 50),
         perThousandTtsChars: Number(process.env.CREDITS_PER_1K_TTS_CHARS ?? 2),
+        perThousandPromptTokens: Number(process.env.CREDITS_PER_1K_PROMPT ?? 1),
+        perThousandCompletionTokens: Number(process.env.CREDITS_PER_1K_COMPLETION ?? 3),
       },
     },
   };
@@ -190,6 +204,7 @@ export function applySettings(base: Config, s: Settings): Config {
     apiKey: s.llm?.apiKey ?? base.llm.apiKey,
     model: s.llm?.model?.trim() || base.llm.model,
     provider: s.llm?.provider ?? base.llm.provider,
+    altModels: s.llm?.altModels ?? base.llm.altModels,
   };
 
   // Image: settings can enable/disable and override any field. It's active
@@ -235,13 +250,16 @@ export function applySettings(base: Config, s: Settings): Config {
   const credits = {
     enabled: srv.creditsEnabled ?? base.credits.enabled,
     pricing: {
+      perMessage: srv.pricing?.perMessage ?? base.credits.pricing.perMessage,
+      perModelMessage: srv.pricing?.perModelMessage ?? base.credits.pricing.perModelMessage,
+      perCampaign: srv.pricing?.perCampaign ?? base.credits.pricing.perCampaign,
+      perImage: srv.pricing?.perImage ?? base.credits.pricing.perImage,
+      perThousandTtsChars:
+        srv.pricing?.perThousandTtsChars ?? base.credits.pricing.perThousandTtsChars,
       perThousandPromptTokens:
         srv.pricing?.perThousandPromptTokens ?? base.credits.pricing.perThousandPromptTokens,
       perThousandCompletionTokens:
         srv.pricing?.perThousandCompletionTokens ?? base.credits.pricing.perThousandCompletionTokens,
-      perImage: srv.pricing?.perImage ?? base.credits.pricing.perImage,
-      perThousandTtsChars:
-        srv.pricing?.perThousandTtsChars ?? base.credits.pricing.perThousandTtsChars,
     },
   };
 

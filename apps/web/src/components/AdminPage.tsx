@@ -272,8 +272,8 @@ function ServerTab({ onErr }: { onErr: ErrHandler }) {
       </section>
 
       <section className="flex flex-col gap-2">
-        <H2>Ceník kreditů</H2>
-        <PricingEditor pricing={s.pricing} onSave={(pricing) => save({ pricing })} />
+        <H2>AI & ceník (per akce)</H2>
+        <PricingEditor settings={s} onSave={(pricing) => save({ pricing })} />
       </section>
 
       <section className="flex flex-col gap-1">
@@ -293,35 +293,103 @@ function ServerTab({ onErr }: { onErr: ErrHandler }) {
   );
 }
 
-function PricingEditor({ pricing, onSave }: { pricing: ServerSettings["pricing"]; onSave: (p: Partial<ServerSettings["pricing"]>) => void }) {
-  const [draft, setDraft] = useState(pricing);
-  useEffect(() => setDraft(pricing), [pricing]);
-  const fields: { k: keyof ServerSettings["pricing"]; label: string }[] = [
-    { k: "perThousandPromptTokens", label: "Kredity / 1k vstup. tokenů" },
-    { k: "perThousandCompletionTokens", label: "Kredity / 1k výstup. tokenů" },
+function PricingEditor({
+  settings,
+  onSave,
+}: {
+  settings: ServerSettings;
+  onSave: (p: Partial<ServerSettings["pricing"]>) => void;
+}) {
+  const [draft, setDraft] = useState(settings.pricing);
+  // Per-model rates as editable strings ("" = use default).
+  const [models, setModels] = useState<Record<string, string>>({});
+  useEffect(() => {
+    setDraft(settings.pricing);
+    const m: Record<string, string> = {};
+    for (const id of settings.models) {
+      const v = settings.pricing.perModelMessage[id];
+      m[id] = v == null ? "" : String(v);
+    }
+    setModels(m);
+  }, [settings]);
+
+  const flat: { k: keyof ServerSettings["pricing"]; label: string }[] = [
+    { k: "perMessage", label: "Kredity / zpráva (výchozí)" },
+    { k: "perCampaign", label: "Kredity / generování kampaně" },
     { k: "perImage", label: "Kredity / obrázek" },
-    { k: "perThousandTtsChars", label: "Kredity / 1k znaků TTS" },
   ];
+  const basis: { k: keyof ServerSettings["pricing"]; label: string }[] = [
+    { k: "perThousandTtsChars", label: "Kredity / 1k znaků TTS" },
+    { k: "perThousandPromptTokens", label: "Cost-basis / 1k vstup. tokenů" },
+    { k: "perThousandCompletionTokens", label: "Cost-basis / 1k výstup. tokenů" },
+  ];
+
+  const save = () => {
+    // Build the per-model map: only models with an explicit number.
+    const perModelMessage: Record<string, number> = {};
+    for (const [id, v] of Object.entries(models)) {
+      const n = v.trim() === "" ? NaN : Number(v);
+      if (Number.isFinite(n) && n >= 0) perModelMessage[id] = n;
+    }
+    onSave({ ...draft, perModelMessage });
+  };
+
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col gap-3">
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-        {fields.map((f) => (
-          <label key={f.k} className="flex items-center justify-between gap-2 font-log text-sm text-ink/70">
-            <span>{f.label}</span>
+        {flat.map((f) => (
+          <NumField key={f.k} label={f.label} value={draft[f.k] as number} onChange={(n) => setDraft({ ...draft, [f.k]: n })} />
+        ))}
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <p className="font-log text-xs text-ink/55">Cena za zprávu podle modelu (prázdné = výchozí {draft.perMessage}):</p>
+        {settings.models.map((id) => (
+          <label key={id} className="flex items-center justify-between gap-2 font-log text-sm text-ink/70">
+            <span className="truncate" title={id}>
+              {id}
+            </span>
             <input
               type="number"
               min={0}
-              value={draft[f.k]}
-              onChange={(e) => setDraft({ ...draft, [f.k]: Number(e.target.value) })}
+              placeholder={String(draft.perMessage)}
+              value={models[id] ?? ""}
+              onChange={(e) => setModels({ ...models, [id]: e.target.value })}
               className="w-24 rounded border border-ink/25 bg-bg-crust px-2 py-1 text-right text-ink"
             />
           </label>
         ))}
+        {settings.models.length === 0 && <p className="font-log text-xs italic text-ink/40">Žádné modely nenastaveny.</p>}
       </div>
-      <button className="btn-link self-start text-sm underline" onClick={() => onSave(draft)}>
+
+      <details className="font-log text-sm text-ink/70">
+        <summary className="cursor-pointer text-ink/55">TTS & token cost-basis</summary>
+        <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+          {basis.map((f) => (
+            <NumField key={f.k} label={f.label} value={draft[f.k] as number} onChange={(n) => setDraft({ ...draft, [f.k]: n })} />
+          ))}
+        </div>
+      </details>
+
+      <button className="btn-link self-start text-sm underline" onClick={save}>
         Uložit ceník
       </button>
     </div>
+  );
+}
+
+function NumField({ label, value, onChange }: { label: string; value: number; onChange: (n: number) => void }) {
+  return (
+    <label className="flex items-center justify-between gap-2 font-log text-sm text-ink/70">
+      <span>{label}</span>
+      <input
+        type="number"
+        min={0}
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="w-24 rounded border border-ink/25 bg-bg-crust px-2 py-1 text-right text-ink"
+      />
+    </label>
   );
 }
 

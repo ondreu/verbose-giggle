@@ -221,6 +221,36 @@ describe("admin dev panel (#57b)", () => {
     await app.close();
   });
 
+  it("persists per-model message pricing and exposes the model list", async () => {
+    const { app, adminSid, getConfig } = await setup();
+    const res = await app.inject({
+      method: "PUT",
+      url: "/api/admin/server-settings",
+      payload: { pricing: { perMessage: 12, perCampaign: 300, perModelMessage: { "claude-opus": 40 } } },
+      ...asAdmin(adminSid),
+    });
+    expect(res.statusCode).toBe(200);
+    const view = res.json();
+    expect(view.pricing.perMessage).toBe(12);
+    expect(view.pricing.perCampaign).toBe(300);
+    expect(view.pricing.perModelMessage["claude-opus"]).toBe(40);
+    expect(Array.isArray(view.models)).toBe(true);
+    expect(getConfig().credits.pricing.perModelMessage["claude-opus"]).toBe(40);
+    await app.close();
+  });
+
+  it("rejects a non-object per-model price map", async () => {
+    const { app, adminSid } = await setup();
+    const res = await app.inject({
+      method: "PUT",
+      url: "/api/admin/server-settings",
+      payload: { pricing: { perModelMessage: [1, 2] } },
+      ...asAdmin(adminSid),
+    });
+    expect(res.statusCode).toBe(400);
+    await app.close();
+  });
+
   it("rejects a negative price", async () => {
     const { app, adminSid } = await setup();
     const res = await app.inject({

@@ -130,10 +130,13 @@ export const adminGrantCredits = (id: string, amount: number, reason?: string) =
 // --- Admin: server settings / health / usage / vaults / backups (#57b) -----
 
 export interface CreditPricing {
-  perThousandPromptTokens: number;
-  perThousandCompletionTokens: number;
+  perMessage: number;
+  perModelMessage: Record<string, number>;
+  perCampaign: number;
   perImage: number;
   perThousandTtsChars: number;
+  perThousandPromptTokens: number;
+  perThousandCompletionTokens: number;
 }
 export interface ServerSettings {
   allowAnonymous: boolean;
@@ -141,6 +144,8 @@ export interface ServerSettings {
   requireVerifiedEmail: boolean;
   creditsEnabled: boolean;
   pricing: CreditPricing;
+  /** Models the per-message price table covers (primary + re-roll alternates). */
+  models: string[];
   providers: {
     llm: { provider: string; model: string; baseUrl: string; hasKey: boolean };
     image: { enabled: boolean; model: string | null };

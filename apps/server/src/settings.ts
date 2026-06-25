@@ -64,10 +64,15 @@ export interface Settings {
     creditsEnabled?: boolean;
     /** Credit pricing (smallest unit). Missing fields fall back to env/defaults. */
     pricing?: {
-      perThousandPromptTokens?: number;
-      perThousandCompletionTokens?: number;
+      /** Per-action billing (#56f). */
+      perMessage?: number;
+      perModelMessage?: Record<string, number>;
+      perCampaign?: number;
       perImage?: number;
       perThousandTtsChars?: number;
+      /** Token cost-basis (logging). */
+      perThousandPromptTokens?: number;
+      perThousandCompletionTokens?: number;
     };
   };
 }

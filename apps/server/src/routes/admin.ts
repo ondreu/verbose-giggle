@@ -144,6 +144,8 @@ export async function registerAdminRoutes(app: FastifyInstance, ctx: AdminContex
       requireVerifiedEmail: c.auth.requireVerifiedEmail,
       creditsEnabled: c.credits.enabled,
       pricing: c.credits.pricing,
+      // Models the per-message price table covers: primary + re-roll alternates.
+      models: [c.llm.model, ...c.llm.altModels].filter((m, i, a) => m && a.indexOf(m) === i),
       providers: {
         llm: {
           provider: c.llm.provider,
@@ -173,19 +175,33 @@ export async function registerAdminRoutes(app: FastifyInstance, ctx: AdminContex
       if (body.creditsEnabled !== undefined) srv.creditsEnabled = Boolean(body.creditsEnabled);
       if (body.pricing) {
         const p: NonNullable<NonNullable<Settings["server"]>["pricing"]> = {};
+        const nonNeg = (v: unknown) => typeof v === "number" && Number.isFinite(v) && v >= 0;
         for (const k of [
-          "perThousandPromptTokens",
-          "perThousandCompletionTokens",
+          "perMessage",
+          "perCampaign",
           "perImage",
           "perThousandTtsChars",
+          "perThousandPromptTokens",
+          "perThousandCompletionTokens",
         ] as const) {
           const v = body.pricing[k];
           if (v !== undefined) {
-            if (typeof v !== "number" || !Number.isFinite(v) || v < 0) {
-              return reply.code(400).send({ error: "Ceník musí být nezáporné číslo." });
-            }
+            if (!nonNeg(v)) return reply.code(400).send({ error: "Ceník musí být nezáporné číslo." });
             p[k] = v;
           }
+        }
+        // Per-model message rates: a clean { modelId: number } map (#56f).
+        if (body.pricing.perModelMessage !== undefined) {
+          const raw = body.pricing.perModelMessage;
+          if (raw === null || typeof raw !== "object" || Array.isArray(raw)) {
+            return reply.code(400).send({ error: "Neplatný ceník modelů." });
+          }
+          const map: Record<string, number> = {};
+          for (const [model, v] of Object.entries(raw)) {
+            if (!nonNeg(v)) return reply.code(400).send({ error: "Ceník modelu musí být nezáporné číslo." });
+            map[model] = v as number;
+          }
+          p.perModelMessage = map;
         }
         if (Object.keys(p).length > 0) srv.pricing = p;
       }

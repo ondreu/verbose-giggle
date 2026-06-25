@@ -162,18 +162,20 @@ ne „nice to have".
   pohybů; anonym vidí vysvětlení) přes `GET /api/credits`. Ukazatel zůstatku
   v hlavičce (`CreditBadge`, jen hosted + přihlášený, polluje). Admin má
   per-uživatele tlačítko „kredity". Zbývá jen „koupit" (čeká na platby/Stripe).
-- **[ ] #56f — AI management & ceník per model / per akce.** Dnešní ceník je
-  **globální a tokenový** (LLM = prompt/completion za 1k), plochý za obrázek,
-  za 1k znaků TTS; dev panel (#57b) edituje tyto 4 knoflíky. Chybí:
-  (1) **per-model ceník** — appka už umí alternativní modely („Jiným modelem"),
-  ale všechny se účtují stejnou sazbou za token (Opus vs Haiku se liší ~10×).
-  (2) **Účtování generování kampaně** — `forgeCampaign` (`/api/campaigns/forge`)
-  běží **nemetrovaně**, dnes zdarma i přes vysokou spotřebu.
-  Návrh (preferovaný směr uživatele): **ceník per akce a per model** — tabulka
-  `model → kredity/zpráva`, plochá cena za obrázek a za generování kampaně.
-  Předvídatelné pro hráče; tokenové metrování zůstane pod tím jako cost-basis,
-  aby cena pokryla nejdražší model a nešlo se do ztráty. „AI management" záložka
-  v dev panelu: seznam modelů (primární + `altModels`) + jejich sazby.
+- **[x] #56f — AI management & ceník per model / per akce.** Účtování přepnuto
+  z tokenového na **per akci**: plochá cena **za zprávu** (jeden LLM tah), klíčovaná
+  modelem (`pricing.perModelMessage[model]` s fallbackem `perMessage`), plus plochá
+  cena **za obrázek** a **za generování kampaně** (`perCampaign`). Generování kampaně
+  (`forgeCampaign`) je nově metrované a gated (dřív zdarma). Tokenové sazby zůstaly
+  jako **cost-basis** (loguje se na tah), neúčtují se. Účtuje se jen hráčův tah
+  (`llm-turn`/`llm-regenerate`); systémové beaty (intro/recap/arrival/AI tahy) běží
+  bez per-message poplatku. Vše perzistované ve `Settings.server.pricing` a živé přes
+  config holder. Dev panel: sekce *AI & ceník (per akce)* — výchozí cena/zpráva,
+  cena/kampaň, cena/obrázek, **tabulka per-model** (primární + `altModels` z
+  `GET /api/admin/server-settings`.models), TTS + token cost-basis pod „details".
+  Testy: `credits.test.ts` (`creditsPerMessage`), `admin.test.ts` (perzistence
+  per-model ceníku + validace). Zbývá (volitelně): per-model i pro obrázky/TTS,
+  reálný $ přepočet cost vs markup v přehledu spotřeby.
 
 ### #57 — Dev / admin panel
 

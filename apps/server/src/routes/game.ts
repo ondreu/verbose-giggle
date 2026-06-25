@@ -3,7 +3,7 @@ import path from "node:path";
 import YAML from "yaml";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { LlmClient, type Llm } from "../llm/client.js";
-import { MeteredLlm } from "../credits/metering.js";
+import { MeteredLlm, creditsPerMessage } from "../credits/metering.js";
 import type { CreditStore } from "../credits/ledger.js";
 import { MockLlmClient } from "../llm/mock.js";
 import { ImageClient, buildMapPrompt, buildPrompt, type ImageSubject } from "../llm/image.js";
@@ -149,27 +149,40 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
   }
 
   /**
-   * Run an LLM operation with credit metering (#56b/#56c). When metering is off
-   * (self-hosted / BYO-key, no accounts, or anonymous request) it just runs.
+   * Run an LLM operation with credit metering (#56b/#56c/#56f). When metering is
+   * off (self-hosted / BYO-key, no accounts, or anonymous request) it just runs.
    * Otherwise: optionally enforce a positive balance up front (`enforce`), run
-   * with a metered narrator, and charge the accumulated token cost *after*
-   * success — a thrown turn is never billed. Charging is a side effect outside
-   * the engine, so determinism (#12) is unaffected.
+   * with a metered narrator, and — for a billable player turn (`bill`) — charge
+   * a flat **per-message** price for the model that ran (#56f), *after* success
+   * so a thrown turn is never billed. The token usage is logged as a cost basis
+   * but no longer drives the charge. Non-billable system beats (intro, recap,
+   * arrival, AI turns) run metered for logging but aren't charged per message.
+   * Charging is a side effect outside the engine, so determinism (#12) holds.
    */
   async function meteredTurn<T>(
     req: FastifyRequest,
     reason: string,
     baseLlm: Llm,
     run: (llm: Llm) => Promise<T>,
-    enforce = true,
+    opts: { enforce?: boolean; bill?: boolean; model?: string } = {},
   ): Promise<T> {
+    const { enforce = true, bill = false, model } = opts;
     const user = meteringUser(req);
     if (!user) return run(baseLlm);
     if (enforce && ctx.credits!.balance(user.id) <= 0) throw new InsufficientCreditsError();
     const metered = new MeteredLlm(baseLlm);
     const result = await run(metered);
-    const cost = metered.cost(config.credits.pricing);
-    if (cost > 0) ctx.credits!.charge(user.id, cost, reason);
+    const basis = metered.cost(config.credits.pricing);
+    if (bill) {
+      const price = creditsPerMessage(config.credits.pricing, model);
+      if (price > 0) ctx.credits!.charge(user.id, price, reason, model ?? null);
+      app.log.info(
+        `Charged ${price} cr for ${reason} (model=${model ?? "?"}; token cost-basis=${basis}, ` +
+          `${metered.usage.promptTokens}+${metered.usage.completionTokens} tok)`,
+      );
+    } else if (basis > 0) {
+      app.log.info(`${reason}: token cost-basis=${basis} (not charged per #56f)`);
+    }
     return result;
   }
 
@@ -544,7 +557,10 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
     const sess = await registry.resolve(req);
     const llm = makeLlm(sess.manager);
     try {
+      enforceCredits(req);
       const { folder, usedLlm } = await forgeCampaign(sess.root, llm, req.body as ForgeInput);
+      // Flat per-campaign charge after a successful generation (#56f).
+      if (usedLlm) chargeCredits(req, "campaign", config.credits.pricing.perCampaign);
       if (req.body?.select !== false) {
         await saveSettings(sess.root, { campaign: folder });
         await sess.reopen(folder);
@@ -552,6 +568,7 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
       }
       return { ok: true, folder, usedLlm };
     } catch (err) {
+      if (err instanceof InsufficientCreditsError) return reply.code(402).send({ error: err.message });
       return reply.code(400).send({ error: err instanceof Error ? err.message : String(err) });
     }
   });
@@ -575,6 +592,7 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
     req.raw.on("close", () => { /* client disconnected — writes will be no-ops via writableEnded */ });
 
     try {
+      enforceCredits(req);
       const onProgress: ProgressCallback = (phase, msg) => send("progress", { phase, msg });
       const { folder, usedLlm } = await forgeCampaign(
         sess.root,
@@ -582,6 +600,8 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
         req.body as ForgeInput,
         onProgress,
       );
+      // Flat per-campaign charge after a successful generation (#56f).
+      if (usedLlm) chargeCredits(req, "campaign", config.credits.pricing.perCampaign);
 
       if (req.body?.select !== false) {
         send("progress", { phase: "Aktivace", msg: "Přepínám aktivní kampaň…" });
@@ -929,7 +949,7 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
     }
     await sess.manager.checkpoint(gs);
     sess.bus.emit({ type: "state", state: sess.manager.session });
-    await meteredTurn(req, "llm-ai-turns", llm, (l) => resolveAiTurns({ manager: sess.manager, llm: l, bus: sess.bus, gs }), false);
+    await meteredTurn(req, "llm-ai-turns", llm, (l) => resolveAiTurns({ manager: sess.manager, llm: l, bus: sess.bus, gs }), { enforce: false });
     return res;
   });
 
@@ -1031,8 +1051,12 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
       // Checkpoint the pre-turn state so the player can undo this message.
       await checkpointTurn(sess.manager.campaign.dir, `Před: „${input.slice(0, 40)}“`);
       const partyVoice = req.body?.as === "party";
-      const { narration } = await meteredTurn(req, "llm-turn", llm, (l) =>
-        runTurn({ manager: sess.manager, llm: l, bus: sess.bus, input, partyVoice }),
+      const { narration } = await meteredTurn(
+        req,
+        "llm-turn",
+        llm,
+        (l) => runTurn({ manager: sess.manager, llm: l, bus: sess.bus, input, partyVoice }),
+        { bill: true, model: config.llm.model },
       );
       return { narration };
     } catch (err) {
@@ -1068,9 +1092,14 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
       await checkpointTurn(dir, `Před: „${input.slice(0, 40)}“`);
       // Build the narrator AFTER the rewind so the mock introspects the
       // rewound manager, not the stale one.
+      const model = req.body?.model?.trim() || config.llm.model;
       const turnLlm = makeLlm(sess.manager, req.body?.model?.trim() || undefined);
-      const { narration } = await meteredTurn(req, "llm-regenerate", turnLlm, (l) =>
-        runTurn({ manager: sess.manager, llm: l, bus: sess.bus, input }),
+      const { narration } = await meteredTurn(
+        req,
+        "llm-regenerate",
+        turnLlm,
+        (l) => runTurn({ manager: sess.manager, llm: l, bus: sess.bus, input }),
+        { bill: true, model },
       );
       return { narration };
     } catch (err) {
@@ -1115,10 +1144,10 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
     // These LLM follow-ups are metered but not balance-gated — the engine
     // command already ran; enforcement happens at the player-action boundary.
     if (tool === "travel" && result.ok) {
-      await meteredTurn(req, "llm-arrival", llm, (l) => runArrival({ manager: sess.manager, llm: l, bus: sess.bus }), false);
+      await meteredTurn(req, "llm-arrival", llm, (l) => runArrival({ manager: sess.manager, llm: l, bus: sess.bus }), { enforce: false });
     } else {
       // For non-travel commands, auto-resolve AI turns as before (§8.3).
-      await meteredTurn(req, "llm-ai-turns", llm, (l) => resolveAiTurns({ manager: sess.manager, llm: l, bus: sess.bus, gs }), false);
+      await meteredTurn(req, "llm-ai-turns", llm, (l) => resolveAiTurns({ manager: sess.manager, llm: l, bus: sess.bus, gs }), { enforce: false });
     }
 
     return result;

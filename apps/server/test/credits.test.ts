@@ -2,7 +2,12 @@ import { describe, expect, it } from "vitest";
 import { openInMemoryDatabase } from "../src/db/database.js";
 import { UserStore } from "../src/auth/users.js";
 import { CreditStore } from "../src/credits/ledger.js";
-import { MeteredLlm, creditsForUsage, type CreditPricing } from "../src/credits/metering.js";
+import {
+  MeteredLlm,
+  creditsForUsage,
+  creditsPerMessage,
+  type CreditPricing,
+} from "../src/credits/metering.js";
 import type { Llm, LlmResponse } from "../src/llm/client.js";
 
 function setup() {
@@ -62,7 +67,24 @@ describe("credit ledger (#56a)", () => {
   });
 });
 
-const PRICING: CreditPricing = { perThousandPromptTokens: 1, perThousandCompletionTokens: 3 };
+const PRICING: CreditPricing = {
+  perMessage: 10,
+  perModelMessage: { "claude-opus": 40, "claude-haiku": 3 },
+  perCampaign: 200,
+  perImage: 50,
+  perThousandTtsChars: 2,
+  perThousandPromptTokens: 1,
+  perThousandCompletionTokens: 3,
+};
+
+describe("per-action pricing (#56f)", () => {
+  it("uses the per-model message rate, falling back to the default", () => {
+    expect(creditsPerMessage(PRICING, "claude-opus")).toBe(40);
+    expect(creditsPerMessage(PRICING, "claude-haiku")).toBe(3);
+    expect(creditsPerMessage(PRICING, "some-other-model")).toBe(10);
+    expect(creditsPerMessage(PRICING, undefined)).toBe(10);
+  });
+});
 
 describe("metering (#56b)", () => {
   it("costs usage at price × markup, rounding up", () => {
