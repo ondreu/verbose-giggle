@@ -3,8 +3,9 @@
  * email-verification link target. Thin wrapper over {@link AuthService};
  * login/session (#55c) and reset (#55d) add their routes here later.
  */
-import type { FastifyInstance, FastifyReply } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { AuthError, AuthService } from "../auth/service.js";
+import { RateLimiter } from "../auth/rate-limit.js";
 import type { User } from "../auth/users.js";
 
 export interface AuthFlags {
@@ -22,6 +23,21 @@ export interface AuthContext {
    * config change from the admin panel (#57b) is reflected without restart.
    */
   flags: AuthFlags | (() => AuthFlags);
+  /**
+   * Brute-force throttles (#59b) for the credential endpoints. Optional so the
+   * unit tests and self-hosted boot can omit them; when absent the routes are
+   * unthrottled exactly as before.
+   */
+  rateLimit?: {
+    login: RateLimiter;
+    register: RateLimiter;
+  };
+  /**
+   * Purge a deleted user's isolated game data (#59e): their `<vault>/users/<id>`
+   * subtree and cached scope. Optional so tests/self-hosted can omit it; when
+   * absent, account deletion still removes the DB row + sessions as before.
+   */
+  onAccountDeleted?: (userId: string) => Promise<void>;
 }
 
 /** Name of the session cookie. */
@@ -74,7 +90,8 @@ const token=${tokenJson};
 const f=document.getElementById('f'),p=document.getElementById('p'),m=document.getElementById('m');
 f.addEventListener('submit',async(e)=>{
   e.preventDefault();m.textContent='';m.className='msg';
-  const res=await fetch('/api/auth/reset',{method:'POST',headers:{'content-type':'application/json'},
+  const res=await fetch('/api/auth/reset',{method:'POST',
+    headers:{'content-type':'application/json','x-requested-with':'fetch'},
     body:JSON.stringify({token,password:p.value})});
   const data=await res.json().catch(()=>({}));
   if(res.ok){m.textContent='Heslo bylo změněno. Můžeš se přihlásit.';m.className='msg ok';f.style.display='none';}
@@ -85,6 +102,22 @@ f.addEventListener('submit',async(e)=>{
 
 export async function registerAuthRoutes(app: FastifyInstance, ctx: AuthContext): Promise<void> {
   const getFlags = (): AuthFlags => (typeof ctx.flags === "function" ? ctx.flags() : ctx.flags);
+
+  /**
+   * Apply a rate-limit bucket keyed by client IP. Returns true and sends a 429
+   * (with `Retry-After`) when the caller is over the limit; the handler should
+   * stop. No limiter configured = always allowed.
+   */
+  function throttled(limiter: RateLimiter | undefined, req: FastifyRequest, reply: FastifyReply): boolean {
+    if (!limiter) return false;
+    const result = limiter.hit(req.ip);
+    if (result.allowed) return false;
+    reply
+      .header("Retry-After", Math.ceil(result.retryAfterMs / 1000))
+      .code(429)
+      .send({ error: "Příliš mnoho pokusů. Zkus to za chvíli znovu." });
+    return true;
+  }
 
   function setSessionCookie(reply: FastifyReply, value: string, maxAgeMs: number): void {
     reply.setCookie(SESSION_COOKIE, value, {
@@ -99,6 +132,7 @@ export async function registerAuthRoutes(app: FastifyInstance, ctx: AuthContext)
   app.post<{ Body: { email?: string; password?: string } }>(
     "/api/auth/register",
     async (req, reply) => {
+      if (throttled(ctx.rateLimit?.register, req, reply)) return;
       const { email, password } = req.body ?? {};
       if (typeof email !== "string" || typeof password !== "string") {
         return reply.code(400).send({ error: "Chybí e-mail nebo heslo." });
@@ -147,12 +181,16 @@ export async function registerAuthRoutes(app: FastifyInstance, ctx: AuthContext)
   app.post<{ Body: { email?: string; password?: string } }>(
     "/api/auth/login",
     async (req, reply) => {
+      if (throttled(ctx.rateLimit?.login, req, reply)) return;
       const { email, password } = req.body ?? {};
       if (typeof email !== "string" || typeof password !== "string") {
         return reply.code(400).send({ error: "Chybí e-mail nebo heslo." });
       }
       try {
         const { user, session } = await ctx.service.login(email, password);
+        // A genuine login clears the IP's failed-attempt window so honest users
+        // who finally typed the right password aren't penalised for earlier ones.
+        ctx.rateLimit?.login.reset(req.ip);
         setSessionCookie(reply, session.id, ctx.service.sessionMaxAgeMs);
         return reply.send({ ok: true, user: userView(user) });
       } catch (err) {
@@ -252,7 +290,10 @@ export async function registerAuthRoutes(app: FastifyInstance, ctx: AuthContext)
 
   app.delete("/api/account", async (req, reply) => {
     if (!req.user) return reply.code(401).send({ error: "Nepřihlášen." });
-    ctx.service.deleteAccount(req.user.id);
+    const userId = req.user.id;
+    ctx.service.deleteAccount(userId);
+    // GDPR (#59e): also purge the user's isolated vault data, not just the row.
+    await ctx.onAccountDeleted?.(userId);
     reply.clearCookie(SESSION_COOKIE, { path: "/" });
     return reply.send({ ok: true });
   });

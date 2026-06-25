@@ -8,7 +8,7 @@ import { loadSettings } from "./settings.js";
 import { registerGameRoutes } from "./routes/game.js";
 import { registerAuthRoutes } from "./routes/auth.js";
 import { registerAdminRoutes } from "./routes/admin.js";
-import { openDatabase } from "./db/database.js";
+import { openDatabase, checkpointDatabase } from "./db/database.js";
 import { UserStore } from "./auth/users.js";
 import { SessionStore } from "./auth/sessions.js";
 import { AuditStore } from "./auth/audit.js";
@@ -17,14 +17,20 @@ import { registerCreditRoutes } from "./routes/credits.js";
 import { loadOrCreateSecret } from "./auth/tokens.js";
 import { LogEmailSender, SmtpEmailSender, type EmailSender } from "./auth/email.js";
 import { AuthService } from "./auth/service.js";
-import { registerAuthGuard } from "./auth/middleware.js";
+import { registerAuthGuard, registerCsrfGuard } from "./auth/middleware.js";
+import { RateLimiter } from "./auth/rate-limit.js";
+import { applyPendingRestore } from "./admin/ops.js";
+import { LogBuffer } from "./admin/log-buffer.js";
 
 async function main(): Promise<void> {
   const startedAtMs = Date.now();
   const env = loadConfig();
   const settings = await loadSettings(env.vaultPath);
   const config = applySettings(env, settings);
-  const app = Fastify({ logger: true });
+  // Tee runtime logs into a bounded ring buffer so the admin panel can tail them
+  // (#59g); they still stream to stdout for container log collectors.
+  const logBuffer = new LogBuffer();
+  const app = Fastify({ logger: { stream: logBuffer.stream() } });
 
   // Single window into the live, mutable config. Game routes own the canonical
   // value and call `exposeConfig` to wire these handles; until then they read
@@ -35,6 +41,13 @@ async function main(): Promise<void> {
     get: () => config,
     reload: async () => config,
   };
+  // Late-bound by the game routes (which own the session registry, #59e). Until
+  // then a deleted account just drops its DB row; once wired it also purges the
+  // user's vault subtree and evicts their cached scope.
+  let purgeUserScope: (userId: string) => Promise<void> = async () => {};
+  // Late-bound likewise (#59d): drop a scope's cached manager after the admin
+  // panel deletes a campaign in it, so the next turn re-opens fresh.
+  let invalidateScope: (scopeKey: string, reason: string) => Promise<void> = async () => {};
 
   if (config.basicAuth) {
     const expected = "Basic " + Buffer.from(config.basicAuth).toString("base64");
@@ -43,6 +56,12 @@ async function main(): Promise<void> {
         reply.header("WWW-Authenticate", 'Basic realm="adm"').code(401).send("Unauthorized");
       }
     });
+  }
+
+  // A staged restore (#59c) is swapped in here, before anything opens the DB or
+  // reads vault data, so the SQLite handle below sees the restored file.
+  if (await applyPendingRestore(config.vaultPath, (msg) => app.log.warn(msg))) {
+    app.log.info("Vault restored from a staged backup at startup.");
   }
 
   // Accounts (#55): app DB + auth service. File-first SQLite in the vault.
@@ -66,15 +85,47 @@ async function main(): Promise<void> {
   // Promote the designated operator to admin if they already registered (#57).
   const admin = authService.ensureAdmin();
   if (admin) app.log.info(`Admin role ensured for ${admin.email}`);
+  // Reject cross-site state-changing requests (#59a) before any handler runs.
+  registerCsrfGuard(app);
   // Resolve req.user from the session and gate protected routes (#55f part 1).
   // Getters so a live config change (admin panel, #57b) is honoured per request.
   registerAuthGuard(app, {
     service: authService,
     allowAnonymous: () => configAccess.get().auth.allowAnonymous,
   });
+  // Brute-force throttles for the credential endpoints (#59b). A `max` of 0
+  // disables a limit; the limiter then never blocks. Pruned periodically so the
+  // keyed-by-IP map can't grow without bound.
+  const loginLimit = config.auth.rateLimit.login;
+  const registerLimit = config.auth.rateLimit.register;
+  const rateLimit =
+    loginLimit.max > 0 || registerLimit.max > 0
+      ? {
+          login: new RateLimiter({
+            max: loginLimit.max > 0 ? loginLimit.max : Infinity,
+            windowMs: loginLimit.windowMs,
+          }),
+          register: new RateLimiter({
+            max: registerLimit.max > 0 ? registerLimit.max : Infinity,
+            windowMs: registerLimit.windowMs,
+          }),
+        }
+      : undefined;
+  if (rateLimit) {
+    const pruneTimer = setInterval(
+      () => {
+        rateLimit.login.prune();
+        rateLimit.register.prune();
+      },
+      10 * 60 * 1000,
+    );
+    pruneTimer.unref();
+  }
   await registerAuthRoutes(app, {
     service: authService,
     cookieSecure: config.auth.publicUrl.startsWith("https://"),
+    rateLimit,
+    onAccountDeleted: (userId) => purgeUserScope(userId),
     flags: () => {
       const c = configAccess.get();
       return {
@@ -92,6 +143,11 @@ async function main(): Promise<void> {
     vaultPath: config.vaultPath,
     getConfig: () => configAccess.get(),
     reloadConfig: () => configAccess.reload(),
+    onScopeDataChanged: (scopeKey, reason) => invalidateScope(scopeKey, reason),
+    checkpointDb: () => checkpointDatabase(db),
+    backupRetention: config.backups.retention,
+    bootAllowAnonymous: config.auth.allowAnonymous,
+    getLogs: (limit) => logBuffer.tail(limit),
     startedAtMs,
   });
   await registerCreditRoutes(app, { credits });
@@ -106,6 +162,12 @@ async function main(): Promise<void> {
     credits,
     exposeConfig: (access) => {
       configAccess = access;
+    },
+    exposePurgeUserScope: (purge) => {
+      purgeUserScope = purge;
+    },
+    exposeInvalidateScope: (invalidate) => {
+      invalidateScope = invalidate;
     },
   });
 

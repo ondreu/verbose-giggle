@@ -89,12 +89,23 @@ export class UserSession {
 
 export class SessionRegistry {
   private scopes = new Map<string, Promise<UserSession>>();
+  /**
+   * Data-isolation routing is latched at boot (#59f). Flipping `allowAnonymous`
+   * live (admin panel) changes the auth *gate* (whether login is required) right
+   * away, but switching scope routing mid-session would tear a player out of the
+   * vault they're playing — shared ⇄ per-user — under their feet. So the routing
+   * decision uses this boot snapshot and only changes on restart; the admin UI
+   * warns when the live setting has drifted from it.
+   */
+  private readonly bootAllowAnonymous: boolean;
 
-  constructor(private deps: { getConfig: () => Config }) {}
+  constructor(private deps: { getConfig: () => Config }) {
+    this.bootAllowAnonymous = deps.getConfig().auth.allowAnonymous;
+  }
 
   /** True when each signed-in user gets isolated data (hosted edition). */
   isolationEnabled(): boolean {
-    return this.deps.getConfig().auth.allowAnonymous === false;
+    return this.bootAllowAnonymous === false;
   }
 
   private keyAndRoot(req: FastifyRequest): { key: string; root: string } {
@@ -172,6 +183,35 @@ export class SessionRegistry {
       cfg.auth.adminEmail != null &&
       user.email.toLowerCase() === cfg.auth.adminEmail
     );
+  }
+
+  /**
+   * Forget a cached scope so its next resolve re-opens from disk (#59d/#59e).
+   * Used after a scope's data is deleted (account removal, campaign delete), so
+   * a stale in-memory `SessionManager` pointing at a now-gone directory can't be
+   * reused. No-op if the scope was never opened.
+   */
+  evict(key: string): void {
+    this.scopes.delete(key);
+  }
+
+  /**
+   * Invalidate one scope after its on-disk data changed under it (#59d, e.g. an
+   * admin deleted a campaign in that scope). Tells any connected clients to
+   * re-hydrate, then drops the cached scope so its next request re-opens from
+   * disk (re-discovering a campaign / seeding) instead of serving a stale
+   * `SessionManager` that may point at a deleted directory. No-op if the scope
+   * was never opened.
+   */
+  async invalidateScope(key: string, reason: string): Promise<void> {
+    const pending = this.scopes.get(key);
+    if (!pending) return;
+    try {
+      (await pending).bus.emit({ type: "reload", reason });
+    } catch {
+      /* a scope that failed to open has no clients to notify */
+    }
+    this.scopes.delete(key);
   }
 
   /**

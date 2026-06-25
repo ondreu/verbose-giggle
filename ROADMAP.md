@@ -232,33 +232,50 @@ ne „nice to have".
 ### #59 — Bezpečnost & hardening (dev panel / multi-tenant)
 
 Vyvstalo při stavbě dev panelu (#57b). Privilegovaná, mutující plocha + reálné
-kredity = bezpečnost přestává být „nice to have".
+kredity = bezpečnost přestává být „nice to have". **Stav:** všechny položky
+(#59a–#59h) jsou hotové; zbývají jen drobné navazující úkoly označené „Zbývá"
+(CAPTCHA, GDPR export, plné stránkovací ovládání, purge při admin smazání).
 
-- **[ ] #59a — CSRF.** Admin i ostatní mutace (`PUT/POST/DELETE`) se autentizují
-  jen session cookie (`SameSite=Lax`). Lax zastaví cross-site GET, ne cross-site
-  `POST` z formuláře (např. `POST /api/admin/backups`). Přidat CSRF token nebo
-  vyžadovat vlastní hlavičku (`X-Requested-With`) na state-changing `/api` routách.
-- **[ ] #59b — Rate-limit & brute-force.** Limit na `/api/auth/login` a
-  `/api/auth/register` (+ případně CAPTCHA). Dnes bez omezení.
-- **[ ] #59c — Hardening záloh (#57b).** (1) Konzistence: zálohuje se živý SQLite
-  soubor — před zipem `PRAGMA wal_checkpoint(TRUNCATE)` / `VACUUM INTO` pro čistý
-  snapshot. (2) Paměť: `zipDir` staví celý archiv v `Buffer` — u velkého vaultu
-  (mapy) hrozí nafouknutí RSS; streamovat. (3) Retence: zálohy rostou bez limitu
-  ve vault volume — „nech posledních N" + strop. (4) Hlídaný restore (upload →
-  validace → swap při příštím startu). (5) Záloha obsahuje hashe hesel — citlivá.
-- **[ ] #59d — Mazání otevřené kampaně.** `DELETE /api/admin/vaults/...` smaže
-  složku, ale neinvaliduje cachovaný `SessionManager` daného scope → další tah
-  může spadnout. Reopen/invalidace dotčeného scope.
-- **[ ] #59e — GDPR mazání dat.** Po izolaci (#55f-2) má každý uživatel
-  `<vault>/users/<id>/`; `deleteAccount` by měl tento podstrom smazat (+ export
-  dat, souhlas). Dnes maže jen řádek uživatele a session.
-- **[ ] #59f — Živý přepínač `allowAnonymous`.** Přepnutí za běhu mění routing
-  izolace dat uprostřed sezení (ostrá hrana). Buď varovat v UI, nebo udělat tento
-  jeden flag „až po restartu".
-- **[ ] #59g — Prohlížeč serverových logů.** Poslední otevřená položka #57b
-  (tail běhových logů nad rámec audit logu).
-- **[ ] #59h — Stránkování.** Seznamy users/usage/audit/vaults jsou bez limitu;
-  poroste-li ledger/audit, doplnit paginaci.
+- **[x] #59a — CSRF.** Hotovo: `registerCsrfGuard`
+  (`apps/server/src/auth/middleware.ts`) vyžaduje vlastní hlavičku
+  (`X-Requested-With`) na každém mutujícím `/api` požadavku — forged cross-site
+  `POST` ji bez CORS preflightu nenastaví. Klient ji přidává centrálně přes patch
+  `window.fetch` (`apps/web/src/csrf.ts`); server-rendered reset formulář ji
+  posílá taky.
+- **[~] #59b — Rate-limit & brute-force.** Hotovo: per-IP fixed-window limiter
+  (`apps/server/src/auth/rate-limit.ts`) na `/api/auth/login` a
+  `/api/auth/register`, konfigurovatelný přes `AUTH_*_RATE_*`; úspěšné přihlášení
+  vynuluje okno dané IP. Zbývá: CAPTCHA.
+- **[x] #59c — Hardening záloh (#57b).** Hotovo: (1) Konzistence — před zipem
+  `PRAGMA wal_checkpoint(TRUNCATE)` (`checkpointDatabase`). (2) Paměť — `zipDirToFile`
+  streamuje archiv po jednom souboru na disk místo plnění `Buffer`u. (3) Retence —
+  `BACKUP_RETENTION` (default 10), starší se po každé záloze prořežou
+  (`pruneBackups`). (4) Hlídaný restore — `stageRestore` validuje archiv a uloží
+  ho jako marker; `applyPendingRestore` ho při příštím startu (před otevřením DB)
+  atomicky prohodí (`POST /api/admin/backups/:name/restore` i upload
+  `POST /api/admin/restore`). (5) Zálohy se píší s právy `0o600` (obsahují hashe
+  hesel).
+- **[x] #59d — Mazání otevřené kampaně.** Hotovo: po `DELETE /api/admin/vaults/...`
+  se volá `SessionRegistry.invalidateScope` (emit `reload` připojeným klientům +
+  zahození cachovaného scope), takže další tah scope znovu otevře místo běhu nad
+  smazanou složkou.
+- **[~] #59e — GDPR mazání dat.** Hotovo: `DELETE /api/account` teď kromě řádku
+  uživatele a session maže i jeho izolovaný podstrom `<vault>/users/<id>/`
+  (`deleteUserVault`, `admin/ops.ts`) a evikuje cachovaný scope
+  (`SessionRegistry.evict`). Zbývá: export dat + souhlas; a totéž napojit na
+  admin smazání uživatele (`DELETE /api/admin/users/:id`).
+- **[x] #59f — Živý přepínač `allowAnonymous`.** Hotovo obojí: `SessionRegistry`
+  latchuje routing izolace dat z boot configu (přepne se až po restartu, ne
+  uprostřed sezení); admin panel varuje (`allowAnonymousPendingRestart`), když se
+  živá hodnota odchýlí od boot snapshotu. Auth gate (vyžadovat přihlášení) se mění
+  živě dál.
+- **[x] #59g — Prohlížeč serverových logů.** Hotovo: `LogBuffer` teeuje pino
+  výstup do ohraničeného ring bufferu (stdout zůstává), `GET /api/admin/logs`
+  vrací tail a panel má záložku „Logy".
+- **[~] #59h — Stránkování.** Hotovo serverově: `users`/`audit`/`usage`/`vaults`
+  berou `?limit&offset` (cap 500, default 200) a vrací `total`; `UserStore.list`
+  i `AuditStore.list` mají SQL LIMIT/OFFSET. UI ukazuje „zobrazeno X z Y" u users
+  a audit. Zbývá: plné stránkovací ovládání (další/předchozí) v panelu.
 
 ### Co snadno zapomeneme
 

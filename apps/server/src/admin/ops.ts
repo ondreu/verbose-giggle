@@ -10,7 +10,7 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import YAML from "yaml";
-import { dirSize, zipDir } from "../vault/zip.js";
+import { dirSize, zipDirToFile, listZipEntries, unzipInto } from "../vault/zip.js";
 import { SHARED_SCOPE } from "../session/registry.js";
 
 /** A single path segment with no separators / traversal / dotfiles. */
@@ -50,6 +50,24 @@ export function scopeRoot(vaultPath: string, scope: string): string | null {
   if (scope === SHARED_SCOPE) return vaultPath;
   if (!isSafeSegment(scope)) return null;
   return path.join(vaultPath, "users", scope);
+}
+
+/**
+ * Permanently delete a user's vault subtree (`<vault>/users/<id>`) on account
+ * deletion (GDPR, #59e). No-op (returns false) when the user never had isolated
+ * data or the id isn't a safe single segment. Confined to the vault, so it can
+ * never reach outside `<vault>/users/`.
+ */
+export async function deleteUserVault(vaultPath: string, userId: string): Promise<boolean> {
+  if (!isSafeSegment(userId)) return false;
+  const root = path.join(vaultPath, "users", userId);
+  try {
+    await fs.stat(root);
+  } catch {
+    return false; // nothing to delete
+  }
+  await fs.rm(root, { recursive: true, force: true });
+  return true;
 }
 
 export interface CampaignInfo {
@@ -131,22 +149,55 @@ export interface BackupInfo {
   createdAt: string;
 }
 
+export interface CreateBackupOptions {
+  /**
+   * Flush the live SQLite WAL before zipping so the copied `app.db` is a
+   * consistent snapshot (#59c). Best-effort; omitted in tests with no live DB.
+   */
+  checkpoint?: () => void;
+  /**
+   * Keep at most this many backups (newest wins); older ones are pruned after a
+   * successful create. 0 / undefined = keep everything.
+   */
+  retention?: number;
+}
+
 /**
  * Zip the entire vault (DB, campaigns, worlds, settings) into
  * `<vault>/backups/<name>.zip`. The backups folder itself is excluded so a
  * backup never contains older backups. `nowIso` is injected so callers can keep
- * filenames deterministic in tests. Returns the new backup's metadata.
+ * filenames deterministic in tests. The archive is streamed to disk one file at
+ * a time (bounded memory, #59c) with 0o600 perms (it contains password hashes).
+ * Returns the new backup's metadata.
  */
-export async function createBackup(vaultPath: string, nowIso: string): Promise<BackupInfo> {
+export async function createBackup(
+  vaultPath: string,
+  nowIso: string,
+  opts: CreateBackupOptions = {},
+): Promise<BackupInfo> {
   const dir = backupsDir(vaultPath);
   await fs.mkdir(dir, { recursive: true });
+  opts.checkpoint?.();
   // ISO timestamp → filesystem-safe (':' and '.' out).
   const stamp = nowIso.replace(/[:.]/g, "-");
   const name = `vault-${stamp}.zip`;
-  const buf = await zipDir(vaultPath, (rel) => rel === "backups" || rel.startsWith("backups/"));
   const target = path.join(dir, name);
-  await fs.writeFile(target, buf);
-  return { name, sizeBytes: buf.length, createdAt: nowIso };
+  await zipDirToFile(vaultPath, target, (rel) => rel === "backups" || rel.startsWith("backups/"));
+  const sizeBytes = (await fs.stat(target)).size;
+  if (opts.retention && opts.retention > 0) await pruneBackups(vaultPath, opts.retention);
+  return { name, sizeBytes, createdAt: nowIso };
+}
+
+/**
+ * Delete backups beyond the newest `keep` (#59c retention). Returns the names
+ * removed. No-op when `keep <= 0` or there's nothing to trim.
+ */
+export async function pruneBackups(vaultPath: string, keep: number): Promise<string[]> {
+  if (keep <= 0) return [];
+  const all = await listBackups(vaultPath); // newest first
+  const stale = all.slice(keep);
+  for (const b of stale) await deleteBackup(vaultPath, b.name);
+  return stale.map((b) => b.name);
 }
 
 /** List stored backups, newest first. */
@@ -185,5 +236,83 @@ export async function deleteBackup(vaultPath: string, name: string): Promise<boo
     return true;
   } catch {
     return false;
+  }
+}
+
+// --- Guarded restore (#59c part 4): validate → stage → swap at next start ----
+
+/** Marker file holding the validated backup to swap in on the next boot. */
+function pendingRestorePath(vaultPath: string): string {
+  return path.join(vaultPath, ".restore-pending.zip");
+}
+
+/** Temp dir a pending restore is unpacked into before the atomic swap. */
+function restoreStagingDir(vaultPath: string): string {
+  return path.join(vaultPath, ".restore-staging");
+}
+
+export class RestoreValidationError extends Error {}
+
+/**
+ * Validate a backup archive and stage it for a swap-in at the next start (#59c).
+ * We never overwrite the live vault while the app (and its open SQLite handle)
+ * is running; instead the bytes are parked as a marker and {@link
+ * applyPendingRestore} swaps them in at boot, before the DB is opened. Throws
+ * {@link RestoreValidationError} if the archive isn't a structurally valid vault
+ * backup (must contain `db/app.db`). Returns the entry count.
+ */
+export async function stageRestore(vaultPath: string, zip: Buffer): Promise<{ entries: number }> {
+  let names: string[];
+  try {
+    names = listZipEntries(zip);
+  } catch (err) {
+    throw new RestoreValidationError((err as Error).message);
+  }
+  if (!names.includes("db/app.db")) {
+    throw new RestoreValidationError("Tohle nevypadá jako záloha vaultu (chybí db/app.db).");
+  }
+  await fs.mkdir(vaultPath, { recursive: true });
+  await fs.writeFile(pendingRestorePath(vaultPath), zip, { mode: 0o600 });
+  return { entries: names.length };
+}
+
+/**
+ * If a restore was staged, swap it into the vault. MUST run at boot before the
+ * database is opened. Extracts into a staging dir, re-validates, then replaces
+ * each top-level entry atomically (`rename`). `backups/` is preserved (a backup
+ * never contains it). On any failure the live vault is left untouched and the
+ * bad marker is cleared. Returns true when a restore was applied.
+ */
+export async function applyPendingRestore(
+  vaultPath: string,
+  log?: (msg: string) => void,
+): Promise<boolean> {
+  const pending = pendingRestorePath(vaultPath);
+  let zip: Buffer;
+  try {
+    zip = await fs.readFile(pending);
+  } catch {
+    return false; // nothing staged
+  }
+  const staging = restoreStagingDir(vaultPath);
+  try {
+    await fs.rm(staging, { recursive: true, force: true });
+    await fs.mkdir(staging, { recursive: true });
+    await unzipInto(staging, zip);
+    // Re-validate the unpacked tree before touching live data.
+    await fs.access(path.join(staging, "db", "app.db"));
+    for (const entry of await fs.readdir(staging)) {
+      const dest = path.join(vaultPath, entry);
+      await fs.rm(dest, { recursive: true, force: true });
+      await fs.rename(path.join(staging, entry), dest);
+    }
+    log?.("Applied staged vault restore.");
+    return true;
+  } catch (err) {
+    log?.(`Pending restore failed; vault left untouched: ${(err as Error).message}`);
+    return false;
+  } finally {
+    await fs.rm(pending, { force: true }).catch(() => {});
+    await fs.rm(staging, { recursive: true, force: true }).catch(() => {});
   }
 }

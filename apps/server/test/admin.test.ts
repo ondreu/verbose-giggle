@@ -63,6 +63,8 @@ async function setup() {
     vaultPath,
     getConfig: () => config,
     reloadConfig,
+    bootAllowAnonymous: config.auth.allowAnonymous,
+    getLogs: (limit) => ["log-a", "log-b", "log-c"].slice(-limit),
     startedAtMs: Date.now(),
     now: () => "2026-06-25T12:00:00.000Z",
   });
@@ -221,6 +223,25 @@ describe("admin dev panel (#57b)", () => {
     await app.close();
   });
 
+  it("flags allowAnonymous as needing a restart once it drifts from boot (#59f)", async () => {
+    const { app, adminSid } = await setup();
+    // Boot value is true; before any change there's no pending restart.
+    const before = await app.inject({ method: "GET", url: "/api/admin/server-settings", ...asAdmin(adminSid) });
+    expect(before.json().allowAnonymousPendingRestart).toBe(false);
+
+    const res = await app.inject({
+      method: "PUT",
+      url: "/api/admin/server-settings",
+      payload: { allowAnonymous: false },
+      ...asAdmin(adminSid),
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().allowAnonymous).toBe(false);
+    // Live value now differs from the boot snapshot the routing still uses.
+    expect(res.json().allowAnonymousPendingRestart).toBe(true);
+    await app.close();
+  });
+
   it("persists per-model message pricing and exposes the model list", async () => {
     const { app, adminSid, getConfig } = await setup();
     const res = await app.inject({
@@ -359,6 +380,64 @@ describe("admin dev panel (#57b)", () => {
       ...asAdmin(adminSid),
     });
     expect(res.statusCode).toBe(404);
+    await app.close();
+  });
+
+  it("tails server logs for an admin (#59g)", async () => {
+    const { app, adminSid } = await setup();
+    const res = await app.inject({ method: "GET", url: "/api/admin/logs?limit=2", ...asAdmin(adminSid) });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().available).toBe(true);
+    expect(res.json().lines).toEqual(["log-b", "log-c"]);
+  });
+
+  it("paginates the users list with limit/offset and a total (#59h)", async () => {
+    const { app, adminSid, users } = await setup();
+    const hash = await hashPassword("Abcd1234");
+    for (let i = 0; i < 5; i++) users.create({ email: `p${i}@e.c`, passwordHash: hash, emailVerified: true });
+
+    const page = await app.inject({
+      method: "GET",
+      url: "/api/admin/users?limit=2&offset=1",
+      ...asAdmin(adminSid),
+    });
+    expect(page.statusCode).toBe(200);
+    const body = page.json();
+    expect(body.users).toHaveLength(2);
+    expect(body.limit).toBe(2);
+    expect(body.offset).toBe(1);
+    // 2 from setup (admin + member) + 5 created = 7.
+    expect(body.total).toBe(7);
+  });
+
+  it("caps an over-large page size (#59h)", async () => {
+    const { app, adminSid } = await setup();
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/admin/users?limit=99999",
+      ...asAdmin(adminSid),
+    });
+    expect(res.json().limit).toBe(500);
+  });
+
+  it("stages a restore from a stored backup (#59c)", async () => {
+    const { app, adminSid, vaultPath } = await setup();
+    // Tests use an in-memory DB, so write a db/app.db file the backup must carry
+    // for restore validation to accept the archive as a real vault backup.
+    await fs.mkdir(path.join(vaultPath, "db"), { recursive: true });
+    await fs.writeFile(path.join(vaultPath, "db", "app.db"), "fake-sqlite");
+    const create = await app.inject({ method: "POST", url: "/api/admin/backups", ...asAdmin(adminSid) });
+    const name = create.json().name;
+
+    const restore = await app.inject({
+      method: "POST",
+      url: `/api/admin/backups/${name}/restore`,
+      ...asAdmin(adminSid),
+    });
+    expect(restore.statusCode).toBe(200);
+    expect(restore.json().appliesAtRestart).toBe(true);
+    // The marker is staged for the next boot to pick up.
+    await expect(fs.stat(path.join(vaultPath, ".restore-pending.zip"))).resolves.toBeTruthy();
     await app.close();
   });
 });

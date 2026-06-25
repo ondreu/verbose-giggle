@@ -152,11 +152,18 @@ export class UserStore {
     this.db.prepare("DELETE FROM users WHERE id = ?").run(id);
   }
 
-  /** All users, newest first (admin panel, #57). */
-  list(): User[] {
-    const rows = this.db
-      .prepare("SELECT * FROM users ORDER BY created_at DESC")
-      .all() as unknown as UserRow[];
+  /**
+   * Users, newest first (admin panel, #57). With no args returns all; pass
+   * `limit`/`offset` to page (#59h).
+   */
+  list(opts: { limit?: number; offset?: number } = {}): User[] {
+    let sql = "SELECT * FROM users ORDER BY created_at DESC";
+    const params: number[] = [];
+    if (opts.limit !== undefined) {
+      sql += " LIMIT ? OFFSET ?";
+      params.push(opts.limit, opts.offset ?? 0);
+    }
+    const rows = this.db.prepare(sql).all(...params) as unknown as UserRow[];
     return rows.map(rowToUser);
   }
 

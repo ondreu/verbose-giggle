@@ -20,6 +20,8 @@ import {
   listAllCampaigns,
   listBackups,
   backupPath,
+  stageRestore,
+  RestoreValidationError,
 } from "../admin/ops.js";
 import { zipDir } from "../vault/zip.js";
 import { promises as fs } from "node:fs";
@@ -39,6 +41,46 @@ export interface AdminContext {
   startedAtMs: number;
   /** ISO clock, injectable for deterministic backup filenames in tests. */
   now?: () => string;
+  /**
+   * Invalidate a scope's cached SessionManager after this panel changed its
+   * data on disk (#59d). Optional so tests can omit it; when absent, deletion
+   * still removes the folder but a stale manager isn't dropped.
+   */
+  onScopeDataChanged?: (scopeKey: string, reason: string) => Promise<void>;
+  /**
+   * Flush the live SQLite WAL before a backup, for a consistent snapshot (#59c).
+   * Optional so the in-memory test DB can omit it.
+   */
+  checkpointDb?: () => void;
+  /** Keep at most this many backups; older ones are pruned (#59c). 0 = keep all. */
+  backupRetention?: number;
+  /**
+   * `allowAnonymous` as latched at boot (#59f). Data-isolation routing only
+   * changes on restart, so the panel warns when the live setting has drifted
+   * from this. Omitted = no warning (tests / self-hosted).
+   */
+  bootAllowAnonymous?: boolean;
+  /**
+   * Tail recent server log lines (#59g). Optional so tests can omit it; when
+   * absent the logs endpoint reports the viewer as unavailable.
+   */
+  getLogs?: (limit: number) => string[];
+}
+
+/** Largest page an admin list endpoint will serve in one response (#59h). */
+const MAX_PAGE = 500;
+
+/** Parse `?limit&offset` into a sane, capped window. */
+function parsePage(
+  q: { limit?: string; offset?: string } | undefined,
+  defLimit = 200,
+): { limit: number; offset: number } {
+  const rawLimit = Number(q?.limit);
+  const rawOffset = Number(q?.offset);
+  const limit =
+    Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(Math.floor(rawLimit), MAX_PAGE) : defLimit;
+  const offset = Number.isFinite(rawOffset) && rawOffset > 0 ? Math.floor(rawOffset) : 0;
+  return { limit, offset };
 }
 
 function userRow(u: ReturnType<UserStore["list"]>[number]) {
@@ -53,9 +95,24 @@ function userRow(u: ReturnType<UserStore["list"]>[number]) {
 }
 
 export async function registerAdminRoutes(app: FastifyInstance, ctx: AdminContext): Promise<void> {
-  app.get("/api/admin/users", async () => ({
-    users: ctx.users.list().map((u) => ({ ...userRow(u), credits: ctx.credits.balance(u.id) })),
-  }));
+  // Accept a raw backup archive on the restore-upload route (#59c). Fastify only
+  // parses JSON/urlencoded out of the box; hand zip bytes through untouched. A
+  // generous cap keeps a hostile upload from exhausting memory.
+  if (!app.hasContentTypeParser("application/zip")) {
+    app.addContentTypeParser(
+      "application/zip",
+      { parseAs: "buffer", bodyLimit: 512 * 1024 * 1024 },
+      (_req, body, done) => done(null, body),
+    );
+  }
+
+  app.get<{ Querystring: { limit?: string; offset?: string } }>("/api/admin/users", async (req) => {
+    const { limit, offset } = parsePage(req.query);
+    const users = ctx.users
+      .list({ limit, offset })
+      .map((u) => ({ ...userRow(u), credits: ctx.credits.balance(u.id) }));
+    return { users, total: ctx.users.count(), limit, offset };
+  });
 
   app.get("/api/admin/overview", async () => {
     const all = ctx.users.list();
@@ -66,7 +123,10 @@ export async function registerAdminRoutes(app: FastifyInstance, ctx: AdminContex
     };
   });
 
-  app.get("/api/admin/audit", async () => ({ entries: ctx.audit.list() }));
+  app.get<{ Querystring: { limit?: string; offset?: string } }>("/api/admin/audit", async (req) => {
+    const { limit, offset } = parsePage(req.query);
+    return { entries: ctx.audit.list({ limit, offset }), total: ctx.audit.count(), limit, offset };
+  });
 
   // Change a user's role. Refuses to demote the last/own admin away.
   app.put<{ Params: { id: string }; Body: { role?: string } }>(
@@ -140,6 +200,10 @@ export async function registerAdminRoutes(app: FastifyInstance, ctx: AdminContex
   function serverSettingsView(c: Config) {
     return {
       allowAnonymous: c.auth.allowAnonymous,
+      // True when the live value differs from the boot snapshot the data-isolation
+      // routing is still using (#59f): the toggle takes full effect on restart.
+      allowAnonymousPendingRestart:
+        ctx.bootAllowAnonymous !== undefined && ctx.bootAllowAnonymous !== c.auth.allowAnonymous,
       registrationEnabled: c.auth.registrationEnabled,
       requireVerifiedEmail: c.auth.requireVerifiedEmail,
       creditsEnabled: c.credits.enabled,
@@ -215,6 +279,13 @@ export async function registerAdminRoutes(app: FastifyInstance, ctx: AdminContex
     },
   );
 
+  // --- Server logs viewer (#59g) -------------------------------------------
+  app.get<{ Querystring: { limit?: string } }>("/api/admin/logs", async (req) => {
+    if (!ctx.getLogs) return { lines: [], available: false };
+    const { limit } = parsePage(req.query, 200);
+    return { lines: ctx.getLogs(limit), available: true };
+  });
+
   // --- Health / runtime (#57b) ---------------------------------------------
   app.get("/api/admin/health", async () => {
     const c = ctx.getConfig();
@@ -241,23 +312,38 @@ export async function registerAdminRoutes(app: FastifyInstance, ctx: AdminContex
   });
 
   // --- Usage / cost overview (#57b) ----------------------------------------
-  app.get("/api/admin/usage", async () => {
+  app.get<{ Querystring: { limit?: string; offset?: string } }>("/api/admin/usage", async (req) => {
     const summary = ctx.credits.usageSummary();
-    const byUser = summary.byUser.map((u) => ({
+    const { limit, offset } = parsePage(req.query);
+    // byReason is bounded by the set of reasons; only byUser can grow, so page it.
+    const allByUser = summary.byUser.map((u) => ({
       ...u,
       email: ctx.users.findById(u.userId)?.email ?? null,
     }));
-    return { ...summary, byUser, creditsEnabled: ctx.getConfig().credits.enabled };
+    return {
+      ...summary,
+      byUser: allByUser.slice(offset, offset + limit),
+      byUserTotal: allByUser.length,
+      limit,
+      offset,
+      creditsEnabled: ctx.getConfig().credits.enabled,
+    };
   });
 
   // --- Cross-tenant campaign / vault management (#57b) ---------------------
-  app.get("/api/admin/vaults", async () => {
+  app.get<{ Querystring: { limit?: string; offset?: string } }>("/api/admin/vaults", async (req) => {
     const campaigns = await listAllCampaigns(ctx.vaultPath);
     const enriched = campaigns.map((c) => ({
       ...c,
       ownerEmail: c.scope === "__shared__" ? null : ctx.users.findById(c.scope)?.email ?? null,
     }));
-    return { campaigns: enriched };
+    const { limit, offset } = parsePage(req.query);
+    return {
+      campaigns: enriched.slice(offset, offset + limit),
+      total: enriched.length,
+      limit,
+      offset,
+    };
   });
 
   app.get<{ Params: { scope: string; folder: string } }>(
@@ -279,6 +365,9 @@ export async function registerAdminRoutes(app: FastifyInstance, ctx: AdminContex
       const dir = await campaignDir(ctx.vaultPath, req.params.scope, req.params.folder);
       if (!dir) return reply.code(404).send({ error: "Kampaň nenalezena." });
       await deleteCampaign(dir);
+      // Drop the affected scope's cached manager so a later turn can't run
+      // against the just-deleted campaign dir (#59d).
+      await ctx.onScopeDataChanged?.(req.params.scope, "campaign-deleted");
       ctx.audit.record(req.user!.id, "vault.campaign.delete", null, `${req.params.scope}/${req.params.folder}`);
       return reply.send({ ok: true });
     },
@@ -288,7 +377,10 @@ export async function registerAdminRoutes(app: FastifyInstance, ctx: AdminContex
   app.get("/api/admin/backups", async () => ({ backups: await listBackups(ctx.vaultPath) }));
 
   app.post("/api/admin/backups", async (req, reply) => {
-    const info = await createBackup(ctx.vaultPath, now());
+    const info = await createBackup(ctx.vaultPath, now(), {
+      checkpoint: ctx.checkpointDb,
+      retention: ctx.backupRetention,
+    });
     ctx.audit.record(req.user!.id, "backup.create", null, info.name);
     return reply.send(info);
   });
@@ -313,5 +405,45 @@ export async function registerAdminRoutes(app: FastifyInstance, ctx: AdminContex
     if (!ok) return reply.code(404).send({ error: "Záloha nenalezena." });
     ctx.audit.record(req.user!.id, "backup.delete", null, req.params.name);
     return reply.send({ ok: true });
+  });
+
+  // --- Guarded restore (#59c): validate now, swap in at the next restart ------
+  // Stage a restore from an already-stored backup, by name.
+  app.post<{ Params: { name: string } }>(
+    "/api/admin/backups/:name/restore",
+    async (req, reply) => {
+      const p = backupPath(ctx.vaultPath, req.params.name);
+      if (!p) return reply.code(400).send({ error: "Neplatný název zálohy." });
+      let zip: Buffer;
+      try {
+        zip = await fs.readFile(p);
+      } catch {
+        return reply.code(404).send({ error: "Záloha nenalezena." });
+      }
+      try {
+        const info = await stageRestore(ctx.vaultPath, zip);
+        ctx.audit.record(req.user!.id, "vault.restore.stage", null, req.params.name);
+        return reply.send({ ok: true, ...info, appliesAtRestart: true });
+      } catch (err) {
+        if (err instanceof RestoreValidationError) return reply.code(400).send({ error: err.message });
+        throw err;
+      }
+    },
+  );
+
+  // Stage a restore from an uploaded backup archive (raw application/zip body).
+  app.post("/api/admin/restore", async (req, reply) => {
+    const zip = req.body as Buffer;
+    if (!Buffer.isBuffer(zip) || zip.length === 0) {
+      return reply.code(400).send({ error: "Chybí nahraná záloha." });
+    }
+    try {
+      const info = await stageRestore(ctx.vaultPath, zip);
+      ctx.audit.record(req.user!.id, "vault.restore.upload", null, `${info.entries} souborů`);
+      return reply.send({ ok: true, ...info, appliesAtRestart: true });
+    } catch (err) {
+      if (err instanceof RestoreValidationError) return reply.code(400).send({ error: err.message });
+      throw err;
+    }
   });
 }
