@@ -2,6 +2,8 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Settings } from "./settings.js";
+import type { SmtpConfig } from "./auth/email.js";
+import type { CreditPricing } from "./credits/metering.js";
 
 /**
  * Bundled SRD dataset shipped in-repo (#45a) under `packages/srd/data`, so the
@@ -54,6 +56,34 @@ export interface Config {
   basicAuth: string | null;
   webDist: string | null;
   image: { baseUrl: string; apiKey: string; model: string } | null;
+  /** Accounts / auth (#55). */
+  auth: {
+    /** Absolute base URL for links in emails (no trailing slash). */
+    publicUrl: string;
+    /** SMTP transport for outbound email; null logs emails instead. */
+    smtp: SmtpConfig | null;
+    /**
+     * Self-hosted default: let visitors enter without an account ("continue
+     * without login"). Hosted edition sets AUTH_ALLOW_ANONYMOUS=false.
+     */
+    allowAnonymous: boolean;
+    /** Whether self-service registration is open. */
+    registrationEnabled: boolean;
+    /**
+     * Email that should hold the admin role (#57). Promoted on startup and at
+     * registration. Null = no designated admin (pure single-tenant).
+     */
+    adminEmail: string | null;
+  };
+  /** Credits / metering (#56). */
+  credits: {
+    /**
+     * Charge real token usage against user credits (hosted edition). Off by
+     * default so self-hosted / BYO-key runs are never metered.
+     */
+    enabled: boolean;
+    pricing: CreditPricing;
+  };
 }
 
 export function loadConfig(): Config {
@@ -85,8 +115,23 @@ export function loadConfig(): Config {
         }
       : null;
 
+  const port = Number(process.env.PORT ?? 3000);
+
+  // SMTP is active only when a host is given; auth otherwise just logs emails.
+  const smtpHost = process.env.SMTP_HOST?.trim();
+  const smtp: SmtpConfig | null = smtpHost
+    ? {
+        host: smtpHost,
+        port: Number(process.env.SMTP_PORT ?? 587),
+        secure: process.env.SMTP_SECURE === "true",
+        user: process.env.SMTP_USER || null,
+        pass: process.env.SMTP_PASS || null,
+        from: process.env.SMTP_FROM || process.env.SMTP_USER || "no-reply@localhost",
+      }
+    : null;
+
   return {
-    port: Number(process.env.PORT ?? 3000),
+    port,
     host: process.env.HOST ?? "0.0.0.0",
     vaultPath,
     // SRD dataset path. Defaults to the in-repo bundled copy (#45a) so the app
@@ -105,6 +150,22 @@ export function loadConfig(): Config {
     basicAuth: process.env.BASIC_AUTH || null,
     webDist: process.env.WEB_DIST ?? null,
     image,
+    auth: {
+      publicUrl: (process.env.PUBLIC_URL?.trim().replace(/\/+$/, "")) || `http://localhost:${port}`,
+      smtp,
+      allowAnonymous: process.env.AUTH_ALLOW_ANONYMOUS !== "false",
+      registrationEnabled: process.env.AUTH_REGISTRATION !== "false",
+      adminEmail: process.env.ADMIN_EMAIL?.trim().toLowerCase() || null,
+    },
+    credits: {
+      enabled: process.env.CREDITS_ENABLED === "true",
+      pricing: {
+        perThousandPromptTokens: Number(process.env.CREDITS_PER_1K_PROMPT ?? 1),
+        perThousandCompletionTokens: Number(process.env.CREDITS_PER_1K_COMPLETION ?? 3),
+        perImage: Number(process.env.CREDITS_PER_IMAGE ?? 50),
+        perThousandTtsChars: Number(process.env.CREDITS_PER_1K_TTS_CHARS ?? 2),
+      },
+    },
   };
 }
 

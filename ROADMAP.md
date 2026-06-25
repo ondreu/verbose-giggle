@@ -25,14 +25,31 @@ updating.
 
 # Open work — what's next
 
-Recommended order (decisions in #55–58 are already made):
-**#55 auth + per-user data isolation → #58 account settings → #57 admin panel →
-#56 credits/metering → payments.** #48 (i18n) and the #45 partials are
-independent and can land alongside.
+**Stav (2026-06-25):** Účty/kredity/admin jsou z velké části hotové a nasazené —
+**#55a–#55e** (registrace, ověření e-mailu, login + httpOnly session, reset hesla,
+napojený `LoginScreen`), **#55f část 1** (autentizace + gating endpointů),
+**#56** (kreditní ledger, metering LLM/obrázků/TTS, vynucení limitu 402, admin
+granty, záložka *Kredity*, ukazatel v hlavičce — chybí jen platby/Stripe),
+**#57** (admin role + bootstrap, správa uživatelů, audit log, `/admin` panel) a
+**#58a** (nastavení účtu). Vše s testy (`apps/server/test/`).
+
+**Zbývá — dva velké samostatné tracky + drobnosti:**
+1. **#55f část 2 — izolace dat per uživatel** (rozhodnutý layout:
+   `<vault>/users/<id>/`, migrace stávajícího vaultu na prvního admina).
+   Největší a nejrizikovější — přepis single-manager herní vrstvy na resolving
+   manageru + event streamu per request (~60 míst v `routes/game.ts`). Migrace
+   nemůže bezpečně přijít dřív, než je tento přepis hotový. **Čeká na explicitní
+   pokyn** (riziko rozbití funkční single-tenant verze).
+2. **#48 — i18n** (P1): infrastruktura lokalizace v `@adm/schemas` (`cs`/`en`,
+   runtime přepínání) + tři přepínače. Aditivní a nezávislé, nízké riziko.
+3. Drobnosti: **#58b/#58c** (per-user preference + rozdělení global vs user
+   settings), zbytek **#57b** (globální settings, správa kampaní/vaultů, logy,
+   health), platby (#56d), **#45** partials (obsah — dělá autor).
 
 ## P0 — Účty, kredity a provoz (nový směr, 2026-06-24)
 
-> **Status: design / brainstorm — nic z toho se zatím neimplementuje.** Posouvá
+> **Status: z velké části IMPLEMENTOVÁNO** (viz „Stav" výše a `[x]` níže); zbývá
+> #55f-2 (izolace dat) a platby. Posouvá
 > appku z dnešního **single-tenant self-hosted** modelu (jeden vault, jeden
 > Basic-Auth zámek, klíče vlastní provozovatel) k provozu, kde má **více
 > uživatelů vlastní účet, data a kredity**. `LoginScreen` a záložky
@@ -59,54 +76,114 @@ ne „nice to have".
 
 ### #55 — Email registrace + autentizace
 
-- **#55a — Datová vrstva uživatelů.** Lehká DB (SQLite ve vaultu — žádná nová
-  infra, drží „file-first") s tabulkou `users` (id, email, `password_hash`
-  argon2/bcrypt, `email_verified`, `created_at`, role).
-- **#55b — Registrace + ověření emailu.** `POST /api/auth/register` (validace
-  síly hesla, hash), ověřovací odkaz podepsaným tokenem s expirací. Vyžaduje
-  **odesílání emailů** (SMTP — nová závislost).
-- **#55c — Login + session.** `POST /api/auth/login` → **httpOnly cookie**
-  (bezpečnější default proti XSS než JWT). `config.basicAuth` zůstane jako
-  „op-only" zámek pro self-hosted.
-- **#55d — Reset hesla.** `POST /api/auth/forgot` + `/reset` přes emailový token
-  (sdílí infra s #55b).
-- **#55e — Napojit `LoginScreen`.** Vyměnit `onContinue()` stub za reálná volání
-  + error stavy; „pokračovat bez přihlášení" jen v self-hosted režimu.
-- **#55f — Autorizace na endpointech.** Největší skrytá práce: protáhnout
-  `userId` ze session do `SessionManager`/vaultu a izolovat kampaně per uživatel.
-  Bez toho je registrace kosmetika.
+- **[x] #55a — Datová vrstva uživatelů.** SQLite ve vaultu (`<vault>/db/app.db`)
+  přes vestavěný `node:sqlite` (Node 22+, žádná nativní závislost); idempotentní
+  migrace dle `user_version`. Tabulka `users` (id, email, `password_hash`,
+  `display_name`, `email_verified`, role, `created_at`) + `UserStore`
+  (create/find/update/list/delete) a hashování hesla přes `crypto.scrypt`
+  (self-describing formát, snadná migrace na argon2). `apps/server/src/db/`,
+  `apps/server/src/auth/{users,password}.ts`, test `test/users.test.ts`. Pozn.:
+  baseline Node zvednut 20→22.
+- **[x] #55b — Registrace + ověření emailu.** `POST /api/auth/register`
+  (validace e-mailu + síly hesla, scrypt hash), `POST
+  /api/auth/resend-verification` (neutrální odpověď proti enumeraci) a `GET
+  /api/auth/verify?token=` (HTML potvrzení). Ověřovací odkaz = HMAC podepsaný
+  token s expirací (`auth/tokens.ts`, sdílí #55d), tajemství z `AUTH_SECRET`
+  nebo persistované v `<vault>/db/auth-secret`. Odesílání e-mailů přes
+  `EmailSender` — default loguje odkaz, SMTP přes `nodemailer` (lazy) když je
+  `SMTP_HOST` nastaven. `apps/server/src/auth/{service,tokens,validation,email}.ts`,
+  `routes/auth.ts`, test `test/auth.test.ts`.
+- **[x] #55c — Login + session.** `POST /api/auth/login` ověří heslo
+  (timing-uniform proti enumeraci), vyžaduje ověřený e-mail (vypínatelné
+  `requireVerifiedEmail`) a otevře **server-side session** (tabulka `sessions`,
+  v2 migrace) → opaque id v **httpOnly** cookie (`adm_session`, SameSite=Lax,
+  Secure dle HTTPS). `POST /api/auth/logout` (invaliduje session), `GET
+  /api/auth/me`. Server-side úložiště = reálný logout/revokace (vs. JWT).
+  `auth/sessions.ts`, `@fastify/cookie`. `config.basicAuth` zůstává op-only
+  zámek. Testy v `test/auth.test.ts`.
+- **[x] #55d — Reset hesla.** `POST /api/auth/forgot` (neutrální odpověď) pošle
+  e-mail s reset tokenem (purpose `reset-password`, krátká expirace);
+  `POST /api/auth/reset {token,password}` ověří token + sílu hesla, přehashuje,
+  invaliduje VŠECHNY session uživatele a zároveň označí e-mail jako ověřený.
+  Emailový odkaz cílí na `GET /api/auth/reset?token=` — self-contained HTML
+  formulář, takže reset funguje i bez front-endu (#55e). Sdílí token/email
+  infra s #55b. Testy v `test/auth.test.ts`.
+- **[x] #55e — Napojit `LoginScreen`.** Stub `onContinue()` nahrazen reálnými
+  voláními přes klienta `apps/web/src/auth.ts` (login/register/forgot/resend,
+  `credentials: same-origin`). `LoginScreen` má režimy login/registrace/
+  zapomenuté heslo, chybové i potvrzovací stavy a nabídku znovu poslat ověření
+  při 403. `App.tsx` při startu ověří session (`GET /api/auth/me`) a načte
+  `GET /api/auth/config` → „pokračovat bez přihlášení" a odkaz na registraci se
+  zobrazí jen podle serverových flagů (`allowAnonymous`/`registrationEnabled`,
+  env `AUTH_ALLOW_ANONYMOUS`/`AUTH_REGISTRATION`).
+- **[~] #55f — Autorizace na endpointech.** **Hotovo (část 1 — autentizace):**
+  `auth/middleware.ts` resolvuje session usera na `req.user` na každém requestu
+  a — když je `allowAnonymous=false` (hosted) — blokuje chráněné `/api` routy
+  bez session (401). Veřejné: `/api/auth/*`, `/api/health`, statika.
+  Integrační testy (`test/auth-guard.test.ts`).
+  **Zbývá (část 2 — izolace dat):** protáhnout `userId` do `SessionManager`/
+  vaultu a izolovat kampaně per uživatel (dnes 1 sdílený vault + 1
+  `SessionManager` při startu). Architektonicky velké — čeká na rozhodnutí
+  o layoutu vaultu a vlastnictví stávajících dat.
 
 ### #56 — Uživatelské kredity / metering
 
-- **#56a — Kreditní účet + transakce.** `credit_ledger` (user_id, delta, důvod,
-  ref, timestamp) jako **append-only ledger**; zůstatek = součet.
-- **#56b — Měření spotřeby.** Strhávat **per reálná spotřeba tokenů** (LLM/
-  obrázek/TTS) = cost + markup; usage brát z odpovědi poskytovatele, ne odhad.
-  **Pozor na determinismus (#12):** strhávání je vedlejší efekt mimo engine.
-  Ošetřit selhání (nestrhávat za chybu) a streaming (#32 — účtovat po dokončení
-  tahu). **BYO-key (self-hosted):** metering se přeskakuje; hosted BYO nepovolí.
-- **#56c — Vynucení limitu.** Před drahou operací zkontrolovat zůstatek; při 0
-  vrátit čistý 402 do UI (ne pád). Rozhodnout: tvrdý stop vs. mock narrator.
-- **#56d — Dobíjení.** Začít **admin grantem** (#57); platební brána (Stripe)
-  až později (vlastní compliance).
-- **#56e — UI.** Naplnit záložku *Kredity* (zůstatek, historie, koupit) +
-  ukazatel v hlavičce.
+- **[x] #56a — Kreditní účet + transakce.** Append-only `credit_ledger`
+  (user_id, delta, reason, ref, timestamp; v4 migrace, FK cascade) + `CreditStore`
+  (`grant`/`charge`/`balance`/`history`). Zůstatek = `SUM(delta)`; delty jsou
+  celá čísla v nejmenší jednotce (bez floatů). `credits/ledger.ts`, test
+  `test/credits.test.ts`.
+- **[x] #56b — Měření spotřeby.** LLM: `MeteredLlm` obalí vypravěče a sečte
+  `usage` z odpovědí poskytovatele přes všechna kola tool-loopu (stream i
+  ne-stream; u streamu `stream_options.include_usage`); cena = tokeny/1000 ×
+  sazba (input/output). Obrázky: paušál `CREDITS_PER_IMAGE` po úspěšném
+  vygenerování (`/api/image`). TTS: `CREDITS_PER_1K_TTS_CHARS` × délka textu
+  (`/api/tts`; preview zdarma). Strhává se **až po úspěchu** (chyba = nestrhne)
+  → mimo engine, determinismus (#12) nedotčen. Gated `CREDITS_ENABLED` (default
+  off). `credits/metering.ts`, `llm/client.ts`.
+- **[x] #56c — Vynucení limitu.** Před tahem (`/api/action`, `/api/regenerate`,
+  intro, recap) se kontroluje zůstatek; při ≤0 čistý **402** do UI. Následné
+  LLM (arrival/AI tahy po engine příkazu) se metrují bez tvrdého stopu —
+  enforcement je na hranici hráčova tahu. Tvrdý stop (ne mock).
+- **[x] #56d — Dobíjení.** Admin grant: `POST /api/admin/users/:id/credits`
+  (kladně přidá, záporně odečte; audit). Zůstatek je vidět v admin seznamu
+  uživatelů. Platební brána (Stripe) až později.
+- **[x] #56e — UI.** Záložka *Kredity* (`CreditsPanel`: zůstatek + historie
+  pohybů; anonym vidí vysvětlení) přes `GET /api/credits`. Ukazatel zůstatku
+  v hlavičce (`CreditBadge`, jen hosted + přihlášený, polluje). Admin má
+  per-uživatele tlačítko „kredity". Zbývá jen „koupit" (čeká na platby/Stripe).
 
 ### #57 — Dev / admin panel
 
-- **#57a — Role + ochrana.** `role: admin`; admin endpointy za zvláštní
-  autorizací — bezpečnostně nejcitlivější část.
-- **#57b — Rozsah.** Seznam uživatelů (verifikace/ban/reset), **ruční úprava
-  kreditů**, přehled spotřeby/nákladů, globální server settings, správa
-  kampaní/vaultů, logy, health.
-- **#57c — Audit log.** Každá admin akce (grant, ban, změna settings) append-only.
-- **#57d — UI.** Samostatná `/admin` routa (gated rolí) — čistší než rozšiřovat
-  `SettingsModal`.
+- **[x] #57a — Role + ochrana.** Role `admin` na uživateli; prefix `/api/admin`
+  hlídá auth guard (401 bez session, 403 bez admin role) nezávisle na
+  `allowAnonymous`. Admin se bootstrapuje z `ADMIN_EMAIL` — registrace s tímto
+  e-mailem rovnou dostane roli admin a `ensureAdmin()` při startu povýší už
+  existující účet. `routes/admin.ts`, `auth/middleware.ts`. Testy v
+  `auth-guard.test.ts` + `auth.test.ts`.
+- **[~] #57b — Rozsah.** Hotovo: seznam uživatelů + overview počty; mutace
+  `PUT /api/admin/users/:id/role`, `…/verify`, `DELETE …/:id` (ban — smaže i
+  session), s pojistkami proti self-demote/self-delete; `GET /api/admin/audit`.
+  Zbývá: ruční úprava kreditů (#56), přehled spotřeby/nákladů, globální server
+  settings, správa kampaní/vaultů, logy, health.
+- **[x] #57c — Audit log.** Append-only tabulka `audit_log` (v3 migrace) +
+  `AuditStore`; každá admin mutace (role/verify/delete) zapíše záznam s actorem,
+  cílem a detailem. `auth/audit.ts`. Testy v `admin.test.ts`.
+- **[x] #57d — UI.** Samostatná stránka `AdminPage` na `/admin` (App ji vykreslí
+  podle `location.pathname`; bez client routeru). Gated server-side — `/api/admin/*`
+  vrací 403 ne-adminům, takže ne-admin vidí „přístup odepřen". Tabulka uživatelů
+  (změna role / ověření / smazání), overview počty a audit log. Admin má odkaz
+  na panel v záložce *Účet*.
 
 ### #58 — Nastavení účtu pro uživatele
 
-- **#58a — Záložka *Účet*.** Změna emailu (re-verifikace), hesla, jména, smazání
-  účtu (GDPR), odhlášení.
+- **[x] #58a — Záložka *Účet*.** Backend: `PUT /api/account/{profile,email,
+  password}` + `DELETE /api/account` (vše vyžaduje session). Změna e-mailu resetuje
+  ověření a pošle nový ověřovací odkaz; změna hesla ověří současné a invaliduje
+  všechny session (současné zařízení dostane nové cookie); smazání = sessions +
+  user řádek (úklid vault dat čeká na izolaci #55f-2). Front-end: `AccountPanel`
+  v `SettingsModal` (jméno/e-mail/heslo/odhlášení/smazání), anonymní režim ukáže
+  „nepřihlášen". Testy v `test/auth.test.ts`.
 - **#58b — Per-uživatel preference.** Voice/jazyk (#48) vázané na účet.
   Provider-klíče: v hosted edici jen globální (op-only); v self-hosted BYO. Účet
   v hosted edici **nesmí** nabízet pole pro vlastní API klíč.

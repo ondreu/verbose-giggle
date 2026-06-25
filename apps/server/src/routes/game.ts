@@ -1,8 +1,10 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import YAML from "yaml";
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 import { LlmClient, type Llm } from "../llm/client.js";
+import { MeteredLlm } from "../credits/metering.js";
+import type { CreditStore } from "../credits/ledger.js";
 import { MockLlmClient } from "../llm/mock.js";
 import { ImageClient, buildMapPrompt, buildPrompt, type ImageSubject } from "../llm/image.js";
 import { synthesizeAzure } from "../tts/azure.js";
@@ -31,6 +33,16 @@ export interface GameContext {
   manager: SessionManager;
   bus: EventBus;
   config: Config;
+  /** Credit ledger for metering LLM usage (#56b); null disables metering. */
+  credits: CreditStore | null;
+}
+
+/** Thrown by the metering helper when a user has no credits left (#56c). */
+class InsufficientCreditsError extends Error {
+  constructor() {
+    super("Nedostatek kreditů.");
+    this.name = "InsufficientCreditsError";
+  }
 }
 
 /** Image MIME → file extension for stored assets. */
@@ -99,6 +111,48 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
   let llm: Llm = makeLlm();
   if (!config.llm.apiKey || config.llm.provider === "mock") {
     app.log.warn("No LLM API key configured — using offline mock narrator");
+  }
+
+  /**
+   * Run an LLM operation with credit metering (#56b/#56c). When metering is off
+   * (self-hosted / BYO-key, no accounts, or anonymous request) it just runs.
+   * Otherwise: optionally enforce a positive balance up front (`enforce`), run
+   * with a metered narrator, and charge the accumulated token cost *after*
+   * success — a thrown turn is never billed. Charging is a side effect outside
+   * the engine, so determinism (#12) is unaffected.
+   */
+  async function meteredTurn<T>(
+    req: FastifyRequest,
+    reason: string,
+    baseLlm: Llm,
+    run: (llm: Llm) => Promise<T>,
+    enforce = true,
+  ): Promise<T> {
+    const user = meteringUser(req);
+    if (!user) return run(baseLlm);
+    if (enforce && ctx.credits!.balance(user.id) <= 0) throw new InsufficientCreditsError();
+    const metered = new MeteredLlm(baseLlm);
+    const result = await run(metered);
+    const cost = metered.cost(config.credits.pricing);
+    if (cost > 0) ctx.credits!.charge(user.id, cost, reason);
+    return result;
+  }
+
+  /** The user to meter for this request, or null when metering is inactive. */
+  function meteringUser(req: FastifyRequest) {
+    return config.credits.enabled && ctx.credits && req.user ? req.user : null;
+  }
+
+  /** Throw a 402-able error if the request's user has no credits (#56c). */
+  function enforceCredits(req: FastifyRequest): void {
+    const user = meteringUser(req);
+    if (user && ctx.credits!.balance(user.id) <= 0) throw new InsufficientCreditsError();
+  }
+
+  /** Charge a flat (non-token) cost for a completed operation (image/TTS). */
+  function chargeCredits(req: FastifyRequest, reason: string, amount: number): void {
+    const user = meteringUser(req);
+    if (user && amount > 0) ctx.credits!.charge(user.id, Math.ceil(amount), reason);
   }
 
   // --- Settings (GUI-editable runtime config; §9.1) ------------------------
@@ -821,7 +875,7 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
     }
     await ctx.manager.checkpoint(gs);
     ctx.bus.emit({ type: "state", state: ctx.manager.session });
-    await resolveAiTurns({ manager: ctx.manager, llm, bus: ctx.bus, gs });
+    await meteredTurn(req, "llm-ai-turns", llm, (l) => resolveAiTurns({ manager: ctx.manager, llm: l, bus: ctx.bus, gs }), false);
     return res;
   });
 
@@ -856,24 +910,30 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
 
   /** DM opening scene for a fresh campaign (#31). Runs once — a no-op if the
       session already has any chat history, so reloads never re-trigger it. */
-  app.post("/api/intro", async (_req, reply) => {
+  app.post("/api/intro", async (req, reply) => {
     const hasHistory = ctx.manager.session.chat.some(
       (m) => m.role === "user" || m.role === "assistant",
     );
     if (hasHistory || ctx.manager.session.ending) return { started: false };
     try {
-      const { intro } = await runIntro({ manager: ctx.manager, llm, bus: ctx.bus });
+      const { intro } = await meteredTurn(req, "llm-intro", llm, (l) =>
+        runIntro({ manager: ctx.manager, llm: l, bus: ctx.bus }),
+      );
       return { started: true, intro };
     } catch (err) {
+      if (err instanceof InsufficientCreditsError) return reply.code(402).send({ error: err.message });
       return reply.code(500).send({ error: err instanceof Error ? err.message : String(err) });
     }
   });
 
   /** Generate a "previously on…" recap of the story so far (§6.6). */
-  app.post("/api/recap", async (_req, reply) => {
+  app.post("/api/recap", async (req, reply) => {
     try {
-      return await runRecap({ manager: ctx.manager, llm, bus: ctx.bus });
+      return await meteredTurn(req, "llm-recap", llm, (l) =>
+        runRecap({ manager: ctx.manager, llm: l, bus: ctx.bus }),
+      );
     } catch (err) {
+      if (err instanceof InsufficientCreditsError) return reply.code(402).send({ error: err.message });
       return reply.code(500).send({ error: err instanceof Error ? err.message : String(err) });
     }
   });
@@ -908,9 +968,12 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
       // Checkpoint the pre-turn state so the player can undo this message.
       await checkpointTurn(ctx.manager.campaign.dir, `Před: „${input.slice(0, 40)}“`);
       const partyVoice = req.body?.as === "party";
-      const { narration } = await runTurn({ manager: ctx.manager, llm, bus: ctx.bus, input, partyVoice });
+      const { narration } = await meteredTurn(req, "llm-turn", llm, (l) =>
+        runTurn({ manager: ctx.manager, llm: l, bus: ctx.bus, input, partyVoice }),
+      );
       return { narration };
     } catch (err) {
+      if (err instanceof InsufficientCreditsError) return reply.code(402).send({ error: err.message });
       const message = err instanceof Error ? err.message : String(err);
       ctx.bus.emit({ type: "error", message });
       return reply.code(500).send({ error: message });
@@ -941,9 +1004,12 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
       await checkpointTurn(dir, `Před: „${input.slice(0, 40)}“`);
       const model = req.body?.model?.trim();
       const turnLlm = model ? makeLlm(model) : llm;
-      const { narration } = await runTurn({ manager: ctx.manager, llm: turnLlm, bus: ctx.bus, input });
+      const { narration } = await meteredTurn(req, "llm-regenerate", turnLlm, (l) =>
+        runTurn({ manager: ctx.manager, llm: l, bus: ctx.bus, input }),
+      );
       return { narration };
     } catch (err) {
+      if (err instanceof InsufficientCreditsError) return reply.code(402).send({ error: err.message });
       const message = err instanceof Error ? err.message : String(err);
       ctx.bus.emit({ type: "error", message });
       return reply.code(500).send({ error: message });
@@ -979,11 +1045,13 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
     ctx.bus.emit({ type: "state", state: ctx.manager.session });
 
     // After successful travel, have the DM narrate the arrival scene (#41b).
+    // These LLM follow-ups are metered but not balance-gated — the engine
+    // command already ran; enforcement happens at the player-action boundary.
     if (tool === "travel" && result.ok) {
-      await runArrival({ manager: ctx.manager, llm, bus: ctx.bus });
+      await meteredTurn(req, "llm-arrival", llm, (l) => runArrival({ manager: ctx.manager, llm: l, bus: ctx.bus }), false);
     } else {
       // For non-travel commands, auto-resolve AI turns as before (§8.3).
-      await resolveAiTurns({ manager: ctx.manager, llm, bus: ctx.bus, gs });
+      await meteredTurn(req, "llm-ai-turns", llm, (l) => resolveAiTurns({ manager: ctx.manager, llm: l, bus: ctx.bus, gs }), false);
     }
 
     return result;
@@ -1016,6 +1084,7 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
       const { subject, id } = req.body ?? {};
       if (!subject) return reply.code(400).send({ error: "Chybí subject" });
       try {
+        enforceCredits(req);
         const prompt = buildPrompt(
           subject,
           ctx.manager.campaign.actors,
@@ -1025,8 +1094,10 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
         );
         const client = new ImageClient(config.image);
         const result = await client.generate(prompt);
+        chargeCredits(req, "image", config.credits.pricing.perImage);
         return result;
       } catch (err) {
+        if (err instanceof InsufficientCreditsError) return reply.code(402).send({ error: err.message });
         return reply.code(500).send({ error: err instanceof Error ? err.message : String(err) });
       }
     },
@@ -1074,8 +1145,15 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
     const provider = req.body?.provider === "azure" || req.body?.provider === "piper" ? req.body.provider : "auto";
     if (!config.azureTts && !config.piperUrl)
       return reply.code(503).send({ error: "TTS not configured" });
+    try {
+      enforceCredits(req);
+    } catch (err) {
+      if (err instanceof InsufficientCreditsError) return reply.code(402).send({ error: err.message });
+      throw err;
+    }
     const wav = await synthesizeTts(text, config.azureTts, provider);
     if (!wav) return reply.code(502).send({ error: "TTS upstream error" });
+    chargeCredits(req, "tts", (text.length / 1000) * config.credits.pricing.perThousandTtsChars);
     reply.header("Content-Type", "audio/wav");
     return reply.send(wav);
   });
