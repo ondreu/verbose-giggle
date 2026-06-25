@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-const INPUT = "w-full rounded border border-ink/25 bg-bg-crust px-2 py-1 text-sm text-ink";
+const INPUT = "w-full rounded border border-surface2 bg-bg-crust px-2 py-1 text-sm text-text";
 
 /**
  * Editable provider/SRD configuration (LLM, image generation, Azure TTS, SRD
@@ -121,19 +121,19 @@ export function ProviderSettings() {
     }
   }
 
-  if (!view) return <p className="font-log text-sm text-ink/50">{error ?? "Načítám…"}</p>;
+  if (!view) return <p className="font-log text-sm text-subtext0">{error ?? "Načítám…"}</p>;
 
   return (
     <div className="flex flex-col gap-5">
-      <div className="flex items-center gap-2 font-log text-sm text-ink/70">
-        <span className={`h-2 w-2 rounded-full ${view.activeNarrator === "llm" ? "bg-gold" : "bg-ink/40"}`} />
+      <div className="flex items-center gap-2 font-log text-sm text-subtext1">
+        <span className={`h-2 w-2 rounded-full ${view.activeNarrator === "llm" ? "bg-gold" : "bg-surface2"}`} />
         {view.activeNarrator === "llm" ? "Aktivní vypravěč: jazykový model" : "Aktivní vypravěč: offline mock"}
       </div>
 
       <section className="flex flex-col gap-2">
         <H3>Jazykový model (AI DM)</H3>
         <Field label="Režim">
-          <select className="prov-input" value={provider} onChange={(e) => setProvider(e.target.value as "auto" | "mock")}>
+          <select className={INPUT} value={provider} onChange={(e) => setProvider(e.target.value as "auto" | "mock")}>
             <option value="auto">Automaticky (model, je-li klíč)</option>
             <option value="mock">Vynutit offline mock</option>
           </select>
@@ -149,10 +149,10 @@ export function ProviderSettings() {
           />
         </Field>
         <Field label="Base URL">
-          <input className="prov-input" value={llmBaseUrl} onChange={(e) => setLlmBaseUrl(e.target.value)} />
+          <input className={INPUT} value={llmBaseUrl} onChange={(e) => setLlmBaseUrl(e.target.value)} />
         </Field>
         <Field label="Model">
-          <input className="prov-input" value={llmModel} onChange={(e) => setLlmModel(e.target.value)} />
+          <input className={INPUT} value={llmModel} onChange={(e) => setLlmModel(e.target.value)} />
         </Field>
         <Field label="Alternativní modely („Jiným modelem“) — jeden na řádek">
           <textarea
@@ -165,17 +165,17 @@ export function ProviderSettings() {
 
       <section className="flex flex-col gap-2">
         <H3>Generování obrázků</H3>
-        <label className="flex items-center gap-2 font-log text-sm text-ink/75">
+        <label className="flex items-center gap-2 font-log text-sm text-text">
           <input type="checkbox" className="accent-gold" checked={imageEnabled} onChange={(e) => setImageEnabled(e.target.checked)} />
           Povolit generování obrázků
         </label>
         {imageEnabled && (
           <>
             <Field label="Base URL">
-              <input className="prov-input" placeholder="https://api.mistral.ai/v1" value={imageBaseUrl} onChange={(e) => setImageBaseUrl(e.target.value)} />
+              <input className={INPUT} placeholder="https://api.mistral.ai/v1" value={imageBaseUrl} onChange={(e) => setImageBaseUrl(e.target.value)} />
             </Field>
             <Field label="Model">
-              <input className="prov-input" placeholder="výchozí dle poskytovatele" value={imageModel} onChange={(e) => setImageModel(e.target.value)} />
+              <input className={INPUT} placeholder="výchozí dle poskytovatele" value={imageModel} onChange={(e) => setImageModel(e.target.value)} />
             </Field>
             <Field label="API klíč">
               <input
@@ -193,7 +193,7 @@ export function ProviderSettings() {
 
       <section className="flex flex-col gap-2">
         <H3>Hlas (TTS — Azure AI Speech)</H3>
-        <p className="font-log text-xs italic text-ink/55">
+        <p className="font-log text-xs italic text-subtext1">
           Prázdný klíč → záložní Piper{view.tts.piperFallback ? " (nastaven)" : " (nenastaven, env)"}.
         </p>
         <Field label="API klíč (Azure Speech)">
@@ -208,20 +208,20 @@ export function ProviderSettings() {
         </Field>
         <div className="grid grid-cols-2 gap-2">
           <Field label="Region">
-            <input className="prov-input" placeholder="westeurope" value={ttsRegion} onChange={(e) => setTtsRegion(e.target.value)} />
+            <input className={INPUT} placeholder="westeurope" value={ttsRegion} onChange={(e) => setTtsRegion(e.target.value)} />
           </Field>
           <Field label="Hlas">
-            <select className="prov-input" value={ttsVoice} onChange={(e) => setTtsVoice(e.target.value)}>
+            <select className={INPUT} value={ttsVoice} onChange={(e) => setTtsVoice(e.target.value)}>
               {!["cs-CZ-AntoninNeural", "cs-CZ-VlastaNeural"].includes(ttsVoice) && <option value={ttsVoice}>{ttsVoice}</option>}
               <option value="cs-CZ-AntoninNeural">cs-CZ-AntoninNeural (mužský)</option>
               <option value="cs-CZ-VlastaNeural">cs-CZ-VlastaNeural (ženský)</option>
             </select>
           </Field>
           <Field label="Tempo (rate)">
-            <input className="prov-input" placeholder="-6%" value={ttsRate} onChange={(e) => setTtsRate(e.target.value)} />
+            <input className={INPUT} placeholder="-6%" value={ttsRate} onChange={(e) => setTtsRate(e.target.value)} />
           </Field>
           <Field label="Výška (pitch)">
-            <input className="prov-input" placeholder="-2%" value={ttsPitch} onChange={(e) => setTtsPitch(e.target.value)} />
+            <input className={INPUT} placeholder="-2%" value={ttsPitch} onChange={(e) => setTtsPitch(e.target.value)} />
           </Field>
         </div>
       </section>
@@ -229,9 +229,9 @@ export function ProviderSettings() {
       <section className="flex flex-col gap-2">
         <H3>SRD dataset</H3>
         <Field label="Cesta k SRD">
-          <input className="prov-input" placeholder="./srd" value={srdPath} onChange={(e) => setSrdPath(e.target.value)} />
+          <input className={INPUT} placeholder="./srd" value={srdPath} onChange={(e) => setSrdPath(e.target.value)} />
         </Field>
-        <p className={`font-log text-xs italic ${view.srd.total > 0 ? "text-ink/55" : "text-blood"}`}>
+        <p className={`font-log text-xs italic ${view.srd.total > 0 ? "text-subtext1" : "text-blood"}`}>
           {view.srd.total > 0
             ? `Načteno ${view.srd.total} záznamů (${view.srd.spells} kouzel, ${view.srd.monsters} nestvůr).`
             : "Žádný SRD dataset nenačten."}
@@ -250,13 +250,13 @@ export function ProviderSettings() {
 }
 
 function H3({ children }: { children: React.ReactNode }) {
-  return <h3 className="font-display text-sm uppercase tracking-wider text-ink/70">{children}</h3>;
+  return <h3 className="font-display text-sm uppercase tracking-wider text-subtext1">{children}</h3>;
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="flex flex-col gap-1 font-log text-sm">
-      <span className="text-ink/70">{label}</span>
+      <span className="text-subtext1">{label}</span>
       {children}
     </label>
   );

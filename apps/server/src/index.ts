@@ -12,7 +12,7 @@ import { openDatabase, checkpointDatabase } from "./db/database.js";
 import { UserStore } from "./auth/users.js";
 import { SessionStore } from "./auth/sessions.js";
 import { AuditStore } from "./auth/audit.js";
-import { CreditStore } from "./credits/ledger.js";
+import { CreditStore, SIGNUP_BONUS_REASON } from "./credits/ledger.js";
 import { registerCreditRoutes } from "./routes/credits.js";
 import { loadOrCreateSecret } from "./auth/tokens.js";
 import { LogEmailSender, SmtpEmailSender, type EmailSender } from "./auth/email.js";
@@ -82,6 +82,16 @@ async function main(): Promise<void> {
     publicUrl: config.auth.publicUrl,
     adminEmail: config.auth.adminEmail,
     requireVerifiedEmail: () => configAccess.get().auth.requireVerifiedEmail,
+    // One-time welcome bonus on first email verification (#56). Only in the
+    // hosted edition (credits enabled) and only once per user (idempotent via
+    // the ledger reason), so re-verifying after an email change can't farm it.
+    onEmailVerified: (user) => {
+      const c = configAccess.get();
+      const bonus = c.credits.signupBonus;
+      if (!c.credits.enabled || bonus <= 0) return;
+      if (credits.hasReason(user.id, SIGNUP_BONUS_REASON)) return;
+      credits.grant(user.id, bonus, SIGNUP_BONUS_REASON);
+    },
   });
   // Promote the designated operator to admin if they already registered (#57).
   const admin = authService.ensureAdmin();
@@ -168,7 +178,13 @@ async function main(): Promise<void> {
     getLogs: (limit) => logBuffer.tail(limit),
     startedAtMs,
   });
-  await registerCreditRoutes(app, { credits });
+  await registerCreditRoutes(app, {
+    credits,
+    signupBonus: () => {
+      const c = configAccess.get();
+      return c.credits.enabled ? c.credits.signupBonus : 0;
+    },
+  });
 
   // The game layer resolves a SessionManager per scope (shared vault when
   // anonymous, <vault>/users/<id> per user when accounts are on, #55f). The

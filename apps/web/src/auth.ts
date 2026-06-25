@@ -278,4 +278,4 @@ export interface CreditMovement {
 }
 
 export const fetchCredits = () =>
-  request<{ balance: number; history: CreditMovement[] }>("GET", "/api/credits");
+  request<{ balance: number; history: CreditMovement[]; signupBonus: number }>("GET", "/api/credits");

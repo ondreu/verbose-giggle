@@ -29,6 +29,12 @@ export interface AuthServiceOptions {
   requireVerifiedEmail?: boolean | (() => boolean);
   /** Email granted the admin role on registration / bootstrap (#57). */
   adminEmail?: string | null;
+  /**
+   * Called once when a user's email transitions to verified for the first time
+   * (#55/#56). Used to grant the one-time signup credit bonus. Best-effort: a
+   * throw here must not break verification, so the caller wraps it.
+   */
+  onEmailVerified?: (user: User) => void;
 }
 
 /** A client-facing failure with an HTTP status and a Czech message. */
@@ -137,8 +143,18 @@ export class AuthService {
     }
     const user = this.users.findById(result.userId);
     if (!user) throw new AuthError(400, "Účet nenalezen.");
-    if (!user.emailVerified) this.users.setEmailVerified(user.id, true);
-    return { ...user, emailVerified: true };
+    const verified = { ...user, emailVerified: true };
+    if (!user.emailVerified) {
+      this.users.setEmailVerified(user.id, true);
+      // First-time verification → fire the hook (e.g. signup credit bonus).
+      // Best-effort: a failure here must not block the user's verification.
+      try {
+        this.opts.onEmailVerified?.(verified);
+      } catch {
+        /* swallow — bonus is non-critical */
+      }
+    }
+    return verified;
   }
 
   /**

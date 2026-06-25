@@ -120,6 +120,24 @@ describe("AuthService", () => {
     expect(() => service.verifyEmail("garbage")).toThrow(AuthError);
   });
 
+  it("fires onEmailVerified once, only on the first verification", async () => {
+    const db = openInMemoryDatabase();
+    const users = new UserStore(db);
+    const sessions = new SessionStore(db);
+    const email = new FakeEmailSender();
+    const verified: string[] = [];
+    const service = new AuthService(users, sessions, email, {
+      secret: "test-secret",
+      publicUrl: "https://dm.example",
+      onEmailVerified: (u) => verified.push(u.id),
+    });
+    const user = await service.register("hero@example.com", "Abcd1234");
+    const token = email.lastToken();
+    service.verifyEmail(token);
+    service.verifyEmail(token); // re-clicking the link must not re-fire
+    expect(verified).toEqual([user.id]);
+  });
+
   it("re-sends verification only for unverified, existing accounts", async () => {
     const { service, email } = freshService();
     await service.register("hero@example.com", "Abcd1234");

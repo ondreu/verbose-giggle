@@ -109,6 +109,11 @@ export interface Config {
      * default so self-hosted / BYO-key runs are never metered.
      */
     enabled: boolean;
+    /**
+     * One-time welcome bonus (credits) granted the first time a user verifies
+     * their email. 0 disables it. Only applied when `enabled` is true (hosted).
+     */
+    signupBonus: number;
     pricing: CreditPricing;
   };
   /**
@@ -214,6 +219,7 @@ export function loadConfig(): Config {
     },
     credits: {
       enabled: process.env.CREDITS_ENABLED === "true",
+      signupBonus: Number(process.env.CREDITS_SIGNUP_BONUS ?? 500),
       pricing: {
         perMessage: Number(process.env.CREDITS_PER_MESSAGE ?? 10),
         perModelMessage: {},
@@ -300,6 +306,7 @@ export function applySettings(base: Config, s: Settings): Config {
   };
   const credits = {
     enabled: srv.creditsEnabled ?? base.credits.enabled,
+    signupBonus: srv.signupBonus ?? base.credits.signupBonus,
     pricing: {
       perMessage: srv.pricing?.perMessage ?? base.credits.pricing.perMessage,
       perModelMessage,

@@ -43,6 +43,10 @@ function testConfig(vaultPath: string, allowAnonymous: boolean): Config {
     llm: { ...base.llm, apiKey: "", provider: "mock" },
     auth: { ...base.auth, allowAnonymous, adminEmail: null },
     credits: { ...base.credits, enabled: false },
+    modelPool: [
+      { name: "Rychlý", model: "fast/slug", perMessage: 20, intelligence: 2, price: 1, tooltip: "" },
+      { name: "Chytrý", model: "smart/slug", perMessage: 300, intelligence: 5, price: 4, tooltip: "" },
+    ],
   };
 }
 
@@ -104,6 +108,40 @@ describe("provider settings gating (#58b)", () => {
       payload: { campaign: "demo" },
     });
     expect(camp.statusCode).toBe(200);
+
+    await t.app.close();
+  });
+
+  it("lets a regular user pick their own model from the pool (#56g)", async () => {
+    const t = await buildApp(await freshVault(), false);
+    const user = await cookieFor(t, "tenant@example.com");
+
+    // The pool (player-facing fields, no secrets) and an empty default choice.
+    const view = await t.app.inject({ method: "GET", url: "/api/settings", cookies: COOKIE(user) });
+    expect(view.json().selectedModel).toBe("");
+    expect(view.json().modelPool.map((m: { model: string }) => m.model)).toEqual([
+      "fast/slug",
+      "smart/slug",
+    ]);
+
+    // Picking a pooled model persists for this user.
+    const pick = await t.app.inject({
+      method: "PUT",
+      url: "/api/settings",
+      cookies: COOKIE(user),
+      payload: { selectedModel: "smart/slug" },
+    });
+    expect(pick.statusCode).toBe(200);
+    expect(pick.json().selectedModel).toBe("smart/slug");
+
+    // A slug that isn't in the pool is rejected → cleared to the default.
+    const bogus = await t.app.inject({
+      method: "PUT",
+      url: "/api/settings",
+      cookies: COOKIE(user),
+      payload: { selectedModel: "evil/slug" },
+    });
+    expect(bogus.json().selectedModel).toBe("");
 
     await t.app.close();
   });

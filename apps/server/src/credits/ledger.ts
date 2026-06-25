@@ -10,6 +10,9 @@
 import { randomUUID } from "node:crypto";
 import type { AppDatabase } from "../db/database.js";
 
+/** Ledger reason for the one-time signup welcome bonus (#56). */
+export const SIGNUP_BONUS_REASON = "signup-bonus";
+
 export interface LedgerEntry {
   id: string;
   userId: string;
@@ -71,6 +74,18 @@ export class CreditStore {
   charge(userId: string, amount: number, reason: string, ref?: string | null): LedgerEntry {
     if (amount <= 0) throw new Error("charge amount must be positive");
     return this.record(userId, -amount, reason, ref);
+  }
+
+  /**
+   * Whether the user already has a ledger entry with the given reason. Used to
+   * make one-time grants (e.g. the signup welcome bonus) idempotent so a user
+   * who re-verifies their email can't collect the bonus twice.
+   */
+  hasReason(userId: string, reason: string): boolean {
+    const row = this.db
+      .prepare("SELECT 1 FROM credit_ledger WHERE user_id = ? AND reason = ? LIMIT 1")
+      .get(userId, reason) as { 1: number } | undefined;
+    return row != null;
   }
 
   /** Current balance = SUM(delta). Zero for an unknown user. */
