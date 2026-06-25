@@ -91,6 +91,11 @@ export interface Config {
       login: { max: number; windowMs: number };
       register: { max: number; windowMs: number };
     };
+    /**
+     * Cloudflare Turnstile CAPTCHA (#59b) for the credential endpoints. Both
+     * keys must be set to activate; null/missing = disabled (self-hosted/BYO).
+     */
+    turnstile: { siteKey: string | null; secretKey: string | null };
   };
   /** Whole-vault backups (#57b / #59c). */
   backups: {
@@ -192,6 +197,10 @@ export function loadConfig(): Config {
           max: Number(process.env.AUTH_REGISTER_RATE_MAX ?? 5),
           windowMs: Number(process.env.AUTH_REGISTER_RATE_WINDOW_MS ?? 60 * 60 * 1000),
         },
+      },
+      turnstile: {
+        siteKey: process.env.TURNSTILE_SITE_KEY?.trim() || null,
+        secretKey: process.env.TURNSTILE_SECRET_KEY?.trim() || null,
       },
     },
     backups: {

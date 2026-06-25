@@ -19,7 +19,8 @@ import { LogEmailSender, SmtpEmailSender, type EmailSender } from "./auth/email.
 import { AuthService } from "./auth/service.js";
 import { registerAuthGuard, registerCsrfGuard } from "./auth/middleware.js";
 import { RateLimiter } from "./auth/rate-limit.js";
-import { applyPendingRestore } from "./admin/ops.js";
+import { makeTurnstileVerifier } from "./auth/turnstile.js";
+import { applyPendingRestore, exportUserData } from "./admin/ops.js";
 import { LogBuffer } from "./admin/log-buffer.js";
 
 async function main(): Promise<void> {
@@ -121,17 +122,33 @@ async function main(): Promise<void> {
     );
     pruneTimer.unref();
   }
+  // Cloudflare Turnstile CAPTCHA on the credential endpoints (#59b). Null when
+  // no keypair is set, so self-hosted / BYO runs with no widget or extra call.
+  const turnstile = makeTurnstileVerifier(config.auth.turnstile);
+  if (turnstile) app.log.info("Turnstile CAPTCHA enabled for login/register.");
   await registerAuthRoutes(app, {
     service: authService,
     cookieSecure: config.auth.publicUrl.startsWith("https://"),
     rateLimit,
     onAccountDeleted: (userId) => purgeUserScope(userId),
+    captcha: turnstile ?? undefined,
+    exportUserData: (user) =>
+      exportUserData(config.vaultPath, {
+        id: user.id,
+        email: user.email,
+        displayName: user.displayName,
+        role: user.role,
+        emailVerified: user.emailVerified,
+        createdAt: user.createdAt,
+        credits: { balance: credits.balance(user.id), history: credits.history(user.id, 10000) },
+      }).then((buf) => buf ?? Buffer.alloc(0)),
     flags: () => {
       const c = configAccess.get();
       return {
         allowAnonymous: c.auth.allowAnonymous,
         registrationEnabled: c.auth.registrationEnabled,
         creditsEnabled: c.credits.enabled,
+        captchaSiteKey: turnstile?.siteKey ?? null,
       };
     },
   });
@@ -144,6 +161,7 @@ async function main(): Promise<void> {
     getConfig: () => configAccess.get(),
     reloadConfig: () => configAccess.reload(),
     onScopeDataChanged: (scopeKey, reason) => invalidateScope(scopeKey, reason),
+    onUserDeleted: (userId) => purgeUserScope(userId),
     checkpointDb: () => checkpointDatabase(db),
     backupRetention: config.backups.retention,
     bootAllowAnonymous: config.auth.allowAnonymous,

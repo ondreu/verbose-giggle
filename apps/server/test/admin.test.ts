@@ -12,6 +12,7 @@ import { CreditStore } from "../src/credits/ledger.js";
 import { AuthService } from "../src/auth/service.js";
 import { registerAuthGuard } from "../src/auth/middleware.js";
 import { registerAdminRoutes } from "../src/routes/admin.js";
+import { deleteUserVault } from "../src/admin/ops.js";
 import { hashPassword } from "../src/auth/password.js";
 import { applySettings, loadConfig, type Config } from "../src/config.js";
 import { loadSettings } from "../src/settings.js";
@@ -64,6 +65,7 @@ async function setup() {
     getConfig: () => config,
     reloadConfig,
     bootAllowAnonymous: config.auth.allowAnonymous,
+    onUserDeleted: (userId) => deleteUserVault(vaultPath, userId),
     getLogs: (limit) => ["log-a", "log-b", "log-c"].slice(-limit),
     startedAtMs: Date.now(),
     now: () => "2026-06-25T12:00:00.000Z",
@@ -131,6 +133,22 @@ describe("admin user management (#57b/#57c)", () => {
     expect(del.statusCode).toBe(200);
     expect(users.findById(member.id)).toBeNull();
     expect(sessions.get(memberSid)).toBeNull();
+    await app.close();
+  });
+
+  it("purges the banned user's isolated vault subtree on delete (#59e)", async () => {
+    const { app, member, adminSid, vaultPath } = await setup();
+    const userDir = path.join(vaultPath, "users", member.id, "campaigns", "solo");
+    await fs.mkdir(userDir, { recursive: true });
+    await fs.writeFile(path.join(userDir, "campaign.yaml"), "name: Solo\n");
+
+    const del = await app.inject({
+      method: "DELETE",
+      url: `/api/admin/users/${member.id}`,
+      ...asAdmin(adminSid),
+    });
+    expect(del.statusCode).toBe(200);
+    await expect(fs.stat(path.join(vaultPath, "users", member.id))).rejects.toThrow();
     await app.close();
   });
 

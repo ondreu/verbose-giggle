@@ -48,6 +48,13 @@ export interface AdminContext {
    */
   onScopeDataChanged?: (scopeKey: string, reason: string) => Promise<void>;
   /**
+   * Purge a banned user's isolated game data (#59e): their `<vault>/users/<id>`
+   * subtree and cached scope, the same teardown an account self-deletion runs.
+   * Optional so tests can omit it; when absent, an admin delete still removes
+   * the DB row + sessions but leaves the vault subtree on disk.
+   */
+  onUserDeleted?: (userId: string) => Promise<void>;
+  /**
    * Flush the live SQLite WAL before a backup, for a consistent snapshot (#59c).
    * Optional so the in-memory test DB can omit it.
    */
@@ -187,6 +194,9 @@ export async function registerAdminRoutes(app: FastifyInstance, ctx: AdminContex
     }
     ctx.sessions.deleteForUser(target.id);
     ctx.users.delete(target.id);
+    // GDPR (#59e): also purge the banned user's isolated vault subtree + scope,
+    // mirroring an account self-deletion — not just the DB row.
+    await ctx.onUserDeleted?.(target.id);
     ctx.audit.record(req.user!.id, "user.delete", target.id, target.email);
     return reply.send({ ok: true });
   });

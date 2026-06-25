@@ -36,6 +36,7 @@ export default function App() {
     allowAnonymous: true,
     registrationEnabled: true,
     creditsEnabled: false,
+    captchaSiteKey: null,
   });
 
   useEffect(() => {
@@ -78,6 +79,7 @@ export default function App() {
         onAuthed={() => setAuthed(true)}
         allowAnonymous={authConfig.allowAnonymous}
         registrationEnabled={authConfig.registrationEnabled}
+        captchaSiteKey={authConfig.captchaSiteKey}
       />
     );
 

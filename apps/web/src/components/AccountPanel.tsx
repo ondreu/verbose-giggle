@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import {
+  accountExportUrl,
   changeEmail,
   changePassword,
   changeProfile,
@@ -75,8 +76,27 @@ export function AccountPanel() {
       <DisplayNameForm user={user} onUpdated={setUser} />
       <EmailForm user={user} onUpdated={setUser} />
       <PasswordForm />
+      <ExportData />
       <DangerZone />
     </div>
+  );
+}
+
+/** GDPR data export (#59e): download a ZIP of the account record + game data. */
+function ExportData() {
+  return (
+    <Section title="Moje data">
+      <p className="font-body text-sm text-ink/60">
+        Stáhni si vše, co o tobě uchováváme — účet, kredity a tvé kampaně — jako ZIP.
+      </p>
+      <a
+        href={accountExportUrl()}
+        download="moje-data.zip"
+        className="self-start rounded-sm border border-ink/30 bg-ink/10 px-3 py-1.5 font-display text-sm hover:bg-ink/20"
+      >
+        Stáhnout moje data
+      </a>
+    </Section>
   );
 }
 

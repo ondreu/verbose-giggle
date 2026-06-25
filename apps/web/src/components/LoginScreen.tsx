@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Icon } from "./Icon";
 import { EmberField } from "./EmberField";
+import { TurnstileWidget } from "./TurnstileWidget";
 import { login, register, requestPasswordReset, resendVerification } from "../auth";
 
 type Mode = "login" | "register" | "forgot";
@@ -16,10 +17,12 @@ export function LoginScreen({
   onAuthed,
   allowAnonymous,
   registrationEnabled,
+  captchaSiteKey,
 }: {
   onAuthed: () => void;
   allowAnonymous: boolean;
   registrationEnabled: boolean;
+  captchaSiteKey: string | null;
 }) {
   const [mode, setMode] = useState<Mode>("login");
   const [email, setEmail] = useState("");
@@ -30,9 +33,15 @@ export function LoginScreen({
   const [notice, setNotice] = useState<string | null>(null);
   // Set when login fails because the email isn't verified — offers a resend.
   const [needsVerify, setNeedsVerify] = useState(false);
+  // Turnstile CAPTCHA token (#59b); only used when a site key is configured.
+  // `captchaReset` is bumped after a failed submit to re-challenge (token is
+  // single-use). The forgot-password flow has no CAPTCHA.
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const [captchaReset, setCaptchaReset] = useState(0);
 
   const isRegister = mode === "register";
   const isForgot = mode === "forgot";
+  const captchaActive = Boolean(captchaSiteKey) && !isForgot;
 
   function switchMode(next: Mode) {
     setMode(next);
@@ -51,21 +60,27 @@ export function LoginScreen({
       setError("Hesla se neshodují.");
       return;
     }
+    if (captchaActive && !captchaToken) {
+      setError("Nejprve dokonči ověření CAPTCHA.");
+      return;
+    }
 
     setBusy(true);
     try {
       if (mode === "login") {
-        const res = await login(email, password);
+        const res = await login(email, password, captchaToken ?? undefined);
         if (res.ok) return onAuthed();
         if (res.status === 403) setNeedsVerify(true);
         setError(res.error);
+        bumpCaptcha();
       } else if (mode === "register") {
-        const res = await register(email, password);
+        const res = await register(email, password, captchaToken ?? undefined);
         if (res.ok) {
           setNotice("Účet vytvořen. Zkontroluj e-mail a klikni na ověřovací odkaz.");
           switchModeKeepNotice("login");
         } else {
           setError(res.error);
+          bumpCaptcha();
         }
       } else {
         // forgot — always neutral.
@@ -84,6 +99,13 @@ export function LoginScreen({
     setError(null);
     setNeedsVerify(false);
     setConfirm("");
+    bumpCaptcha();
+  }
+
+  // Re-challenge the CAPTCHA: the token is single-use, so drop it and reset.
+  function bumpCaptcha() {
+    setCaptchaToken(null);
+    setCaptchaReset((n) => n + 1);
   }
 
   async function onResend() {
@@ -176,7 +198,15 @@ export function LoginScreen({
           )}
           {notice && <p className="font-log text-xs text-verdigris">{notice}</p>}
 
-          <button type="submit" className="btn-gold mt-1 w-full py-2.5 text-sm" disabled={busy}>
+          {captchaActive && captchaSiteKey && (
+            <TurnstileWidget siteKey={captchaSiteKey} onToken={setCaptchaToken} resetSignal={captchaReset} />
+          )}
+
+          <button
+            type="submit"
+            className="btn-gold mt-1 w-full py-2.5 text-sm"
+            disabled={busy || (captchaActive && !captchaToken)}
+          >
             {busy
               ? "Pracuji…"
               : isRegister

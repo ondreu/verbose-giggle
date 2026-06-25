@@ -116,6 +116,50 @@ export function AdminPage() {
 
 type ErrHandler = (res: { ok: boolean; status?: number; error?: string }) => boolean;
 
+/** Rows per page in the admin lists (#59h). */
+const PAGE_SIZE = 50;
+
+/**
+ * Prev/next pager for a server-paginated list (#59h). Shows "X–Y of total" and
+ * disables the edges. Hidden entirely when everything fits on one page.
+ */
+function Pager({
+  offset,
+  count,
+  total,
+  onPage,
+}: {
+  offset: number;
+  count: number;
+  total: number;
+  onPage: (offset: number) => void;
+}) {
+  if (total <= PAGE_SIZE && offset === 0) return null;
+  const from = total === 0 ? 0 : offset + 1;
+  const to = offset + count;
+  return (
+    <div className="mt-2 flex items-center gap-3 font-log text-xs text-ink/55">
+      <button
+        className="btn-link underline disabled:opacity-40 disabled:no-underline"
+        disabled={offset === 0}
+        onClick={() => onPage(Math.max(0, offset - PAGE_SIZE))}
+      >
+        ‹ předchozí
+      </button>
+      <span>
+        {from}–{to} z {total}
+      </span>
+      <button
+        className="btn-link underline disabled:opacity-40 disabled:no-underline"
+        disabled={to >= total}
+        onClick={() => onPage(offset + PAGE_SIZE)}
+      >
+        další ›
+      </button>
+    </div>
+  );
+}
+
 // --- Overview + health -------------------------------------------------------
 
 function OverviewTab({ onErr }: { onErr: ErrHandler }) {
@@ -170,13 +214,14 @@ function OverviewTab({ onErr }: { onErr: ErrHandler }) {
 function UsersTab({ onErr }: { onErr: ErrHandler }) {
   const [users, setUsers] = useState<AdminUser[] | null>(null);
   const [total, setTotal] = useState(0);
+  const [offset, setOffset] = useState(0);
   const refresh = useCallback(async () => {
-    const u = await adminListUsers();
+    const u = await adminListUsers({ limit: PAGE_SIZE, offset });
     if (u.ok) {
       setUsers(u.data.users);
       setTotal(u.data.total);
     } else onErr(u);
-  }, [onErr]);
+  }, [onErr, offset]);
   useEffect(() => {
     void refresh();
   }, [refresh]);
@@ -239,11 +284,7 @@ function UsersTab({ onErr }: { onErr: ErrHandler }) {
           ))}
         </tbody>
       </table>
-      {users && users.length < total && (
-        <p className="mt-2 font-log text-xs text-ink/50">
-          Zobrazeno {users.length} z {total}. Větší stránkování přibude později.
-        </p>
-      )}
+      {users && <Pager offset={offset} count={users.length} total={total} onPage={setOffset} />}
     </section>
   );
 }
@@ -411,13 +452,14 @@ function NumField({ label, value, onChange }: { label: string; value: number; on
 
 function UsageTab({ onErr }: { onErr: ErrHandler }) {
   const [u, setU] = useState<AdminUsage | null>(null);
+  const [offset, setOffset] = useState(0);
   useEffect(() => {
     void (async () => {
-      const r = await adminUsage();
+      const r = await adminUsage({ limit: PAGE_SIZE, offset });
       if (r.ok) setU(r.data);
       else onErr(r);
     })();
-  }, [onErr]);
+  }, [onErr, offset]);
   if (!u) return <p className="font-log text-sm text-ink/50">Načítám…</p>;
 
   return (
@@ -475,6 +517,7 @@ function UsageTab({ onErr }: { onErr: ErrHandler }) {
             ))}
           </tbody>
         </table>
+        <Pager offset={offset} count={u.byUser.length} total={u.byUserTotal} onPage={setOffset} />
       </section>
     </div>
   );
@@ -484,11 +527,15 @@ function UsageTab({ onErr }: { onErr: ErrHandler }) {
 
 function VaultsTab({ onErr }: { onErr: ErrHandler }) {
   const [rows, setRows] = useState<AdminCampaign[] | null>(null);
+  const [total, setTotal] = useState(0);
+  const [offset, setOffset] = useState(0);
   const refresh = useCallback(async () => {
-    const r = await adminListVaults();
-    if (r.ok) setRows(r.data.campaigns);
-    else onErr(r);
-  }, [onErr]);
+    const r = await adminListVaults({ limit: PAGE_SIZE, offset });
+    if (r.ok) {
+      setRows(r.data.campaigns);
+      setTotal(r.data.total);
+    } else onErr(r);
+  }, [onErr, offset]);
   useEffect(() => {
     void refresh();
   }, [refresh]);
@@ -540,6 +587,7 @@ function VaultsTab({ onErr }: { onErr: ErrHandler }) {
           )}
         </tbody>
       </table>
+      {rows && <Pager offset={offset} count={rows.length} total={total} onPage={setOffset} />}
     </section>
   );
 }
@@ -628,30 +676,31 @@ function BackupsTab({ onErr }: { onErr: ErrHandler }) {
 function AuditTab({ onErr }: { onErr: ErrHandler }) {
   const [audit, setAudit] = useState<AuditEntry[]>([]);
   const [total, setTotal] = useState(0);
+  const [offset, setOffset] = useState(0);
   useEffect(() => {
     void (async () => {
-      const r = await adminAudit();
+      const r = await adminAudit({ limit: PAGE_SIZE, offset });
       if (r.ok) {
         setAudit(r.data.entries);
         setTotal(r.data.total);
       } else onErr(r);
     })();
-  }, [onErr]);
+  }, [onErr, offset]);
 
   return (
-    <ul className="flex flex-col gap-1 font-log text-xs text-ink/60">
-      {audit.map((e) => (
-        <li key={e.id}>
-          <span className="text-ink/40">{new Date(e.createdAt).toLocaleString("cs-CZ")}</span>{" "}
-          <span className="text-ink/80">{e.action}</span>
-          {e.detail && <span> · {e.detail}</span>}
-        </li>
-      ))}
-      {audit.length === 0 && <li className="italic">Zatím žádné záznamy.</li>}
-      {audit.length < total && (
-        <li className="text-ink/40">Zobrazeno {audit.length} z {total} (nejnovější).</li>
-      )}
-    </ul>
+    <div className="flex flex-col gap-1">
+      <ul className="flex flex-col gap-1 font-log text-xs text-ink/60">
+        {audit.map((e) => (
+          <li key={e.id}>
+            <span className="text-ink/40">{new Date(e.createdAt).toLocaleString("cs-CZ")}</span>{" "}
+            <span className="text-ink/80">{e.action}</span>
+            {e.detail && <span> · {e.detail}</span>}
+          </li>
+        ))}
+        {audit.length === 0 && <li className="italic font-log text-xs text-ink/60">Zatím žádné záznamy.</li>}
+      </ul>
+      <Pager offset={offset} count={audit.length} total={total} onPage={setOffset} />
+    </div>
   );
 }
 
