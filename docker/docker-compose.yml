@@ -119,6 +119,22 @@ services:
     command: --interval 3600 --label-enable    # only update labeled containers
 
 volumes:
-  vault_data:   # Docker-managed vault; survives image updates and container recreation
+  # Vault data (campaigns, settings.json with the model pool, SQLite app db).
+  # The fixed `name:` pins the on-disk volume to `adm_vault_data` REGARDLESS of
+  # the Compose project name. Without it, Compose names the volume
+  # `<project>_vault_data`, where <project> defaults to the directory name — so
+  # running the stack from a different folder (or a NAS UI that sets its own
+  # project/stack name) silently creates a NEW empty volume and the vault gets
+  # re-seeded from the example, making operator settings look "disappeared".
+  #
+  # ONE-TIME MIGRATION if you already had data in an auto-named volume (find it
+  # with `docker volume ls | grep vault_data`, often `docker_vault_data`):
+  #   docker compose down
+  #   docker volume create adm_vault_data
+  #   docker run --rm -v OLD_NAME:/from -v adm_vault_data:/to alpine \
+  #     sh -c 'cp -a /from/. /to/'
+  #   docker compose up -d
+  vault_data:
+    name: adm_vault_data
   caddy_data:
   caddy_config:

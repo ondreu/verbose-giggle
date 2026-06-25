@@ -216,6 +216,8 @@ export interface AdminHealth {
   node: string;
   memory: { rss: number; heapUsed: number; heapTotal: number };
   vaultPath: string;
+  /** Persistence marker (#persistence): stable id/createdAt = durable storage. */
+  vault: { id: string; createdAt: string } | null;
   users: number;
   activeSessions: number;
   auth: {

@@ -197,6 +197,12 @@ function OverviewTab({ onErr }: { onErr: ErrHandler }) {
             <Row k="Paměť (RSS)" v={formatBytes(health.memory.rss)} />
             <Row k="Heap" v={`${formatBytes(health.memory.heapUsed)} / ${formatBytes(health.memory.heapTotal)}`} />
             <Row k="Vault" v={health.vaultPath} />
+            {health.vault && (
+              <Row
+                k="Vault perzistence"
+                v={`od ${new Date(health.vault.createdAt).toLocaleString("cs-CZ")}`}
+              />
+            )}
             <Row k="LLM" v={`${health.providers.llm.provider} · ${health.providers.llm.model}${health.providers.llm.hasKey ? "" : " (bez klíče)"}`} />
             <Row k="Obrázky" v={health.providers.image.enabled ? health.providers.image.model ?? "zap." : "vyp."} />
             <Row k="TTS" v={health.providers.tts.engine} />
@@ -204,6 +210,13 @@ function OverviewTab({ onErr }: { onErr: ErrHandler }) {
             <Row k="Kredity" v={health.credits.enabled ? "zapnuté" : "vypnuté"} />
             <Row k="Anonymní přístup" v={health.auth.allowAnonymous ? "ano" : "ne"} />
           </dl>
+          {health.vault && (
+            <p className="font-log text-xs italic text-subtext0">
+              „Vault perzistence" je datum prvního spuštění tohoto vaultu. Pokud se po
+              restartu/redeployi <strong>změní</strong>, vault neběží na trvalém úložišti a
+              nastavení (model pool, ceník) se resetuje — zkontroluj připojení volume.
+            </p>
+          )}
         </section>
       )}
     </div>

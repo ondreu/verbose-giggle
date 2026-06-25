@@ -164,6 +164,20 @@ services:
     command: --interval 3600 --label-enable    # only update labeled containers
 
 volumes:
-  vault_data:   # customer data: per-user vaults + SQLite app db; survives image updates
+  # Customer data: per-user vaults + SQLite app db (accounts, credits, audit) +
+  # operator settings.json. The fixed `name:` pins the on-disk volume to
+  # `adm_commercial_vault_data` REGARDLESS of the Compose project name, so a
+  # redeploy from a different folder / NAS stack name can't silently land on a
+  # new empty volume and reset everything. Keep it on durable storage.
+  #
+  # ONE-TIME MIGRATION from an auto-named volume (find it with
+  # `docker volume ls | grep vault_data`):
+  #   docker compose -f docker-compose.commercial.yml down
+  #   docker volume create adm_commercial_vault_data
+  #   docker run --rm -v OLD_NAME:/from -v adm_commercial_vault_data:/to alpine \
+  #     sh -c 'cp -a /from/. /to/'
+  #   docker compose -f docker-compose.commercial.yml --profile cloudflare up -d
+  vault_data:
+    name: adm_commercial_vault_data
   caddy_data:
   caddy_config:
