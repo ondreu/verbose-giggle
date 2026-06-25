@@ -117,6 +117,17 @@ The fastest path for either edition is the interactive setup script — it asks 
 ./docker/setup.sh
 ```
 
+**No git on the NAS?** You don't need it — the stack runs from prebuilt GHCR images, and the script downloads its companion files (`docker-compose.*.yml`, `Caddyfile`) itself. Over SSH, just fetch the one script and run it:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ondreu/verbose-giggle/main/docker/setup.sh -o setup.sh
+bash setup.sh
+```
+
+(Pin a different branch with `ADM_REF=<branch> bash setup.sh`.)
+
+**NAS with a Docker GUI but no shell** (Ugreen / Synology / QNAP): there's nothing to run — paste a compose file straight into the GUI's "Project / Stack" editor and add the env vars in its form. Use [`docker/docker-compose.nas.yml`](docker/docker-compose.nas.yml) (self-hosted, Cloudflare Tunnel built in) or [`docker/docker-compose.commercial.yml`](docker/docker-compose.commercial.yml); the `[COMMERCIAL]`-marked vars in [`.env.example`](.env.example) tell you what to fill in (generate `AUTH_SECRET` with `openssl rand -base64 48`).
+
 Prefer to wire it by hand? Follow the per-edition steps below.
 
 ### Self-hosted
@@ -133,15 +144,16 @@ docker compose --profile cloudflare up -d     # + Cloudflare Tunnel
 
 ### Commercial (multi-tenant / hosted)
 
-The paid public edition turns on the full account + monetisation surface: required login, per-user data isolation (#55f-2), credit metering (#56), SMTP for email verification / password reset, and Turnstile CAPTCHA. Caddy public HTTPS is always on (a commercial deploy is public by definition).
+The paid public edition turns on the full account + monetisation surface: required login, per-user data isolation (#55f-2), credit metering (#56), SMTP for email verification / password reset, and Turnstile CAPTCHA. Pick an ingress with a `--profile` (a NAS usually already holds 80/443 for its own admin UI, so Cloudflare Tunnel — which opens no host ports — is the safer default):
 
 ```bash
 cd docker
-cp ../.env.example .env        # fill in every [COMMERCIAL] item, then set your domain in Caddyfile
-docker compose -f docker-compose.commercial.yml up -d
+cp ../.env.example .env        # fill in every [COMMERCIAL] item
+docker compose -f docker-compose.commercial.yml --profile cloudflare up -d   # no open ports (recommended on a NAS)
+docker compose -f docker-compose.commercial.yml --profile caddy up -d        # public HTTPS; needs free 80/443 + domain in Caddyfile
 ```
 
-Required in `.env` before first start: `LLM_API_KEY`, `ADMIN_EMAIL`, `AUTH_SECRET` (`openssl rand -base64 48`), `PUBLIC_URL`, the `SMTP_*` block, and `TURNSTILE_SITE_KEY` / `TURNSTILE_SECRET_KEY`. After boot, register with `ADMIN_EMAIL` to claim the admin role, then set per-model pricing and grant credits from `/admin`. See the `[COMMERCIAL]`-marked vars in [`.env.example`](.env.example) and the hardening checklist in [ROADMAP.md](ROADMAP.md) §59.
+Required in `.env` before first start: `LLM_API_KEY`, `ADMIN_EMAIL`, `AUTH_SECRET` (`openssl rand -base64 48`), `PUBLIC_URL`, the `SMTP_*` block, `TURNSTILE_SITE_KEY` / `TURNSTILE_SECRET_KEY`, and — for the cloudflare profile — `CLOUDFLARE_TUNNEL_TOKEN`. After boot, register with `ADMIN_EMAIL` to claim the admin role, then set per-model pricing and grant credits from `/admin`. See the `[COMMERCIAL]`-marked vars in [`.env.example`](.env.example) and the hardening checklist in [ROADMAP.md](ROADMAP.md) §59.
 
 - Mount your real content over `./vault`, `./maps`, `./srd`. Live session state is written inside each campaign's `state/` folder, so it persists with the vault.
 - **TLS / public access:** see [Ingress options](#ingress-options) below — Caddy, Tailscale, or Cloudflare Tunnel.

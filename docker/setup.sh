@@ -21,8 +21,13 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
 ENV_FILE="$SCRIPT_DIR/.env"
-ENV_EXAMPLE="$SCRIPT_DIR/../.env.example"
 CADDYFILE="$SCRIPT_DIR/Caddyfile"
+
+# Where to fetch companion files (compose + Caddyfile) if they aren't already
+# next to this script. Lets you run it on a NAS with NO git checkout — just
+# download setup.sh and it pulls the rest. Override the branch with ADM_REF.
+ADM_REF="${ADM_REF:-main}"
+ADM_RAW_BASE="${ADM_RAW_BASE:-https://raw.githubusercontent.com/ondreu/verbose-giggle/$ADM_REF/docker}"
 
 bold() { printf '\033[1m%s\033[0m\n' "$1"; }
 info() { printf '  %s\n' "$1"; }
@@ -63,6 +68,22 @@ gen_secret() {
     openssl rand -base64 48 | tr -d '\n'
   else
     head -c 48 /dev/urandom | base64 | tr -d '\n'
+  fi
+}
+
+# Ensure a companion file exists next to the script; download it if missing.
+# Used so the script works on a NAS with no git checkout.
+fetch_if_missing() {
+  local name="$1"
+  [ -f "$SCRIPT_DIR/$name" ] && return 0
+  info "Stahuji $name z $ADM_REF…"
+  if command -v curl >/dev/null 2>&1; then
+    curl -fsSL "$ADM_RAW_BASE/$name" -o "$SCRIPT_DIR/$name"
+  elif command -v wget >/dev/null 2>&1; then
+    wget -qO "$SCRIPT_DIR/$name" "$ADM_RAW_BASE/$name"
+  else
+    info "CHYBA: chybí curl i wget — stáhni ručně $ADM_RAW_BASE/$name vedle skriptu."
+    exit 1
   fi
 }
 
@@ -114,6 +135,19 @@ if [ "$edition" = "2" ]; then
   domain="$(ask_required "Veřejná doména (např. dnd.example.com)")"
   public_url="$(ask "PUBLIC_URL" "https://$domain")"
   admin_email="$(ask_required "Admin e-mail (získá roli admin po registraci)")"
+  echo
+
+  bold "3b) Ingress (HTTPS)"
+  info "  cloudflare — Cloudflare Tunnel: NEotevírá porty 80/443 (doporučeno pro NAS,"
+  info "               kde admin UI obvykle 443 už obsadilo)"
+  info "  caddy      — vlastní HTTPS přes Caddy: vyžaduje volné porty 80 a 443"
+  ingress="$(ask "Ingress" "cloudflare")"
+  cf_token=""
+  if [ "$ingress" = "cloudflare" ]; then
+    info "Token získáš v Cloudflare Zero Trust → Networks → Tunnels (token-based),"
+    info "a v Public Hostname nasměruj $domain → http://app:3000."
+    cf_token="$(ask_required "CLOUDFLARE_TUNNEL_TOKEN")"
+  fi
   echo
 
   bold "4) SMTP (ověřovací + reset e-maily — povinné)"
@@ -169,10 +203,14 @@ CREDITS_ENABLED=true
 CREDITS_PER_MESSAGE=10
 CREDITS_PER_CAMPAIGN=200
 CREDITS_PER_IMAGE=50
+
+# --- Ingress ---
+CLOUDFLARE_TUNNEL_TOKEN=$cf_token
 EOF
 
-  # Write the domain into the Caddyfile (replace the placeholder host line).
-  if [ -f "$CADDYFILE" ]; then
+  # Caddy ingress writes the domain into the Caddyfile; the tunnel doesn't need it.
+  if [ "$ingress" = "caddy" ]; then
+    fetch_if_missing "Caddyfile"
     cp "$CADDYFILE" "$CADDYFILE.bak"
     sed -i.tmp "s/^dnd\.example\.org {/$domain {/" "$CADDYFILE" && rm -f "$CADDYFILE.tmp"
     info "Caddyfile: doména nastavena na $domain (záloha .bak)."
@@ -193,7 +231,8 @@ else
     cf_token="$(ask "CLOUDFLARE_TUNNEL_TOKEN" "")"
   elif [ "$ingress" = "caddy" ]; then
     domain="$(ask "Doména pro Caddy (např. dnd.example.com)" "")"
-    if [ -n "$domain" ] && [ -f "$CADDYFILE" ]; then
+    if [ -n "$domain" ]; then
+      fetch_if_missing "Caddyfile"
       cp "$CADDYFILE" "$CADDYFILE.bak"
       sed -i.tmp "s/^dnd\.example\.org {/$domain {/" "$CADDYFILE" && rm -f "$CADDYFILE.tmp"
       info "Caddyfile: doména nastavena na $domain (záloha .bak)."
@@ -221,20 +260,28 @@ EOF
 fi
 
 info ".env zapsán: $ENV_FILE"
+
+# Make sure the chosen compose file is present (download if no git checkout).
+fetch_if_missing "$COMPOSE_FILE"
 echo
 
 # ---------------------------------------------------------------------------
 # Validate + start
 # ---------------------------------------------------------------------------
 if ! command -v docker >/dev/null 2>&1; then
+  PROFILE_HINT=""
+  if [ "${ingress:-none}" = "caddy" ] || [ "${ingress:-none}" = "cloudflare" ]; then
+    PROFILE_HINT="--profile $ingress "
+  fi
   bold "Hotovo (docker nenalezen)"
-  info "Spusť ručně: docker compose -f $COMPOSE_FILE up -d"
+  info "Spusť ručně: docker compose -f $COMPOSE_FILE ${PROFILE_HINT}up -d"
   exit 0
 fi
 
-# Build the up command (self-host caddy/cloudflare needs a --profile).
+# Build the up command. A caddy/cloudflare ingress needs a --profile (in both
+# editions; commercial always has one, self-host only when not "none").
 UP_ARGS=(-f "$COMPOSE_FILE")
-if [ "${edition:-1}" = "1" ] && { [ "${ingress:-none}" = "caddy" ] || [ "${ingress:-none}" = "cloudflare" ]; }; then
+if [ "${ingress:-none}" = "caddy" ] || [ "${ingress:-none}" = "cloudflare" ]; then
   UP_ARGS+=(--profile "$ingress")
 fi
 
