@@ -265,7 +265,11 @@ kredity = bezpečnost přestává být „nice to have". **Stav:** všechny polo
   (`deleteUserVault`, `admin/ops.ts`) a evikuje cachovaný scope
   (`SessionRegistry.evict`). **Totéž napojeno i na admin smazání uživatele**
   (`DELETE /api/admin/users/:id` → `onUserDeleted` → stejná `purgeUserScope`),
-  takže ban smaže i data, ne jen řádek. Zbývá: export dat + souhlas.
+  takže ban smaže i data, ne jen řádek. **Export dat hotový:**
+  `GET /api/account/export` stáhne ZIP s `account.json` (účet + kredity vč.
+  historie) a celým izolovaným podstromem `<vault>/users/<id>/` pod `vault/`
+  (`exportUserData`, `admin/ops.ts`; sdílený ZIP writer `zipFiles`). UI: sekce
+  *Moje data* v záložce *Účet* (`AccountPanel`). Zbývá: souhlas (consent).
 - **[x] #59f — Živý přepínač `allowAnonymous`.** Hotovo obojí: `SessionRegistry`
   latchuje routing izolace dat z boot configu (přepne se až po restartu, ne
   uprostřed sezení); admin panel varuje (`allowAnonymousPendingRestart`), když se
@@ -284,7 +288,8 @@ kredity = bezpečnost přestává být „nice to have". **Stav:** všechny polo
 - **Bezpečnost:** viz **#59** — rate-limit, CAPTCHA, CSRF, ochrana cizích
   kreditů, secret management.
 - **Email infra:** dnes nulová — SMTP nebo služba (Resend/SES) + setup docs.
-- **GDPR:** mazání účtu smaže i vault data; export; souhlas (české UI → EU).
+- **GDPR:** mazání účtu i admin ban smažou vault data; export hotový
+  (`/api/account/export`); zbývá souhlas (české UI → EU).
 - **Migrace dat:** dnešní vault nemá majitele — přiřadit „adminovi" nebo nechat
   self-hosted bez vlastnictví.
 - **Souběh:** `SessionManager` dnes předpokládá jeden aktivní vault/kampaň —

@@ -96,6 +96,9 @@ export const changePassword = (currentPassword: string, newPassword: string) =>
 
 export const deleteAccount = () => request("DELETE", "/api/account");
 
+/** GDPR data export (#59e): a download URL for a ZIP of all the account's data. */
+export const accountExportUrl = () => "/api/account/export";
+
 // --- Admin (#57d) ----------------------------------------------------------
 
 export interface AdminUser extends AuthUser {

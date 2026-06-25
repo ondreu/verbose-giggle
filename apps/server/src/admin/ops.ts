@@ -10,7 +10,7 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import YAML from "yaml";
-import { dirSize, zipDirToFile, listZipEntries, unzipInto } from "../vault/zip.js";
+import { dirSize, zipDirToFile, listZipEntries, unzipInto, zipFiles } from "../vault/zip.js";
 import { SHARED_SCOPE } from "../session/registry.js";
 
 /** A single path segment with no separators / traversal / dotfiles. */
@@ -68,6 +68,56 @@ export async function deleteUserVault(vaultPath: string, userId: string): Promis
   }
   await fs.rm(root, { recursive: true, force: true });
   return true;
+}
+
+/** A user's account record as it appears in the GDPR export's `account.json`. */
+export interface ExportAccount {
+  id: string;
+  email: string;
+  displayName: string | null;
+  role: string;
+  emailVerified: boolean;
+  createdAt: string;
+  credits: { balance: number; history: unknown[] };
+}
+
+/** Recursively read every file under `dir` as `{ name, data }`, names prefixed. */
+async function readTree(dir: string, prefix: string): Promise<{ name: string; data: Buffer }[]> {
+  let entries: import("node:fs").Dirent[];
+  try {
+    entries = await fs.readdir(dir, { withFileTypes: true });
+  } catch {
+    return []; // user never had isolated data
+  }
+  const out: { name: string; data: Buffer }[] = [];
+  for (const e of entries) {
+    const abs = path.join(dir, e.name);
+    const rel = `${prefix}/${e.name}`;
+    if (e.isDirectory()) out.push(...(await readTree(abs, rel)));
+    else if (e.isFile()) out.push({ name: rel, data: await fs.readFile(abs) });
+  }
+  return out;
+}
+
+/**
+ * Build a GDPR data export (#59e): a ZIP with the user's account record
+ * (`account.json`, including credit history) plus every file in their isolated
+ * `<vault>/users/<id>` subtree under `vault/`. Returns null when the id isn't a
+ * safe single segment (never reaches outside `<vault>/users/`). Self-hosted
+ * shared-vault users have no isolated subtree, so the export is just the
+ * account record.
+ */
+export async function exportUserData(
+  vaultPath: string,
+  account: ExportAccount,
+): Promise<Buffer | null> {
+  if (!isSafeSegment(account.id)) return null;
+  const root = path.join(vaultPath, "users", account.id);
+  const files = [
+    { name: "account.json", data: Buffer.from(JSON.stringify(account, null, 2), "utf8") },
+    ...(await readTree(root, "vault")),
+  ];
+  return zipFiles(files);
 }
 
 export interface CampaignInfo {

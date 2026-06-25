@@ -58,7 +58,16 @@ async function collect(
 
 /** Build a ZIP archive (STORE method) of every file under `dir`. */
 export async function zipDir(dir: string, exclude?: (rel: string) => boolean): Promise<Buffer> {
-  const files = await collect(dir, exclude);
+  return zipFiles(await collect(dir, exclude));
+}
+
+/**
+ * Build a ZIP archive (STORE method) from in-memory entries. Lets callers mix
+ * files read off disk with generated content (e.g. a GDPR export's
+ * `account.json` alongside the user's vault files, #59e). Entry names use
+ * forward slashes per the ZIP spec.
+ */
+export function zipFiles(files: { name: string; data: Buffer }[]): Buffer {
   const local: Buffer[] = [];
   const entries: Entry[] = [];
   let offset = 0;

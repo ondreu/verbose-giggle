@@ -19,7 +19,7 @@ import { LogEmailSender, SmtpEmailSender, type EmailSender } from "./auth/email.
 import { AuthService } from "./auth/service.js";
 import { registerAuthGuard, registerCsrfGuard } from "./auth/middleware.js";
 import { RateLimiter } from "./auth/rate-limit.js";
-import { applyPendingRestore } from "./admin/ops.js";
+import { applyPendingRestore, exportUserData } from "./admin/ops.js";
 import { LogBuffer } from "./admin/log-buffer.js";
 
 async function main(): Promise<void> {
@@ -126,6 +126,16 @@ async function main(): Promise<void> {
     cookieSecure: config.auth.publicUrl.startsWith("https://"),
     rateLimit,
     onAccountDeleted: (userId) => purgeUserScope(userId),
+    exportUserData: (user) =>
+      exportUserData(config.vaultPath, {
+        id: user.id,
+        email: user.email,
+        displayName: user.displayName,
+        role: user.role,
+        emailVerified: user.emailVerified,
+        createdAt: user.createdAt,
+        credits: { balance: credits.balance(user.id), history: credits.history(user.id, 10000) },
+      }).then((buf) => buf ?? Buffer.alloc(0)),
     flags: () => {
       const c = configAccess.get();
       return {

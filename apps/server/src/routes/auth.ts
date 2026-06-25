@@ -38,6 +38,12 @@ export interface AuthContext {
    * absent, account deletion still removes the DB row + sessions as before.
    */
   onAccountDeleted?: (userId: string) => Promise<void>;
+  /**
+   * Build a GDPR data export (#59e) for the signed-in user: a ZIP of their
+   * account record + isolated vault subtree. Optional so tests/self-hosted can
+   * omit it; when absent the export endpoint reports it unavailable (501).
+   */
+  exportUserData?: (user: User) => Promise<Buffer>;
 }
 
 /** Name of the session cookie. */
@@ -287,6 +293,19 @@ export async function registerAuthRoutes(app: FastifyInstance, ctx: AuthContext)
       }
     },
   );
+
+  // GDPR data export (#59e): download everything we hold for this account.
+  app.get("/api/account/export", async (req, reply) => {
+    if (!req.user) return reply.code(401).send({ error: "Nepřihlášen." });
+    if (!ctx.exportUserData) {
+      return reply.code(501).send({ error: "Export není v tomto nasazení dostupný." });
+    }
+    const zip = await ctx.exportUserData(req.user);
+    return reply
+      .header("content-type", "application/zip")
+      .header("content-disposition", 'attachment; filename="moje-data.zip"')
+      .send(zip);
+  });
 
   app.delete("/api/account", async (req, reply) => {
     if (!req.user) return reply.code(401).send({ error: "Nepřihlášen." });
