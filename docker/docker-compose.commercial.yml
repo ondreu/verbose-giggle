@@ -45,9 +45,11 @@ services:
     restart: unless-stopped
     environment:
       # --- LLM (server-side key; users never bring their own in hosted mode) --
-      - LLM_API_KEY=${LLM_API_KEY}                                 # required
-      - LLM_BASE_URL=${LLM_BASE_URL:-https://api.mistral.ai/v1}
-      - LLM_MODEL=${LLM_MODEL:-mistral-medium-3.5}
+      - LLM_API_KEY=${LLM_API_KEY}                                 # required (OpenRouter key)
+      - LLM_BASE_URL=${LLM_BASE_URL:-https://openrouter.ai/api/v1} # everything routes through OpenRouter
+      # Models live in the admin Model pool; LLM_MODEL is only an empty-pool
+      # fallback. Add any model (incl. Mistral) to the pool to offer it.
+      - LLM_MODEL=${LLM_MODEL:-}
       - VAULT_PATH=/data/vault
 
       # --- Accounts / multi-tenant (#55–58) -----------------------------------
