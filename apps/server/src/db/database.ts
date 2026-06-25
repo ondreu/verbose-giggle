@@ -124,3 +124,18 @@ export function openInMemoryDatabase(): AppDatabase {
   migrate(db);
   return db;
 }
+
+/**
+ * Flush the write-ahead log into the main `app.db` file (#59c). In WAL mode
+ * recent writes live in the `-wal` sidecar; a file-level backup that copies only
+ * `app.db` would miss them. Running a TRUNCATE checkpoint before a backup folds
+ * the WAL back in, so the copied `app.db` is a consistent snapshot. Best-effort:
+ * a busy checkpoint just means some pages stay in the WAL, never corruption.
+ */
+export function checkpointDatabase(db: AppDatabase): void {
+  try {
+    db.exec("PRAGMA wal_checkpoint(TRUNCATE);");
+  } catch {
+    /* a concurrent reader can block a full checkpoint — backup is still valid */
+  }
+}

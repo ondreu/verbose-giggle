@@ -45,6 +45,13 @@ export interface AdminContext {
    * still removes the folder but a stale manager isn't dropped.
    */
   onScopeDataChanged?: (scopeKey: string, reason: string) => Promise<void>;
+  /**
+   * Flush the live SQLite WAL before a backup, for a consistent snapshot (#59c).
+   * Optional so the in-memory test DB can omit it.
+   */
+  checkpointDb?: () => void;
+  /** Keep at most this many backups; older ones are pruned (#59c). 0 = keep all. */
+  backupRetention?: number;
 }
 
 function userRow(u: ReturnType<UserStore["list"]>[number]) {
@@ -297,7 +304,10 @@ export async function registerAdminRoutes(app: FastifyInstance, ctx: AdminContex
   app.get("/api/admin/backups", async () => ({ backups: await listBackups(ctx.vaultPath) }));
 
   app.post("/api/admin/backups", async (req, reply) => {
-    const info = await createBackup(ctx.vaultPath, now());
+    const info = await createBackup(ctx.vaultPath, now(), {
+      checkpoint: ctx.checkpointDb,
+      retention: ctx.backupRetention,
+    });
     ctx.audit.record(req.user!.id, "backup.create", null, info.name);
     return reply.send(info);
   });

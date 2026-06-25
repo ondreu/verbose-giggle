@@ -92,6 +92,11 @@ export interface Config {
       register: { max: number; windowMs: number };
     };
   };
+  /** Whole-vault backups (#57b / #59c). */
+  backups: {
+    /** Keep at most this many backups; older ones are pruned. 0 = unlimited. */
+    retention: number;
+  };
   /** Credits / metering (#56). */
   credits: {
     /**
@@ -188,6 +193,9 @@ export function loadConfig(): Config {
           windowMs: Number(process.env.AUTH_REGISTER_RATE_WINDOW_MS ?? 60 * 60 * 1000),
         },
       },
+    },
+    backups: {
+      retention: Number(process.env.BACKUP_RETENTION ?? 10),
     },
     credits: {
       enabled: process.env.CREDITS_ENABLED === "true",

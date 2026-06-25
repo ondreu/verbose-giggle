@@ -10,7 +10,7 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import YAML from "yaml";
-import { dirSize, zipDir } from "../vault/zip.js";
+import { dirSize, zipDirToFile } from "../vault/zip.js";
 import { SHARED_SCOPE } from "../session/registry.js";
 
 /** A single path segment with no separators / traversal / dotfiles. */
@@ -149,22 +149,55 @@ export interface BackupInfo {
   createdAt: string;
 }
 
+export interface CreateBackupOptions {
+  /**
+   * Flush the live SQLite WAL before zipping so the copied `app.db` is a
+   * consistent snapshot (#59c). Best-effort; omitted in tests with no live DB.
+   */
+  checkpoint?: () => void;
+  /**
+   * Keep at most this many backups (newest wins); older ones are pruned after a
+   * successful create. 0 / undefined = keep everything.
+   */
+  retention?: number;
+}
+
 /**
  * Zip the entire vault (DB, campaigns, worlds, settings) into
  * `<vault>/backups/<name>.zip`. The backups folder itself is excluded so a
  * backup never contains older backups. `nowIso` is injected so callers can keep
- * filenames deterministic in tests. Returns the new backup's metadata.
+ * filenames deterministic in tests. The archive is streamed to disk one file at
+ * a time (bounded memory, #59c) with 0o600 perms (it contains password hashes).
+ * Returns the new backup's metadata.
  */
-export async function createBackup(vaultPath: string, nowIso: string): Promise<BackupInfo> {
+export async function createBackup(
+  vaultPath: string,
+  nowIso: string,
+  opts: CreateBackupOptions = {},
+): Promise<BackupInfo> {
   const dir = backupsDir(vaultPath);
   await fs.mkdir(dir, { recursive: true });
+  opts.checkpoint?.();
   // ISO timestamp → filesystem-safe (':' and '.' out).
   const stamp = nowIso.replace(/[:.]/g, "-");
   const name = `vault-${stamp}.zip`;
-  const buf = await zipDir(vaultPath, (rel) => rel === "backups" || rel.startsWith("backups/"));
   const target = path.join(dir, name);
-  await fs.writeFile(target, buf);
-  return { name, sizeBytes: buf.length, createdAt: nowIso };
+  await zipDirToFile(vaultPath, target, (rel) => rel === "backups" || rel.startsWith("backups/"));
+  const sizeBytes = (await fs.stat(target)).size;
+  if (opts.retention && opts.retention > 0) await pruneBackups(vaultPath, opts.retention);
+  return { name, sizeBytes, createdAt: nowIso };
+}
+
+/**
+ * Delete backups beyond the newest `keep` (#59c retention). Returns the names
+ * removed. No-op when `keep <= 0` or there's nothing to trim.
+ */
+export async function pruneBackups(vaultPath: string, keep: number): Promise<string[]> {
+  if (keep <= 0) return [];
+  const all = await listBackups(vaultPath); // newest first
+  const stale = all.slice(keep);
+  for (const b of stale) await deleteBackup(vaultPath, b.name);
+  return stale.map((b) => b.name);
 }
 
 /** List stored backups, newest first. */

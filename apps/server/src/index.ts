@@ -8,7 +8,7 @@ import { loadSettings } from "./settings.js";
 import { registerGameRoutes } from "./routes/game.js";
 import { registerAuthRoutes } from "./routes/auth.js";
 import { registerAdminRoutes } from "./routes/admin.js";
-import { openDatabase } from "./db/database.js";
+import { openDatabase, checkpointDatabase } from "./db/database.js";
 import { UserStore } from "./auth/users.js";
 import { SessionStore } from "./auth/sessions.js";
 import { AuditStore } from "./auth/audit.js";
@@ -133,6 +133,8 @@ async function main(): Promise<void> {
     getConfig: () => configAccess.get(),
     reloadConfig: () => configAccess.reload(),
     onScopeDataChanged: (scopeKey, reason) => invalidateScope(scopeKey, reason),
+    checkpointDb: () => checkpointDatabase(db),
+    backupRetention: config.backups.retention,
     startedAtMs,
   });
   await registerCreditRoutes(app, { credits });
