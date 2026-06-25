@@ -20,13 +20,17 @@ import { AuthService } from "./auth/service.js";
 import { registerAuthGuard, registerCsrfGuard } from "./auth/middleware.js";
 import { RateLimiter } from "./auth/rate-limit.js";
 import { applyPendingRestore } from "./admin/ops.js";
+import { LogBuffer } from "./admin/log-buffer.js";
 
 async function main(): Promise<void> {
   const startedAtMs = Date.now();
   const env = loadConfig();
   const settings = await loadSettings(env.vaultPath);
   const config = applySettings(env, settings);
-  const app = Fastify({ logger: true });
+  // Tee runtime logs into a bounded ring buffer so the admin panel can tail them
+  // (#59g); they still stream to stdout for container log collectors.
+  const logBuffer = new LogBuffer();
+  const app = Fastify({ logger: { stream: logBuffer.stream() } });
 
   // Single window into the live, mutable config. Game routes own the canonical
   // value and call `exposeConfig` to wire these handles; until then they read
@@ -143,6 +147,7 @@ async function main(): Promise<void> {
     checkpointDb: () => checkpointDatabase(db),
     backupRetention: config.backups.retention,
     bootAllowAnonymous: config.auth.allowAnonymous,
+    getLogs: (limit) => logBuffer.tail(limit),
     startedAtMs,
   });
   await registerCreditRoutes(app, { credits });

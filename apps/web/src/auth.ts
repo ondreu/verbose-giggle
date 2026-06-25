@@ -128,6 +128,8 @@ export const adminListUsers = () =>
 export const adminOverview = () => request<AdminOverview>("GET", "/api/admin/overview");
 export const adminAudit = () =>
   request<{ entries: AuditEntry[] } & Page>("GET", "/api/admin/audit");
+export const adminLogs = (limit = 300) =>
+  request<{ lines: string[]; available: boolean }>("GET", `/api/admin/logs?limit=${limit}`);
 export const adminSetRole = (id: string, role: "admin" | "user") =>
   put(`/api/admin/users/${id}/role`, { role });
 export const adminSetVerified = (id: string, verified: boolean) =>

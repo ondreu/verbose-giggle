@@ -13,6 +13,7 @@ import {
   adminListBackups,
   adminListUsers,
   adminListVaults,
+  adminLogs,
   adminOverview,
   adminSaveServerSettings,
   adminSetRole,
@@ -36,7 +37,7 @@ import { ProviderSettings } from "./ProviderSettings";
  * denied". Tabs cover users, global server settings, usage/cost, cross-tenant
  * campaign management, whole-vault backups, runtime health, and the audit log.
  */
-type Tab = "overview" | "users" | "server" | "usage" | "vaults" | "backups" | "audit";
+type Tab = "overview" | "users" | "server" | "usage" | "vaults" | "backups" | "audit" | "logs";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "overview", label: "Přehled" },
@@ -46,6 +47,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: "vaults", label: "Kampaně" },
   { id: "backups", label: "Zálohy" },
   { id: "audit", label: "Audit" },
+  { id: "logs", label: "Logy" },
 ];
 
 export function AdminPage() {
@@ -107,6 +109,7 @@ export function AdminPage() {
       {tab === "vaults" && <VaultsTab onErr={onErr} />}
       {tab === "backups" && <BackupsTab onErr={onErr} />}
       {tab === "audit" && <AuditTab onErr={onErr} />}
+      {tab === "logs" && <LogsTab onErr={onErr} />}
     </Shell>
   );
 }
@@ -649,6 +652,69 @@ function AuditTab({ onErr }: { onErr: ErrHandler }) {
         <li className="text-ink/40">Zobrazeno {audit.length} z {total} (nejnovější).</li>
       )}
     </ul>
+  );
+}
+
+/** One pino log line, reduced to time + level + message for display. */
+function formatLogLine(raw: string): { time: string; level: string; msg: string } {
+  try {
+    const o = JSON.parse(raw) as { time?: number; level?: number; msg?: string };
+    const levels: Record<number, string> = { 10: "trace", 20: "debug", 30: "info", 40: "warn", 50: "error", 60: "fatal" };
+    return {
+      time: o.time ? new Date(o.time).toLocaleTimeString("cs-CZ") : "",
+      level: o.level ? levels[o.level] ?? String(o.level) : "",
+      msg: o.msg ?? raw,
+    };
+  } catch {
+    return { time: "", level: "", msg: raw };
+  }
+}
+
+const LEVEL_COLOR: Record<string, string> = {
+  warn: "text-amber-400",
+  error: "text-blood",
+  fatal: "text-blood",
+};
+
+function LogsTab({ onErr }: { onErr: ErrHandler }) {
+  const [lines, setLines] = useState<string[]>([]);
+  const [available, setAvailable] = useState(true);
+  const refresh = useCallback(async () => {
+    const r = await adminLogs();
+    if (r.ok) {
+      setLines(r.data.lines);
+      setAvailable(r.data.available);
+    } else onErr(r);
+  }, [onErr]);
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  if (!available) {
+    return <p className="font-log text-sm text-ink/50">Prohlížeč logů není v tomto nasazení dostupný.</p>;
+  }
+  return (
+    <section className="flex flex-col gap-2">
+      <div className="flex items-center justify-between">
+        <p className="font-log text-xs text-ink/50">Posledních {lines.length} řádků (nejnovější dole).</p>
+        <button className="btn-link text-xs underline" onClick={() => void refresh()}>
+          Obnovit
+        </button>
+      </div>
+      <pre className="max-h-[60vh] overflow-auto rounded border border-ink/15 bg-black/30 p-2 font-log text-xs leading-relaxed">
+        {lines.length === 0 && <span className="text-ink/40">Zatím žádné logy.</span>}
+        {lines.map((raw, i) => {
+          const l = formatLogLine(raw);
+          return (
+            <div key={i}>
+              <span className="text-ink/40">{l.time}</span>{" "}
+              <span className={LEVEL_COLOR[l.level] ?? "text-ink/60"}>{l.level}</span>{" "}
+              <span className="text-ink/85">{l.msg}</span>
+            </div>
+          );
+        })}
+      </pre>
+    </section>
   );
 }
 

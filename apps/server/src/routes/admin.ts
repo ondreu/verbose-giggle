@@ -60,6 +60,11 @@ export interface AdminContext {
    * from this. Omitted = no warning (tests / self-hosted).
    */
   bootAllowAnonymous?: boolean;
+  /**
+   * Tail recent server log lines (#59g). Optional so tests can omit it; when
+   * absent the logs endpoint reports the viewer as unavailable.
+   */
+  getLogs?: (limit: number) => string[];
 }
 
 /** Largest page an admin list endpoint will serve in one response (#59h). */
@@ -273,6 +278,13 @@ export async function registerAdminRoutes(app: FastifyInstance, ctx: AdminContex
       return reply.send(serverSettingsView(c));
     },
   );
+
+  // --- Server logs viewer (#59g) -------------------------------------------
+  app.get<{ Querystring: { limit?: string } }>("/api/admin/logs", async (req) => {
+    if (!ctx.getLogs) return { lines: [], available: false };
+    const { limit } = parsePage(req.query, 200);
+    return { lines: ctx.getLogs(limit), available: true };
+  });
 
   // --- Health / runtime (#57b) ---------------------------------------------
   app.get("/api/admin/health", async () => {

@@ -232,7 +232,9 @@ ne „nice to have".
 ### #59 — Bezpečnost & hardening (dev panel / multi-tenant)
 
 Vyvstalo při stavbě dev panelu (#57b). Privilegovaná, mutující plocha + reálné
-kredity = bezpečnost přestává být „nice to have".
+kredity = bezpečnost přestává být „nice to have". **Stav:** všechny položky
+(#59a–#59h) jsou hotové; zbývají jen drobné navazující úkoly označené „Zbývá"
+(CAPTCHA, GDPR export, plné stránkovací ovládání, purge při admin smazání).
 
 - **[x] #59a — CSRF.** Hotovo: `registerCsrfGuard`
   (`apps/server/src/auth/middleware.ts`) vyžaduje vlastní hlavičku
@@ -267,8 +269,9 @@ kredity = bezpečnost přestává být „nice to have".
   uprostřed sezení); admin panel varuje (`allowAnonymousPendingRestart`), když se
   živá hodnota odchýlí od boot snapshotu. Auth gate (vyžadovat přihlášení) se mění
   živě dál.
-- **[ ] #59g — Prohlížeč serverových logů.** Poslední otevřená položka #57b
-  (tail běhových logů nad rámec audit logu).
+- **[x] #59g — Prohlížeč serverových logů.** Hotovo: `LogBuffer` teeuje pino
+  výstup do ohraničeného ring bufferu (stdout zůstává), `GET /api/admin/logs`
+  vrací tail a panel má záložku „Logy".
 - **[~] #59h — Stránkování.** Hotovo serverově: `users`/`audit`/`usage`/`vaults`
   berou `?limit&offset` (cap 500, default 200) a vrací `total`; `UserStore.list`
   i `AuditStore.list` mají SQL LIMIT/OFFSET. UI ukazuje „zobrazeno X z Y" u users

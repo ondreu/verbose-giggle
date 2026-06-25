@@ -64,6 +64,7 @@ async function setup() {
     getConfig: () => config,
     reloadConfig,
     bootAllowAnonymous: config.auth.allowAnonymous,
+    getLogs: (limit) => ["log-a", "log-b", "log-c"].slice(-limit),
     startedAtMs: Date.now(),
     now: () => "2026-06-25T12:00:00.000Z",
   });
@@ -380,6 +381,14 @@ describe("admin dev panel (#57b)", () => {
     });
     expect(res.statusCode).toBe(404);
     await app.close();
+  });
+
+  it("tails server logs for an admin (#59g)", async () => {
+    const { app, adminSid } = await setup();
+    const res = await app.inject({ method: "GET", url: "/api/admin/logs?limit=2", ...asAdmin(adminSid) });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().available).toBe(true);
+    expect(res.json().lines).toEqual(["log-b", "log-c"]);
   });
 
   it("paginates the users list with limit/offset and a total (#59h)", async () => {
