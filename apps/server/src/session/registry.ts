@@ -185,6 +185,25 @@ export class SessionRegistry {
   }
 
   /**
+   * Invalidate one scope after its on-disk data changed under it (#59d, e.g. an
+   * admin deleted a campaign in that scope). Tells any connected clients to
+   * re-hydrate, then drops the cached scope so its next request re-opens from
+   * disk (re-discovering a campaign / seeding) instead of serving a stale
+   * `SessionManager` that may point at a deleted directory. No-op if the scope
+   * was never opened.
+   */
+  async invalidateScope(key: string, reason: string): Promise<void> {
+    const pending = this.scopes.get(key);
+    if (!pending) return;
+    try {
+      (await pending).bus.emit({ type: "reload", reason });
+    } catch {
+      /* a scope that failed to open has no clients to notify */
+    }
+    this.scopes.delete(key);
+  }
+
+  /**
    * Re-open every live scope's manager (e.g. the global SRD path changed) and
    * tell each scope's clients to re-hydrate. A single bus emit would only reach
    * the shared scope, so we fan out per-bus.

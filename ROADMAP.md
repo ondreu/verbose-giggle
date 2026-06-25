@@ -250,9 +250,10 @@ kredity = bezpečnost přestává být „nice to have".
   (mapy) hrozí nafouknutí RSS; streamovat. (3) Retence: zálohy rostou bez limitu
   ve vault volume — „nech posledních N" + strop. (4) Hlídaný restore (upload →
   validace → swap při příštím startu). (5) Záloha obsahuje hashe hesel — citlivá.
-- **[ ] #59d — Mazání otevřené kampaně.** `DELETE /api/admin/vaults/...` smaže
-  složku, ale neinvaliduje cachovaný `SessionManager` daného scope → další tah
-  může spadnout. Reopen/invalidace dotčeného scope.
+- **[x] #59d — Mazání otevřené kampaně.** Hotovo: po `DELETE /api/admin/vaults/...`
+  se volá `SessionRegistry.invalidateScope` (emit `reload` připojeným klientům +
+  zahození cachovaného scope), takže další tah scope znovu otevře místo běhu nad
+  smazanou složkou.
 - **[~] #59e — GDPR mazání dat.** Hotovo: `DELETE /api/account` teď kromě řádku
   uživatele a session maže i jeho izolovaný podstrom `<vault>/users/<id>/`
   (`deleteUserVault`, `admin/ops.ts`) a evikuje cachovaný scope

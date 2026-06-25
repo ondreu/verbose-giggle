@@ -39,6 +39,12 @@ export interface AdminContext {
   startedAtMs: number;
   /** ISO clock, injectable for deterministic backup filenames in tests. */
   now?: () => string;
+  /**
+   * Invalidate a scope's cached SessionManager after this panel changed its
+   * data on disk (#59d). Optional so tests can omit it; when absent, deletion
+   * still removes the folder but a stale manager isn't dropped.
+   */
+  onScopeDataChanged?: (scopeKey: string, reason: string) => Promise<void>;
 }
 
 function userRow(u: ReturnType<UserStore["list"]>[number]) {
@@ -279,6 +285,9 @@ export async function registerAdminRoutes(app: FastifyInstance, ctx: AdminContex
       const dir = await campaignDir(ctx.vaultPath, req.params.scope, req.params.folder);
       if (!dir) return reply.code(404).send({ error: "Kampaň nenalezena." });
       await deleteCampaign(dir);
+      // Drop the affected scope's cached manager so a later turn can't run
+      // against the just-deleted campaign dir (#59d).
+      await ctx.onScopeDataChanged?.(req.params.scope, "campaign-deleted");
       ctx.audit.record(req.user!.id, "vault.campaign.delete", null, `${req.params.scope}/${req.params.folder}`);
       return reply.send({ ok: true });
     },

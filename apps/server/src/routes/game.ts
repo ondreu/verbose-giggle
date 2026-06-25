@@ -49,6 +49,12 @@ export interface GameContext {
    * module) and invoked by the account-deletion route.
    */
   exposePurgeUserScope?: (purge: (userId: string) => Promise<void>) => void;
+  /**
+   * Hand `index.ts` a function that invalidates one scope after its data changed
+   * on disk (#59d, e.g. the admin panel deleted a campaign in it), so the cached
+   * `SessionManager` for that scope is dropped and clients re-hydrate.
+   */
+  exposeInvalidateScope?: (invalidate: (scopeKey: string, reason: string) => Promise<void>) => void;
 }
 
 /** Thrown by the metering helper when a user has no credits left (#56c). */
@@ -118,6 +124,8 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
     await deleteUserVault(config.vaultPath, userId);
     registry.evict(userId);
   });
+  // …and a way for the admin panel to invalidate a scope whose data it changed.
+  ctx.exposeInvalidateScope?.((scopeKey, reason) => registry.invalidateScope(scopeKey, reason));
 
   /**
    * Build the narrator for the current config. Falls back to the offline mock

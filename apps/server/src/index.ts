@@ -40,6 +40,9 @@ async function main(): Promise<void> {
   // then a deleted account just drops its DB row; once wired it also purges the
   // user's vault subtree and evicts their cached scope.
   let purgeUserScope: (userId: string) => Promise<void> = async () => {};
+  // Late-bound likewise (#59d): drop a scope's cached manager after the admin
+  // panel deletes a campaign in it, so the next turn re-opens fresh.
+  let invalidateScope: (scopeKey: string, reason: string) => Promise<void> = async () => {};
 
   if (config.basicAuth) {
     const expected = "Basic " + Buffer.from(config.basicAuth).toString("base64");
@@ -129,6 +132,7 @@ async function main(): Promise<void> {
     vaultPath: config.vaultPath,
     getConfig: () => configAccess.get(),
     reloadConfig: () => configAccess.reload(),
+    onScopeDataChanged: (scopeKey, reason) => invalidateScope(scopeKey, reason),
     startedAtMs,
   });
   await registerCreditRoutes(app, { credits });
@@ -146,6 +150,9 @@ async function main(): Promise<void> {
     },
     exposePurgeUserScope: (purge) => {
       purgeUserScope = purge;
+    },
+    exposeInvalidateScope: (invalidate) => {
+      invalidateScope = invalidate;
     },
   });
 
