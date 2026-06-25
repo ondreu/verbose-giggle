@@ -25,14 +25,31 @@ updating.
 
 # Open work — what's next
 
-Recommended order (decisions in #55–58 are already made):
-**#55 auth + per-user data isolation → #58 account settings → #57 admin panel →
-#56 credits/metering → payments.** #48 (i18n) and the #45 partials are
-independent and can land alongside.
+**Stav (2026-06-25):** Účty/kredity/admin jsou z velké části hotové a nasazené —
+**#55a–#55e** (registrace, ověření e-mailu, login + httpOnly session, reset hesla,
+napojený `LoginScreen`), **#55f část 1** (autentizace + gating endpointů),
+**#56** (kreditní ledger, metering LLM/obrázků/TTS, vynucení limitu 402, admin
+granty, záložka *Kredity*, ukazatel v hlavičce — chybí jen platby/Stripe),
+**#57** (admin role + bootstrap, správa uživatelů, audit log, `/admin` panel) a
+**#58a** (nastavení účtu). Vše s testy (`apps/server/test/`).
+
+**Zbývá — dva velké samostatné tracky + drobnosti:**
+1. **#55f část 2 — izolace dat per uživatel** (rozhodnutý layout:
+   `<vault>/users/<id>/`, migrace stávajícího vaultu na prvního admina).
+   Největší a nejrizikovější — přepis single-manager herní vrstvy na resolving
+   manageru + event streamu per request (~60 míst v `routes/game.ts`). Migrace
+   nemůže bezpečně přijít dřív, než je tento přepis hotový. **Čeká na explicitní
+   pokyn** (riziko rozbití funkční single-tenant verze).
+2. **#48 — i18n** (P1): infrastruktura lokalizace v `@adm/schemas` (`cs`/`en`,
+   runtime přepínání) + tři přepínače. Aditivní a nezávislé, nízké riziko.
+3. Drobnosti: **#58b/#58c** (per-user preference + rozdělení global vs user
+   settings), zbytek **#57b** (globální settings, správa kampaní/vaultů, logy,
+   health), platby (#56d), **#45** partials (obsah — dělá autor).
 
 ## P0 — Účty, kredity a provoz (nový směr, 2026-06-24)
 
-> **Status: design / brainstorm — nic z toho se zatím neimplementuje.** Posouvá
+> **Status: z velké části IMPLEMENTOVÁNO** (viz „Stav" výše a `[x]` níže); zbývá
+> #55f-2 (izolace dat) a platby. Posouvá
 > appku z dnešního **single-tenant self-hosted** modelu (jeden vault, jeden
 > Basic-Auth zámek, klíče vlastní provozovatel) k provozu, kde má **více
 > uživatelů vlastní účet, data a kredity**. `LoginScreen` a záložky
