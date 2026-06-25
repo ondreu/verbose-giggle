@@ -109,6 +109,16 @@ CI builds and pushes a multi-stage image to `ghcr.io/ondreu/ai-dungeon-master:la
 | **Self-hosted** (single-tenant) | `docker-compose.yml` (or `docker-compose.nas.yml` for NAS GUIs) | Anonymous OK (`AUTH_ALLOW_ANONYMOUS=true`) | One shared vault | Off |
 | **Commercial** (multi-tenant / hosted) | `docker-compose.commercial.yml` | Login required (`AUTH_ALLOW_ANONYMOUS=false`) | Per-user isolation under `<vault>/users/<id>/` | Credits on (#56) |
 
+### Plug-and-play setup
+
+The fastest path for either edition is the interactive setup script — it asks only for what the edition needs, generates a strong `AUTH_SECRET`, writes `docker/.env`, patches your domain into the `Caddyfile`, validates the stack, and offers to start it:
+
+```bash
+./docker/setup.sh
+```
+
+Prefer to wire it by hand? Follow the per-edition steps below.
+
 ### Self-hosted
 
 On the NAS, use the provided Compose stack (app + Piper + Watchtower, plus an optional ingress):
