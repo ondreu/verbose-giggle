@@ -62,6 +62,22 @@ export interface AdminContext {
   bootAllowAnonymous?: boolean;
 }
 
+/** Largest page an admin list endpoint will serve in one response (#59h). */
+const MAX_PAGE = 500;
+
+/** Parse `?limit&offset` into a sane, capped window. */
+function parsePage(
+  q: { limit?: string; offset?: string } | undefined,
+  defLimit = 200,
+): { limit: number; offset: number } {
+  const rawLimit = Number(q?.limit);
+  const rawOffset = Number(q?.offset);
+  const limit =
+    Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(Math.floor(rawLimit), MAX_PAGE) : defLimit;
+  const offset = Number.isFinite(rawOffset) && rawOffset > 0 ? Math.floor(rawOffset) : 0;
+  return { limit, offset };
+}
+
 function userRow(u: ReturnType<UserStore["list"]>[number]) {
   return {
     id: u.id,
@@ -85,9 +101,13 @@ export async function registerAdminRoutes(app: FastifyInstance, ctx: AdminContex
     );
   }
 
-  app.get("/api/admin/users", async () => ({
-    users: ctx.users.list().map((u) => ({ ...userRow(u), credits: ctx.credits.balance(u.id) })),
-  }));
+  app.get<{ Querystring: { limit?: string; offset?: string } }>("/api/admin/users", async (req) => {
+    const { limit, offset } = parsePage(req.query);
+    const users = ctx.users
+      .list({ limit, offset })
+      .map((u) => ({ ...userRow(u), credits: ctx.credits.balance(u.id) }));
+    return { users, total: ctx.users.count(), limit, offset };
+  });
 
   app.get("/api/admin/overview", async () => {
     const all = ctx.users.list();
@@ -98,7 +118,10 @@ export async function registerAdminRoutes(app: FastifyInstance, ctx: AdminContex
     };
   });
 
-  app.get("/api/admin/audit", async () => ({ entries: ctx.audit.list() }));
+  app.get<{ Querystring: { limit?: string; offset?: string } }>("/api/admin/audit", async (req) => {
+    const { limit, offset } = parsePage(req.query);
+    return { entries: ctx.audit.list({ limit, offset }), total: ctx.audit.count(), limit, offset };
+  });
 
   // Change a user's role. Refuses to demote the last/own admin away.
   app.put<{ Params: { id: string }; Body: { role?: string } }>(
@@ -277,23 +300,38 @@ export async function registerAdminRoutes(app: FastifyInstance, ctx: AdminContex
   });
 
   // --- Usage / cost overview (#57b) ----------------------------------------
-  app.get("/api/admin/usage", async () => {
+  app.get<{ Querystring: { limit?: string; offset?: string } }>("/api/admin/usage", async (req) => {
     const summary = ctx.credits.usageSummary();
-    const byUser = summary.byUser.map((u) => ({
+    const { limit, offset } = parsePage(req.query);
+    // byReason is bounded by the set of reasons; only byUser can grow, so page it.
+    const allByUser = summary.byUser.map((u) => ({
       ...u,
       email: ctx.users.findById(u.userId)?.email ?? null,
     }));
-    return { ...summary, byUser, creditsEnabled: ctx.getConfig().credits.enabled };
+    return {
+      ...summary,
+      byUser: allByUser.slice(offset, offset + limit),
+      byUserTotal: allByUser.length,
+      limit,
+      offset,
+      creditsEnabled: ctx.getConfig().credits.enabled,
+    };
   });
 
   // --- Cross-tenant campaign / vault management (#57b) ---------------------
-  app.get("/api/admin/vaults", async () => {
+  app.get<{ Querystring: { limit?: string; offset?: string } }>("/api/admin/vaults", async (req) => {
     const campaigns = await listAllCampaigns(ctx.vaultPath);
     const enriched = campaigns.map((c) => ({
       ...c,
       ownerEmail: c.scope === "__shared__" ? null : ctx.users.findById(c.scope)?.email ?? null,
     }));
-    return { campaigns: enriched };
+    const { limit, offset } = parsePage(req.query);
+    return {
+      campaigns: enriched.slice(offset, offset + limit),
+      total: enriched.length,
+      limit,
+      offset,
+    };
   });
 
   app.get<{ Params: { scope: string; folder: string } }>(

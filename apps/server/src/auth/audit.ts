@@ -45,12 +45,14 @@ export class AuditStore {
     return entry;
   }
 
-  /** Most recent entries first, capped by `limit`. */
-  list(limit = 200): AuditEntry[] {
+  /** Most recent entries first, with `limit`/`offset` paging (#59h). */
+  list(opts: { limit?: number; offset?: number } = {}): AuditEntry[] {
+    const limit = opts.limit ?? 200;
+    const offset = opts.offset ?? 0;
     // Tiebreak on rowid (insertion order) for entries sharing a millisecond.
     const rows = this.db
-      .prepare("SELECT * FROM audit_log ORDER BY created_at DESC, rowid DESC LIMIT ?")
-      .all(limit) as unknown as AuditRow[];
+      .prepare("SELECT * FROM audit_log ORDER BY created_at DESC, rowid DESC LIMIT ? OFFSET ?")
+      .all(limit, offset) as unknown as AuditRow[];
     return rows.map((r) => ({
       id: r.id,
       actorId: r.actor_id,
@@ -59,5 +61,11 @@ export class AuditStore {
       detail: r.detail,
       createdAt: r.created_at,
     }));
+  }
+
+  /** Total number of audit entries (for pagination, #59h). */
+  count(): number {
+    const row = this.db.prepare("SELECT COUNT(*) AS n FROM audit_log").get() as { n: number };
+    return row.n;
   }
 }

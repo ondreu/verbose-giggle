@@ -166,10 +166,13 @@ function OverviewTab({ onErr }: { onErr: ErrHandler }) {
 
 function UsersTab({ onErr }: { onErr: ErrHandler }) {
   const [users, setUsers] = useState<AdminUser[] | null>(null);
+  const [total, setTotal] = useState(0);
   const refresh = useCallback(async () => {
     const u = await adminListUsers();
-    if (u.ok) setUsers(u.data.users);
-    else onErr(u);
+    if (u.ok) {
+      setUsers(u.data.users);
+      setTotal(u.data.total);
+    } else onErr(u);
   }, [onErr]);
   useEffect(() => {
     void refresh();
@@ -233,6 +236,11 @@ function UsersTab({ onErr }: { onErr: ErrHandler }) {
           ))}
         </tbody>
       </table>
+      {users && users.length < total && (
+        <p className="mt-2 font-log text-xs text-ink/50">
+          Zobrazeno {users.length} z {total}. Větší stránkování přibude později.
+        </p>
+      )}
     </section>
   );
 }
@@ -616,11 +624,14 @@ function BackupsTab({ onErr }: { onErr: ErrHandler }) {
 
 function AuditTab({ onErr }: { onErr: ErrHandler }) {
   const [audit, setAudit] = useState<AuditEntry[]>([]);
+  const [total, setTotal] = useState(0);
   useEffect(() => {
     void (async () => {
       const r = await adminAudit();
-      if (r.ok) setAudit(r.data.entries);
-      else onErr(r);
+      if (r.ok) {
+        setAudit(r.data.entries);
+        setTotal(r.data.total);
+      } else onErr(r);
     })();
   }, [onErr]);
 
@@ -634,6 +645,9 @@ function AuditTab({ onErr }: { onErr: ErrHandler }) {
         </li>
       ))}
       {audit.length === 0 && <li className="italic">Zatím žádné záznamy.</li>}
+      {audit.length < total && (
+        <li className="text-ink/40">Zobrazeno {audit.length} z {total} (nejnovější).</li>
+      )}
     </ul>
   );
 }

@@ -116,9 +116,18 @@ export interface AuditEntry {
   createdAt: string;
 }
 
-export const adminListUsers = () => request<{ users: AdminUser[] }>("GET", "/api/admin/users");
+/** A capped, paginated list response (#59h): the array plus its true total. */
+export interface Page {
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export const adminListUsers = () =>
+  request<{ users: AdminUser[] } & Page>("GET", "/api/admin/users");
 export const adminOverview = () => request<AdminOverview>("GET", "/api/admin/overview");
-export const adminAudit = () => request<{ entries: AuditEntry[] }>("GET", "/api/admin/audit");
+export const adminAudit = () =>
+  request<{ entries: AuditEntry[] } & Page>("GET", "/api/admin/audit");
 export const adminSetRole = (id: string, role: "admin" | "user") =>
   put(`/api/admin/users/${id}/role`, { role });
 export const adminSetVerified = (id: string, verified: boolean) =>
@@ -189,6 +198,9 @@ export interface AdminUsage {
   byReason: { reason: string; spent: number; granted: number; count: number }[];
   byUser: { userId: string; email: string | null; balance: number; spent: number; entries: number }[];
   totals: { spent: number; granted: number; entries: number };
+  byUserTotal: number;
+  limit: number;
+  offset: number;
   creditsEnabled: boolean;
 }
 export const adminUsage = () => request<AdminUsage>("GET", "/api/admin/usage");
@@ -200,7 +212,8 @@ export interface AdminCampaign {
   sizeBytes: number;
   ownerEmail: string | null;
 }
-export const adminListVaults = () => request<{ campaigns: AdminCampaign[] }>("GET", "/api/admin/vaults");
+export const adminListVaults = () =>
+  request<{ campaigns: AdminCampaign[] } & Page>("GET", "/api/admin/vaults");
 export const adminDeleteCampaign = (scope: string, folder: string) =>
   request("DELETE", `/api/admin/vaults/${encodeURIComponent(scope)}/campaigns/${encodeURIComponent(folder)}`);
 export const adminExportCampaignUrl = (scope: string, folder: string) =>

@@ -382,6 +382,35 @@ describe("admin dev panel (#57b)", () => {
     await app.close();
   });
 
+  it("paginates the users list with limit/offset and a total (#59h)", async () => {
+    const { app, adminSid, users } = await setup();
+    const hash = await hashPassword("Abcd1234");
+    for (let i = 0; i < 5; i++) users.create({ email: `p${i}@e.c`, passwordHash: hash, emailVerified: true });
+
+    const page = await app.inject({
+      method: "GET",
+      url: "/api/admin/users?limit=2&offset=1",
+      ...asAdmin(adminSid),
+    });
+    expect(page.statusCode).toBe(200);
+    const body = page.json();
+    expect(body.users).toHaveLength(2);
+    expect(body.limit).toBe(2);
+    expect(body.offset).toBe(1);
+    // 2 from setup (admin + member) + 5 created = 7.
+    expect(body.total).toBe(7);
+  });
+
+  it("caps an over-large page size (#59h)", async () => {
+    const { app, adminSid } = await setup();
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/admin/users?limit=99999",
+      ...asAdmin(adminSid),
+    });
+    expect(res.json().limit).toBe(500);
+  });
+
   it("stages a restore from a stored backup (#59c)", async () => {
     const { app, adminSid, vaultPath } = await setup();
     // Tests use an in-memory DB, so write a db/app.db file the backup must carry

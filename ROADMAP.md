@@ -269,8 +269,10 @@ kredity = bezpečnost přestává být „nice to have".
   živě dál.
 - **[ ] #59g — Prohlížeč serverových logů.** Poslední otevřená položka #57b
   (tail běhových logů nad rámec audit logu).
-- **[ ] #59h — Stránkování.** Seznamy users/usage/audit/vaults jsou bez limitu;
-  poroste-li ledger/audit, doplnit paginaci.
+- **[~] #59h — Stránkování.** Hotovo serverově: `users`/`audit`/`usage`/`vaults`
+  berou `?limit&offset` (cap 500, default 200) a vrací `total`; `UserStore.list`
+  i `AuditStore.list` mají SQL LIMIT/OFFSET. UI ukazuje „zobrazeno X z Y" u users
+  a audit. Zbývá: plné stránkovací ovládání (další/předchozí) v panelu.
 
 ### Co snadno zapomeneme
 
