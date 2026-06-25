@@ -235,7 +235,7 @@ ne „nice to have".
 Vyvstalo při stavbě dev panelu (#57b). Privilegovaná, mutující plocha + reálné
 kredity = bezpečnost přestává být „nice to have". **Stav:** všechny položky
 (#59a–#59h) jsou hotové; zbývají jen drobné navazující úkoly označené „Zbývá"
-(CAPTCHA, GDPR export, plné stránkovací ovládání, purge při admin smazání).
+(CAPTCHA pro auth #59b, souhlas/consent u GDPR #59e).
 
 - **[x] #59a — CSRF.** Hotovo: `registerCsrfGuard`
   (`apps/server/src/auth/middleware.ts`) vyžaduje vlastní hlavičku
@@ -278,10 +278,11 @@ kredity = bezpečnost přestává být „nice to have". **Stav:** všechny polo
 - **[x] #59g — Prohlížeč serverových logů.** Hotovo: `LogBuffer` teeuje pino
   výstup do ohraničeného ring bufferu (stdout zůstává), `GET /api/admin/logs`
   vrací tail a panel má záložku „Logy".
-- **[~] #59h — Stránkování.** Hotovo serverově: `users`/`audit`/`usage`/`vaults`
+- **[x] #59h — Stránkování.** Hotovo serverově: `users`/`audit`/`usage`/`vaults`
   berou `?limit&offset` (cap 500, default 200) a vrací `total`; `UserStore.list`
-  i `AuditStore.list` mají SQL LIMIT/OFFSET. UI ukazuje „zobrazeno X z Y" u users
-  a audit. Zbývá: plné stránkovací ovládání (další/předchozí) v panelu.
+  i `AuditStore.list` mají SQL LIMIT/OFFSET. **UI dokončeno:** sdílená komponenta
+  `Pager` (další/předchozí + „X–Y z N") na záložkách Uživatelé, Audit, Kampaně i
+  Spotřeba (klient posílá `?limit&offset`, `PAGE_SIZE` 50). `AdminPage.tsx`.
 
 ### Co snadno zapomeneme
 

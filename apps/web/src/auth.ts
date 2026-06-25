@@ -126,11 +126,15 @@ export interface Page {
   offset: number;
 }
 
-export const adminListUsers = () =>
-  request<{ users: AdminUser[] } & Page>("GET", "/api/admin/users");
+/** Serialise a paging window into a `?limit&offset` query (#59h). */
+const pageQuery = (p?: { limit: number; offset: number }) =>
+  p ? `?limit=${p.limit}&offset=${p.offset}` : "";
+
+export const adminListUsers = (page?: { limit: number; offset: number }) =>
+  request<{ users: AdminUser[] } & Page>("GET", `/api/admin/users${pageQuery(page)}`);
 export const adminOverview = () => request<AdminOverview>("GET", "/api/admin/overview");
-export const adminAudit = () =>
-  request<{ entries: AuditEntry[] } & Page>("GET", "/api/admin/audit");
+export const adminAudit = (page?: { limit: number; offset: number }) =>
+  request<{ entries: AuditEntry[] } & Page>("GET", `/api/admin/audit${pageQuery(page)}`);
 export const adminLogs = (limit = 300) =>
   request<{ lines: string[]; available: boolean }>("GET", `/api/admin/logs?limit=${limit}`);
 export const adminSetRole = (id: string, role: "admin" | "user") =>
@@ -208,7 +212,8 @@ export interface AdminUsage {
   offset: number;
   creditsEnabled: boolean;
 }
-export const adminUsage = () => request<AdminUsage>("GET", "/api/admin/usage");
+export const adminUsage = (page?: { limit: number; offset: number }) =>
+  request<AdminUsage>("GET", `/api/admin/usage${pageQuery(page)}`);
 
 export interface AdminCampaign {
   scope: string;
@@ -217,8 +222,8 @@ export interface AdminCampaign {
   sizeBytes: number;
   ownerEmail: string | null;
 }
-export const adminListVaults = () =>
-  request<{ campaigns: AdminCampaign[] } & Page>("GET", "/api/admin/vaults");
+export const adminListVaults = (page?: { limit: number; offset: number }) =>
+  request<{ campaigns: AdminCampaign[] } & Page>("GET", `/api/admin/vaults${pageQuery(page)}`);
 export const adminDeleteCampaign = (scope: string, folder: string) =>
   request("DELETE", `/api/admin/vaults/${encodeURIComponent(scope)}/campaigns/${encodeURIComponent(folder)}`);
 export const adminExportCampaignUrl = (scope: string, folder: string) =>
