@@ -11,8 +11,8 @@ export interface AuthContext {
   service: AuthService;
   /** Send the cookie with the Secure flag (true behind HTTPS). */
   cookieSecure: boolean;
-  /** Public auth flags surfaced to the client (#55e). */
-  flags: { allowAnonymous: boolean; registrationEnabled: boolean };
+  /** Public auth flags surfaced to the client (#55e, #56e). */
+  flags: { allowAnonymous: boolean; registrationEnabled: boolean; creditsEnabled: boolean };
 }
 
 /** Name of the session cookie. */

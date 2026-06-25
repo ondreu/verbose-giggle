@@ -116,13 +116,14 @@ ne „nice to have".
   (`grant`/`charge`/`balance`/`history`). Zůstatek = `SUM(delta)`; delty jsou
   celá čísla v nejmenší jednotce (bez floatů). `credits/ledger.ts`, test
   `test/credits.test.ts`.
-- **[~] #56b — Měření spotřeby.** Hotovo pro **LLM**: `MeteredLlm` obalí
-  vypravěče a sečte `usage` z odpovědí poskytovatele přes všechna kola tool-loopu
-  (stream i ne-stream; u streamu `stream_options.include_usage`); cena =
-  tokeny/1000 × sazba (input/output) zaokrouhleno nahoru. Strhává se **až po
-  úspěšném tahu** (chyba = nestrhne se) → mimo engine, determinismus (#12)
-  nedotčen. Gated `CREDITS_ENABLED` (default off) → self-hosted/BYO se nemetruje.
-  Zbývá: měření **obrázků a TTS**. `credits/metering.ts`, `llm/client.ts`.
+- **[x] #56b — Měření spotřeby.** LLM: `MeteredLlm` obalí vypravěče a sečte
+  `usage` z odpovědí poskytovatele přes všechna kola tool-loopu (stream i
+  ne-stream; u streamu `stream_options.include_usage`); cena = tokeny/1000 ×
+  sazba (input/output). Obrázky: paušál `CREDITS_PER_IMAGE` po úspěšném
+  vygenerování (`/api/image`). TTS: `CREDITS_PER_1K_TTS_CHARS` × délka textu
+  (`/api/tts`; preview zdarma). Strhává se **až po úspěchu** (chyba = nestrhne)
+  → mimo engine, determinismus (#12) nedotčen. Gated `CREDITS_ENABLED` (default
+  off). `credits/metering.ts`, `llm/client.ts`.
 - **[x] #56c — Vynucení limitu.** Před tahem (`/api/action`, `/api/regenerate`,
   intro, recap) se kontroluje zůstatek; při ≤0 čistý **402** do UI. Následné
   LLM (arrival/AI tahy po engine příkazu) se metrují bez tvrdého stopu —
@@ -131,8 +132,9 @@ ne „nice to have".
   (kladně přidá, záporně odečte; audit). Zůstatek je vidět v admin seznamu
   uživatelů. Platební brána (Stripe) až později.
 - **[x] #56e — UI.** Záložka *Kredity* (`CreditsPanel`: zůstatek + historie
-  pohybů; anonym vidí vysvětlení) přes `GET /api/credits`. Admin má per-uživatele
-  tlačítko „kredity". Zbývá: ukazatel v hlavičce a „koupit" (čeká na platby).
+  pohybů; anonym vidí vysvětlení) přes `GET /api/credits`. Ukazatel zůstatku
+  v hlavičce (`CreditBadge`, jen hosted + přihlášený, polluje). Admin má
+  per-uživatele tlačítko „kredity". Zbývá jen „koupit" (čeká na platby/Stripe).
 
 ### #57 — Dev / admin panel
 

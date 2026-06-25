@@ -16,6 +16,7 @@ export interface AuthUser {
 export interface AuthConfig {
   allowAnonymous: boolean;
   registrationEnabled: boolean;
+  creditsEnabled: boolean;
 }
 
 export type AuthResult<T = void> =
@@ -54,7 +55,7 @@ export async function fetchAuthConfig(): Promise<AuthConfig> {
     /* fall through */
   }
   // Safe default if the endpoint is unreachable: behave like self-hosted.
-  return { allowAnonymous: true, registrationEnabled: true };
+  return { allowAnonymous: true, registrationEnabled: true, creditsEnabled: false };
 }
 
 export async function fetchCurrentUser(): Promise<AuthUser | null> {

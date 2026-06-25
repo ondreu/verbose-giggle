@@ -83,8 +83,10 @@ export class CreditStore {
 
   /** Recent movements, newest first. */
   history(userId: string, limit = 100): LedgerEntry[] {
+    // Tiebreak on rowid (insertion order) so entries created within the same
+    // millisecond still return newest-first deterministically.
     const rows = this.db
-      .prepare("SELECT * FROM credit_ledger WHERE user_id = ? ORDER BY created_at DESC, id DESC LIMIT ?")
+      .prepare("SELECT * FROM credit_ledger WHERE user_id = ? ORDER BY created_at DESC, rowid DESC LIMIT ?")
       .all(userId, limit) as unknown as LedgerRow[];
     return rows.map(rowToEntry);
   }

@@ -88,6 +88,7 @@ async function main(): Promise<void> {
     flags: {
       allowAnonymous: config.auth.allowAnonymous,
       registrationEnabled: config.auth.registrationEnabled,
+      creditsEnabled: config.credits.enabled,
     },
   });
   await registerAdminRoutes(app, { users, sessions, audit, credits });

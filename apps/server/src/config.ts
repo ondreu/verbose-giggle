@@ -162,6 +162,8 @@ export function loadConfig(): Config {
       pricing: {
         perThousandPromptTokens: Number(process.env.CREDITS_PER_1K_PROMPT ?? 1),
         perThousandCompletionTokens: Number(process.env.CREDITS_PER_1K_COMPLETION ?? 3),
+        perImage: Number(process.env.CREDITS_PER_IMAGE ?? 50),
+        perThousandTtsChars: Number(process.env.CREDITS_PER_1K_TTS_CHARS ?? 2),
       },
     },
   };

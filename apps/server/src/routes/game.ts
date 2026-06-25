@@ -128,14 +128,31 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
     run: (llm: Llm) => Promise<T>,
     enforce = true,
   ): Promise<T> {
-    const user = req.user;
-    if (!config.credits.enabled || !ctx.credits || !user) return run(baseLlm);
-    if (enforce && ctx.credits.balance(user.id) <= 0) throw new InsufficientCreditsError();
+    const user = meteringUser(req);
+    if (!user) return run(baseLlm);
+    if (enforce && ctx.credits!.balance(user.id) <= 0) throw new InsufficientCreditsError();
     const metered = new MeteredLlm(baseLlm);
     const result = await run(metered);
     const cost = metered.cost(config.credits.pricing);
-    if (cost > 0) ctx.credits.charge(user.id, cost, reason);
+    if (cost > 0) ctx.credits!.charge(user.id, cost, reason);
     return result;
+  }
+
+  /** The user to meter for this request, or null when metering is inactive. */
+  function meteringUser(req: FastifyRequest) {
+    return config.credits.enabled && ctx.credits && req.user ? req.user : null;
+  }
+
+  /** Throw a 402-able error if the request's user has no credits (#56c). */
+  function enforceCredits(req: FastifyRequest): void {
+    const user = meteringUser(req);
+    if (user && ctx.credits!.balance(user.id) <= 0) throw new InsufficientCreditsError();
+  }
+
+  /** Charge a flat (non-token) cost for a completed operation (image/TTS). */
+  function chargeCredits(req: FastifyRequest, reason: string, amount: number): void {
+    const user = meteringUser(req);
+    if (user && amount > 0) ctx.credits!.charge(user.id, Math.ceil(amount), reason);
   }
 
   // --- Settings (GUI-editable runtime config; §9.1) ------------------------
@@ -1067,6 +1084,7 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
       const { subject, id } = req.body ?? {};
       if (!subject) return reply.code(400).send({ error: "Chybí subject" });
       try {
+        enforceCredits(req);
         const prompt = buildPrompt(
           subject,
           ctx.manager.campaign.actors,
@@ -1076,8 +1094,10 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
         );
         const client = new ImageClient(config.image);
         const result = await client.generate(prompt);
+        chargeCredits(req, "image", config.credits.pricing.perImage);
         return result;
       } catch (err) {
+        if (err instanceof InsufficientCreditsError) return reply.code(402).send({ error: err.message });
         return reply.code(500).send({ error: err instanceof Error ? err.message : String(err) });
       }
     },
@@ -1125,8 +1145,15 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
     const provider = req.body?.provider === "azure" || req.body?.provider === "piper" ? req.body.provider : "auto";
     if (!config.azureTts && !config.piperUrl)
       return reply.code(503).send({ error: "TTS not configured" });
+    try {
+      enforceCredits(req);
+    } catch (err) {
+      if (err instanceof InsufficientCreditsError) return reply.code(402).send({ error: err.message });
+      throw err;
+    }
     const wav = await synthesizeTts(text, config.azureTts, provider);
     if (!wav) return reply.code(502).send({ error: "TTS upstream error" });
+    chargeCredits(req, "tts", (text.length / 1000) * config.credits.pricing.perThousandTtsChars);
     reply.header("Content-Type", "audio/wav");
     return reply.send(wav);
   });

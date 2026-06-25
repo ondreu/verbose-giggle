@@ -13,6 +13,10 @@ export interface CreditPricing {
   perThousandPromptTokens: number;
   /** Credits charged per 1000 completion (output) tokens, after markup. */
   perThousandCompletionTokens: number;
+  /** Credits charged per generated image, after markup. */
+  perImage: number;
+  /** Credits charged per 1000 characters of synthesized speech, after markup. */
+  perThousandTtsChars: number;
 }
 
 /** Integer credit cost for a token total at the given pricing (rounds up). */

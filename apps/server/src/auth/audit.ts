@@ -47,8 +47,9 @@ export class AuditStore {
 
   /** Most recent entries first, capped by `limit`. */
   list(limit = 200): AuditEntry[] {
+    // Tiebreak on rowid (insertion order) for entries sharing a millisecond.
     const rows = this.db
-      .prepare("SELECT * FROM audit_log ORDER BY created_at DESC LIMIT ?")
+      .prepare("SELECT * FROM audit_log ORDER BY created_at DESC, rowid DESC LIMIT ?")
       .all(limit) as unknown as AuditRow[];
     return rows.map((r) => ({
       id: r.id,

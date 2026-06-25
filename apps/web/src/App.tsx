@@ -10,6 +10,7 @@ import { GameOverModal } from "./components/GameOverModal";
 import { EmberField } from "./components/EmberField";
 import { LoginScreen } from "./components/LoginScreen";
 import { AdminPage } from "./components/AdminPage";
+import { CreditBadge } from "./components/CreditBadge";
 import { ReferenceModal } from "./panels/ReferenceModal";
 import { fetchAuthConfig, fetchCurrentUser, type AuthConfig } from "./auth";
 
@@ -30,9 +31,11 @@ export default function App() {
   // screen for already-signed-in (or anonymous-allowed) users.
   const [authed, setAuthed] = useState(false);
   const [authChecked, setAuthChecked] = useState(false);
+  const [hasUser, setHasUser] = useState(false);
   const [authConfig, setAuthConfig] = useState<AuthConfig>({
     allowAnonymous: true,
     registrationEnabled: true,
+    creditsEnabled: false,
   });
 
   useEffect(() => {
@@ -41,7 +44,10 @@ export default function App() {
       const [cfg, user] = await Promise.all([fetchAuthConfig(), fetchCurrentUser()]);
       if (cancelled) return;
       setAuthConfig(cfg);
-      if (user) setAuthed(true);
+      if (user) {
+        setAuthed(true);
+        setHasUser(true);
+      }
       setAuthChecked(true);
     })();
     return () => {
@@ -110,13 +116,17 @@ export default function App() {
             den {time.day}, {String(time.hour).padStart(2, "0")}:00
           </span>
         )}
+        {authConfig.creditsEnabled && hasUser && <span className="ml-auto" />}
         <span
-          className="ml-auto flex items-center gap-1.5 font-log text-[11px] text-subtext0"
+          className={`flex items-center gap-1.5 font-log text-[11px] text-subtext0 ${
+            authConfig.creditsEnabled && hasUser ? "" : "ml-auto"
+          }`}
           title={connected ? "Spojeno se serverem" : "Odpojeno"}
         >
           <span className={`h-2 w-2 rounded-full ${connected ? "bg-verdigris" : "bg-blood"}`} />
           {connected ? "spojeno" : "odpojeno"}
         </span>
+        {authConfig.creditsEnabled && hasUser && <CreditBadge />}
         <button
           className="btn-ghost text-xs"
           title="Hlavní nabídka (kampaně, tvorba postavy, zálohy)"
