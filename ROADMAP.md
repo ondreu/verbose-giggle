@@ -263,8 +263,9 @@ kredity = bezpečnost přestává být „nice to have". **Stav:** všechny polo
 - **[~] #59e — GDPR mazání dat.** Hotovo: `DELETE /api/account` teď kromě řádku
   uživatele a session maže i jeho izolovaný podstrom `<vault>/users/<id>/`
   (`deleteUserVault`, `admin/ops.ts`) a evikuje cachovaný scope
-  (`SessionRegistry.evict`). Zbývá: export dat + souhlas; a totéž napojit na
-  admin smazání uživatele (`DELETE /api/admin/users/:id`).
+  (`SessionRegistry.evict`). **Totéž napojeno i na admin smazání uživatele**
+  (`DELETE /api/admin/users/:id` → `onUserDeleted` → stejná `purgeUserScope`),
+  takže ban smaže i data, ne jen řádek. Zbývá: export dat + souhlas.
 - **[x] #59f — Živý přepínač `allowAnonymous`.** Hotovo obojí: `SessionRegistry`
   latchuje routing izolace dat z boot configu (přepne se až po restartu, ne
   uprostřed sezení); admin panel varuje (`allowAnonymousPendingRestart`), když se

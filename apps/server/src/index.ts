@@ -144,6 +144,7 @@ async function main(): Promise<void> {
     getConfig: () => configAccess.get(),
     reloadConfig: () => configAccess.reload(),
     onScopeDataChanged: (scopeKey, reason) => invalidateScope(scopeKey, reason),
+    onUserDeleted: (userId) => purgeUserScope(userId),
     checkpointDb: () => checkpointDatabase(db),
     backupRetention: config.backups.retention,
     bootAllowAnonymous: config.auth.allowAnonymous,
