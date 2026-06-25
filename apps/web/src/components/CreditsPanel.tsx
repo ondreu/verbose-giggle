@@ -9,14 +9,22 @@ import { fetchCredits, type CreditMovement } from "../auth";
  */
 export function CreditsPanel() {
   const [state, setState] = useState<
-    { kind: "loading" } | { kind: "anon" } | { kind: "ready"; balance: number; history: CreditMovement[] }
+    | { kind: "loading" }
+    | { kind: "anon" }
+    | { kind: "ready"; balance: number; history: CreditMovement[]; signupBonus: number }
   >({ kind: "loading" });
 
   useEffect(() => {
     let cancelled = false;
     void fetchCredits().then((res) => {
       if (cancelled) return;
-      if (res.ok) setState({ kind: "ready", balance: res.data.balance, history: res.data.history });
+      if (res.ok)
+        setState({
+          kind: "ready",
+          balance: res.data.balance,
+          history: res.data.history,
+          signupBonus: res.data.signupBonus ?? 0,
+        });
       else setState({ kind: "anon" });
     });
     return () => {
@@ -43,6 +51,13 @@ export function CreditsPanel() {
         <span className="font-display text-3xl text-ink">{state.balance}</span>
         <span className="font-log text-sm text-ink/60">kreditů</span>
       </div>
+
+      {state.signupBonus > 0 && (
+        <p className="rounded-sm border border-verdigris/40 bg-verdigris/10 px-3 py-2 font-body text-sm text-ink/75">
+          Nové účty dostávají <strong>{state.signupBonus} kreditů</strong> zdarma po
+          ověření e-mailu.
+        </p>
+      )}
 
       <div className="flex flex-col gap-2">
         <h2 className="font-display text-xs uppercase tracking-wider text-ink/70">Historie</h2>

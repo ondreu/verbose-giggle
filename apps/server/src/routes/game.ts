@@ -235,6 +235,18 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
     }
   }
 
+  /**
+   * The OpenRouter slug this scope's user picked from the operator pool (#56g),
+   * or undefined to use the global default. Confined to current pool members so
+   * a stale saved slug (model removed from the pool) safely falls back.
+   */
+  async function resolveSelectedModel(sess: UserSession): Promise<string | undefined> {
+    const scoped = await loadSettings(sess.root);
+    const wanted = scoped.selectedModel?.trim();
+    if (!wanted) return undefined;
+    return config.modelPool.some((m) => m.model === wanted) ? wanted : undefined;
+  }
+
   /** Masked view of the effective settings — never leaks secret values. */
   async function settingsView(sess: UserSession): Promise<unknown> {
     // Provider/SRD credentials are global (op-only); the campaign selection is
@@ -276,6 +288,18 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
       campaign: scoped.campaign ?? path.basename(sess.manager.campaign.dir),
       campaignName: sess.manager.campaign.config.name,
       campaigns: await listCampaigns(sess),
+      // Operator model pool (#56g) the player picks their own model from. Only
+      // player-facing fields — the slug stays internal; the UI shows name +
+      // credits + ★ ratings. `selectedModel` is this user's saved choice.
+      modelPool: config.modelPool.map((m) => ({
+        model: m.model,
+        name: m.name,
+        perMessage: m.perMessage,
+        intelligence: m.intelligence,
+        price: m.price,
+        tooltip: m.tooltip ?? "",
+      })),
+      selectedModel: scoped.selectedModel ?? "",
       activeNarrator: !config.llm.apiKey || config.llm.provider === "mock" ? "mock" : "llm",
       // Bootstrap values that stay in the environment (shown read-only).
       env: {
@@ -346,13 +370,21 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
       if (patch.tts.style !== undefined) clean.tts.style = patch.tts.style;
     }
     if (patch.srdPath !== undefined) clean.srdPath = patch.srdPath;
-    // The campaign selection is per-scope (#55f): route it to the user's own
-    // settings, never the global file. Provider/SRD creds stay global.
+    // The campaign selection and the per-user model choice are per-scope (#55f):
+    // route them to the user's own settings, never the global file. Provider/SRD
+    // creds stay global. An empty/unknown model clears the choice (global default).
     const campaign = patch.campaign;
+    let selectedModel: string | undefined;
+    if (patch.selectedModel !== undefined) {
+      const wanted = String(patch.selectedModel).trim();
+      // Only accept a slug that's actually in the operator pool; otherwise clear.
+      selectedModel = config.modelPool.some((m) => m.model === wanted) ? wanted : "";
+    }
 
     try {
       if (Object.keys(clean).length > 0) await saveSettings(config.vaultPath, clean);
       if (campaign !== undefined) await saveSettings(sess.root, { campaign });
+      if (selectedModel !== undefined) await saveSettings(sess.root, { selectedModel });
       // Rebuild the effective config from env + the new global settings, and
       // re-mount the SRD dataset live for every scope if its path changed.
       await reloadConfig();
@@ -1101,7 +1133,10 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
   /** Player free-text action → the LLM/engine turn loop. */
   app.post<{ Body: { input: string; as?: string } }>("/api/action", async (req, reply) => {
     const sess = await registry.resolve(req);
-    const llm = makeLlm(sess.manager);
+    // Drive the turn with the player's chosen pool model (#56g) when set, so
+    // billing also keys off that model's per-message price.
+    const selectedModel = await resolveSelectedModel(sess);
+    const llm = makeLlm(sess.manager, selectedModel);
     const input = (req.body?.input ?? "").trim();
     if (!input) return reply.code(400).send({ error: "empty input" });
     // A finished campaign (party wipe, #23) accepts no further actions until
@@ -1117,7 +1152,7 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
         "llm-turn",
         llm,
         (l) => runTurn({ manager: sess.manager, llm: l, bus: sess.bus, input, partyVoice }),
-        { bill: true, model: config.llm.model },
+        { bill: true, model: selectedModel ?? config.llm.model },
       );
       return { narration };
     } catch (err) {
@@ -1152,9 +1187,11 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
       await sess.reopen();
       await checkpointTurn(dir, `Před: „${input.slice(0, 40)}“`);
       // Build the narrator AFTER the rewind so the mock introspects the
-      // rewound manager, not the stale one.
-      const model = req.body?.model?.trim() || config.llm.model;
-      const turnLlm = makeLlm(sess.manager, req.body?.model?.trim() || undefined);
+      // rewound manager, not the stale one. With no explicit "Jiným modelem"
+      // pick, default to the player's chosen pool model (#56g).
+      const override = req.body?.model?.trim() || (await resolveSelectedModel(sess));
+      const model = override || config.llm.model;
+      const turnLlm = makeLlm(sess.manager, override || undefined);
       const { narration } = await meteredTurn(
         req,
         "llm-regenerate",

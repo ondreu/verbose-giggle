@@ -69,6 +69,12 @@ export interface Settings {
   /** Campaign folder name under <vault>/campaigns (applied on next start). */
   campaign?: string;
   /**
+   * Per-user choice of which model from the operator model pool (#56g) drives
+   * their turns. Stored in the user's own settings (never global); the OpenRouter
+   * slug of a pool entry, or undefined/empty to fall back to the global default.
+   */
+  selectedModel?: string;
+  /**
    * Operational server settings editable from the admin/dev panel (#57b).
    * These overlay the env defaults (`applySettings`) the same way provider
    * credentials do, so they persist with the vault and survive a redeploy.
@@ -83,6 +89,8 @@ export interface Settings {
     requireVerifiedEmail?: boolean;
     /** Charge metered token/image/TTS usage against user credits. */
     creditsEnabled?: boolean;
+    /** One-time welcome bonus granted on first email verification (#55/#56). */
+    signupBonus?: number;
     /**
      * Selectable model pool (#56g): the models a player can pick / re-roll
      * with, each with its OpenRouter slug, per-message credit price, and 1–5

@@ -22,6 +22,10 @@ interface SettingsView {
   srd: { spells: number; monsters: number; classes: number; subclasses: number; races: number; subraces: number; feats: number; total: number };
   campaign: string;
   campaigns: string[];
+  /** Operator model pool (#56g) the player picks their own model from. */
+  modelPool: { model: string; name: string; perMessage: number; intelligence: number; price: number; tooltip: string }[];
+  /** This user's saved pool choice (slug), or "" for the global default. */
+  selectedModel: string;
   activeNarrator: "mock" | "llm";
   env: { basicAuth: boolean };
   /**
@@ -63,7 +67,8 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
   const [ttsPitch, setTtsPitch] = useState("-2%");
   const [ttsKey, setTtsKey] = useState("");
   const [srdPath, setSrdPath] = useState("");
-  const [campaign, setCampaign] = useState("");
+  // The player's chosen pool model (slug); "" = global default (#56g).
+  const [selectedModel, setSelectedModel] = useState("");
 
   function apply(v: SettingsView) {
     setView(v);
@@ -82,7 +87,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
     setTtsPitch(v.tts.pitch);
     setTtsKey("");
     setSrdPath(v.srdPath);
-    setCampaign(v.campaign);
+    setSelectedModel(v.selectedModel ?? "");
   }
 
   useEffect(() => {
@@ -104,7 +109,10 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
       // The campaign selection is per-user and always editable. Global
       // provider/SRD credentials are only sent when this client may edit them
       // (self-hosted or admin); otherwise the server would reject them (403).
-      const patch: Record<string, unknown> = { campaign };
+      // The per-user model choice is always editable (#56g); the campaign is
+      // switched from the start menu now, not here. Provider/SRD creds only when
+      // this client may edit them.
+      const patch: Record<string, unknown> = { selectedModel };
       if (view?.canEditProviders) {
         patch.llm = {
           provider,
@@ -180,17 +188,18 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
     }
   }
 
-  const campaignChanged = view != null && campaign !== view.campaign;
-
   // Settings are grouped into tabs per the #47 wireframe. Účet/Kredity are
   // pre-prepared placeholders (accounts/billing aren't wired yet); the rest
   // drive the real settings.json fields.
   const [tab, setTab] = useState<TabId>("aidm");
 
   // Provider tabs are hidden when this client can't edit global credentials
-  // (hosted, non-admin); those settings live in the /admin panel instead.
+  // (hosted, non-admin); those settings live in the /admin panel instead. The
+  // AI DM tab stays visible to everyone — a regular player uses it to pick their
+  // model from the operator pool (#56g); only the provider credentials inside
+  // it are gated.
   const canEditProviders = view?.canEditProviders ?? true;
-  const providerTabs: TabId[] = ["aidm", "tts", "images"];
+  const providerTabs: TabId[] = ["tts", "images"];
   const visibleTabs = TABS.filter((t) => canEditProviders || !providerTabs.includes(t.id));
 
   // If the active tab got hidden after load, fall back to a visible one.
@@ -243,17 +252,33 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                 {tab === "credits" && <CreditsPanel />}
 
                 {tab === "aidm" && (
-                  <fieldset className="flex flex-col gap-2">
-                    <legend className="font-display text-sm uppercase tracking-wider">Jazykový model (AI DM)</legend>
-                    <div className="mb-1 flex items-center gap-2 text-sm">
-                      <span
-                        className={`h-2 w-2 rounded-full ${view.activeNarrator === "llm" ? "bg-verdigris" : "bg-ink/40"}`}
-                      />
-                      {view.activeNarrator === "llm"
-                        ? "Aktivní vypravěč: jazykový model"
-                        : "Aktivní vypravěč: offline mock (bez klíče nebo vynuceno)"}
-                    </div>
-                    <Field label="Režim">
+                  <fieldset className="flex flex-col gap-4">
+                    <legend className="font-display text-sm uppercase tracking-wider">AI Dungeon Master</legend>
+
+                    {/* Player model picker (#56g): choose which pooled model drives
+                        your turns. Only name + credits + ★ ratings — never the slug. */}
+                    <ModelPicker
+                      pool={view.modelPool ?? []}
+                      value={selectedModel}
+                      onChange={setSelectedModel}
+                    />
+
+                    {/* Provider credentials are admin/self-hosted only; a regular
+                        hosted player sees just the picker above. */}
+                    {canEditProviders && (
+                      <div className="flex flex-col gap-2 border-t border-ink/15 pt-3">
+                        <h3 className="font-display text-xs uppercase tracking-wider text-ink/60">
+                          Poskytovatel (jazykový model)
+                        </h3>
+                        <div className="mb-1 flex items-center gap-2 text-sm">
+                          <span
+                            className={`h-2 w-2 rounded-full ${view.activeNarrator === "llm" ? "bg-verdigris" : "bg-ink/40"}`}
+                          />
+                          {view.activeNarrator === "llm"
+                            ? "Aktivní vypravěč: jazykový model"
+                            : "Aktivní vypravěč: offline mock (bez klíče nebo vynuceno)"}
+                        </div>
+                        <Field label="Režim">
                       <select
                         className="settings-input"
                         value={provider}
@@ -287,10 +312,12 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                         onChange={(e) => setLlmAltModels(e.target.value)}
                       />
                     </Field>
-                    <p className="text-xs italic text-ink/50">
-                      Tyhle modely se nabídnou v chatu u zprávy DM přes „Jiným modelem" — přegenerují
-                      poslední tah zvoleným modelem (stejný klíč i poskytovatel, jen jiný model).
-                    </p>
+                        <p className="text-xs italic text-ink/50">
+                          Tyhle modely se nabídnou v chatu u zprávy DM přes „Jiným modelem" — přegenerují
+                          poslední tah zvoleným modelem (stejný klíč i poskytovatel, jen jiný model).
+                        </p>
+                      </div>
+                    )}
                   </fieldset>
                 )}
 
@@ -404,20 +431,11 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
 
                 {tab === "info" && (
                   <fieldset className="flex flex-col gap-2">
-                    <legend className="font-display text-sm uppercase tracking-wider">Obsah &amp; info</legend>
-                    <Field label="Kampaň">
-                      <select className="settings-input" value={campaign} onChange={(e) => setCampaign(e.target.value)}>
-                        {!view.campaigns.includes(campaign) && <option value={campaign}>{campaign}</option>}
-                        {view.campaigns.map((c) => (
-                          <option key={c} value={c}>
-                            {c}
-                          </option>
-                        ))}
-                      </select>
-                    </Field>
-                    {campaignChanged && (
-                      <p className="text-xs italic text-blood">Změna kampaně se projeví po restartu serveru.</p>
-                    )}
+                    <legend className="font-display text-sm uppercase tracking-wider">Info</legend>
+                    {/* The campaign selector lived here but duplicated the start
+                        menu's campaign switch, so it was removed. Self-hosted /
+                        admin still configure the SRD dataset path here; a regular
+                        player sees an empty placeholder for now. */}
                     {canEditProviders ? (
                       <>
                         <Field label="Cesta k SRD">
@@ -440,43 +458,12 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                           </p>
                         )}
                         <p className="text-xs italic text-ink/50">
-                          Cesta k SRD se po uložení namountuje hned. Změna kampaně se projeví po restartu serveru.
+                          Cesta k SRD se po uložení namountuje hned.
                         </p>
                       </>
                     ) : (
-                      <p className="text-xs italic text-ink/60">
-                        Poskytovatele (jazykový model, obrázky, hlas) a SRD spravuje administrátor v{" "}
-                        <a className="underline" href="/admin">
-                          admin panelu
-                        </a>
-                        .
-                      </p>
+                      <p className="text-xs italic text-ink/50">Zatím prázdné.</p>
                     )}
-                  </fieldset>
-                )}
-
-                {tab === "selfhosting" && (
-                  <fieldset className="flex flex-col gap-2">
-                    <legend className="font-display text-sm uppercase tracking-wider">Selfhosting</legend>
-                    <p className="text-sm text-ink/80">
-                      Tahle instance běží ve tvé vlastní režii. Citlivé provozní volby se nastavují v prostředí
-                      kontejneru (<code className="font-log text-xs">.env</code>), ne tady.
-                    </p>
-                    <ul className="flex flex-col gap-1.5 text-sm text-ink/70">
-                      <li className="flex items-center gap-2">
-                        <span className={`h-2 w-2 rounded-full ${view.env.basicAuth ? "bg-verdigris" : "bg-ink/40"}`} />
-                        Přihlášení (Basic Auth): {view.env.basicAuth ? "zapnuto" : "vypnuto"}
-                      </li>
-                      <li className="flex items-center gap-2">
-                        <span className={`h-2 w-2 rounded-full ${view.tts.piperFallback ? "bg-verdigris" : "bg-ink/40"}`} />
-                        Záložní Piper TTS: {view.tts.piperFallback ? "nastaven" : "nenastaven"}
-                      </li>
-                    </ul>
-                    <p className="text-xs italic text-ink/50">
-                      Přihlášení i adresa záložního Piperu se konfigurují v prostředí (.env). Data kampaní žijí
-                      v pojmenovaném Docker volume <code className="font-log text-xs">vault_data</code>, takže
-                      přežijí aktualizaci image.
-                    </p>
                   </fieldset>
                 )}
               </div>
@@ -506,7 +493,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
   );
 }
 
-type TabId = "account" | "credits" | "aidm" | "tts" | "images" | "info" | "selfhosting";
+type TabId = "account" | "credits" | "aidm" | "tts" | "images" | "info";
 
 const TABS: { id: TabId; label: string; icon: string }[] = [
   { id: "account", label: "Účet", icon: "user" },
@@ -515,7 +502,6 @@ const TABS: { id: TabId; label: string; icon: string }[] = [
   { id: "tts", label: "TTS", icon: "speaker" },
   { id: "images", label: "Obrázky", icon: "camera" },
   { id: "info", label: "Info", icon: "info" },
-  { id: "selfhosting", label: "Selfhosting", icon: "server" },
 ];
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
@@ -524,5 +510,71 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
       <span className="text-ink/70">{label}</span>
       {children}
     </label>
+  );
+}
+
+type PoolEntry = { model: string; name: string; perMessage: number; intelligence: number; price: number; tooltip: string };
+
+/**
+ * Player-facing model picker (#56g): pick which model from the operator pool
+ * drives your turns. Shows only the display name, per-message credit cost, and
+ * ★ intelligence / $ price ratings — never the raw slug. The operator curates
+ * the pool itself in the admin panel; the player only chooses among it.
+ */
+function ModelPicker({
+  pool,
+  value,
+  onChange,
+}: {
+  pool: PoolEntry[];
+  value: string;
+  onChange: (slug: string) => void;
+}) {
+  if (pool.length === 0) {
+    return (
+      <div className="flex flex-col gap-1">
+        <span className="text-ink/70 text-sm">Model</span>
+        <p className="text-xs italic text-ink/50">
+          Zatím nejsou k dispozici žádné modely. Nabídku spravuje administrátor.
+        </p>
+      </div>
+    );
+  }
+  return (
+    <div className="flex flex-col gap-2">
+      <span className="text-ink/70 text-sm">Model, kterým hraješ</span>
+      <div className="flex flex-col gap-1.5">
+        {pool.map((m) => {
+          const active = m.model === value;
+          return (
+            <button
+              key={m.model}
+              type="button"
+              onClick={() => onChange(m.model)}
+              title={m.tooltip?.trim() || undefined}
+              className={`flex items-center gap-3 rounded-sm border px-3 py-2 text-left transition-colors ${
+                active
+                  ? "border-verdigris bg-verdigris/10"
+                  : "border-ink/20 hover:border-ink/40 hover:bg-ink/5"
+              }`}
+            >
+              <span
+                className={`h-3 w-3 shrink-0 rounded-full border ${
+                  active ? "border-verdigris bg-verdigris" : "border-ink/40"
+                }`}
+              />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate font-body text-sm text-ink">{m.name}</span>
+                <span className="font-log text-[11px] text-ink/55">
+                  <span title="inteligence">{"★".repeat(m.intelligence)}</span>{" "}
+                  <span title="cena">{"$".repeat(m.price)}</span>
+                </span>
+              </span>
+              <span className="shrink-0 font-log text-xs text-ink/60">{m.perMessage} kr./zpráva</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }

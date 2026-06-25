@@ -66,8 +66,8 @@ export function AdminPage() {
   if (denied) {
     return (
       <Shell>
-        <p className="font-display text-lg text-ink/80">Přístup odepřen</p>
-        <p className="font-body text-sm text-ink/60">Tato stránka je jen pro administrátory.</p>
+        <p className="font-display text-lg text-text">Přístup odepřen</p>
+        <p className="font-body text-sm text-subtext1">Tato stránka je jen pro administrátory.</p>
         <a href="/" className="btn-link text-sm underline">
           Zpět do aplikace
         </a>
@@ -84,7 +84,7 @@ export function AdminPage() {
         </a>
       </div>
 
-      <nav className="flex flex-wrap gap-1 border-b border-ink/15">
+      <nav className="flex flex-wrap gap-1 border-b border-surface1">
         {TABS.map((t) => (
           <button
             key={t.id}
@@ -93,7 +93,7 @@ export function AdminPage() {
               setTab(t.id);
             }}
             className={`px-3 py-1.5 font-log text-sm ${
-              tab === t.id ? "border-b-2 border-gold text-ink" : "text-ink/55 hover:text-ink/80"
+              tab === t.id ? "border-b-2 border-gold text-text" : "text-subtext1 hover:text-text"
             }`}
           >
             {t.label}
@@ -139,7 +139,7 @@ function Pager({
   const from = total === 0 ? 0 : offset + 1;
   const to = offset + count;
   return (
-    <div className="mt-2 flex items-center gap-3 font-log text-xs text-ink/55">
+    <div className="mt-2 flex items-center gap-3 font-log text-xs text-subtext1">
       <button
         className="btn-link underline disabled:opacity-40 disabled:no-underline"
         disabled={offset === 0}
@@ -190,7 +190,7 @@ function OverviewTab({ onErr }: { onErr: ErrHandler }) {
       {health && (
         <section className="flex flex-col gap-2">
           <H2>Běh serveru</H2>
-          <dl className="grid grid-cols-2 gap-x-6 gap-y-1 font-log text-sm text-ink/70 sm:grid-cols-3">
+          <dl className="grid grid-cols-2 gap-x-6 gap-y-1 font-log text-sm text-subtext1 sm:grid-cols-3">
             <Row k="Node" v={health.node} />
             <Row k="Uptime" v={formatDuration(health.uptimeSec)} />
             <Row k="Spuštěn" v={new Date(health.startedAt).toLocaleString("cs-CZ")} />
@@ -236,7 +236,7 @@ function UsersTab({ onErr }: { onErr: ErrHandler }) {
     <section className="overflow-x-auto">
       <table className="w-full border-collapse text-sm">
         <thead>
-          <tr className="border-b border-ink/20 text-left font-log text-xs uppercase text-ink/50">
+          <tr className="border-b border-surface1 text-left font-log text-xs uppercase text-subtext0">
             <th className="py-1 pr-3">E-mail</th>
             <th className="py-1 pr-3">Jméno</th>
             <th className="py-1 pr-3">Role</th>
@@ -247,7 +247,7 @@ function UsersTab({ onErr }: { onErr: ErrHandler }) {
         </thead>
         <tbody>
           {users?.map((u) => (
-            <tr key={u.id} className="border-b border-ink/10">
+            <tr key={u.id} className="border-b border-surface1">
               <td className="py-1.5 pr-3">{u.email}</td>
               <td className="py-1.5 pr-3">{u.displayName ?? "—"}</td>
               <td className="py-1.5 pr-3">{u.role}</td>
@@ -313,7 +313,7 @@ function ServerTab({ onErr }: { onErr: ErrHandler }) {
     } else onErr(r);
   };
 
-  if (!s) return <p className="font-log text-sm text-ink/50">Načítám…</p>;
+  if (!s) return <p className="font-log text-sm text-subtext0">Načítám…</p>;
 
   return (
     <div className="flex flex-col gap-5">
@@ -333,7 +333,7 @@ function ServerTab({ onErr }: { onErr: ErrHandler }) {
 
       <section className="flex flex-col gap-2">
         <H2>Model pool</H2>
-        <p className="font-log text-xs text-ink/55">
+        <p className="font-log text-xs text-subtext1">
           Nabídka modelů pro hráče — vše přes OpenRouter chat-completions. Cena za zprávu se
           promítne do účtování; inteligence a cena (★ 1–5) se ukazují hráči v přepínači modelů.
         </p>
@@ -347,7 +347,7 @@ function ServerTab({ onErr }: { onErr: ErrHandler }) {
 
       <section className="flex flex-col gap-2">
         <H2>Poskytovatelé (AI, obrázky, TTS, SRD)</H2>
-        <p className="font-log text-xs text-ink/50">
+        <p className="font-log text-xs text-subtext0">
           Klíče a modely se ukládají do vaultu (settings.json), ne do .env — přežijí restart i nasazení.
         </p>
         <ProviderSettings />
@@ -370,7 +370,7 @@ function StarRating({ value, onChange }: { value: number; onChange: (n: number) 
           aria-checked={n === value}
           title={`${n}/5`}
           onClick={() => onChange(n)}
-          className={`px-0.5 text-base leading-none ${n <= value ? "text-gold" : "text-ink/25"} hover:text-gold`}
+          className={`px-0.5 text-base leading-none ${n <= value ? "text-gold" : "text-subtext0"} hover:text-gold`}
         >
           {n <= value ? "★" : "☆"}
         </button>
@@ -408,7 +408,7 @@ function ModelPoolEditor({
       <div className="overflow-x-auto">
         <table className="w-full border-collapse text-sm">
           <thead>
-            <tr className="border-b border-ink/20 text-left font-log text-xs uppercase text-ink/50">
+            <tr className="border-b border-surface1 text-left font-log text-xs uppercase text-subtext0">
               <th className="py-1 pr-2">Jméno</th>
               <th className="py-1 pr-2">Adresa modelu (OpenRouter)</th>
               <th className="py-1 pr-2">Kr./zpráva</th>
@@ -420,13 +420,13 @@ function ModelPoolEditor({
           </thead>
           <tbody>
             {rows.map((r, i) => (
-              <tr key={i} className="border-b border-ink/10">
+              <tr key={i} className="border-b border-surface1">
                 <td className="py-1 pr-2">
                   <input
                     value={r.name}
                     placeholder="DeepSeek Flash"
                     onChange={(e) => update(i, { name: e.target.value })}
-                    className="w-32 rounded border border-ink/25 bg-bg-crust px-2 py-1 text-ink"
+                    className="w-32 rounded border border-surface2 bg-bg-crust px-2 py-1 text-text"
                   />
                 </td>
                 <td className="py-1 pr-2">
@@ -434,7 +434,7 @@ function ModelPoolEditor({
                     value={r.model}
                     placeholder="deepseek/deepseek-v4-flash"
                     onChange={(e) => update(i, { model: e.target.value })}
-                    className="w-56 rounded border border-ink/25 bg-bg-crust px-2 py-1 font-log text-ink"
+                    className="w-56 rounded border border-surface2 bg-bg-crust px-2 py-1 font-log text-text"
                   />
                 </td>
                 <td className="py-1 pr-2">
@@ -443,7 +443,7 @@ function ModelPoolEditor({
                     min={0}
                     value={r.perMessage}
                     onChange={(e) => update(i, { perMessage: Number(e.target.value) })}
-                    className="w-20 rounded border border-ink/25 bg-bg-crust px-2 py-1 text-right text-ink"
+                    className="w-20 rounded border border-surface2 bg-bg-crust px-2 py-1 text-right text-text"
                   />
                 </td>
                 <td className="py-1 pr-2">
@@ -458,7 +458,7 @@ function ModelPoolEditor({
                     maxLength={280}
                     placeholder="Rychlý a levný; ideální na průzkum."
                     onChange={(e) => update(i, { tooltip: e.target.value })}
-                    className="w-56 rounded border border-ink/25 bg-bg-crust px-2 py-1 text-ink"
+                    className="w-56 rounded border border-surface2 bg-bg-crust px-2 py-1 text-text"
                   />
                 </td>
                 <td className="py-1 pr-2">
@@ -470,7 +470,7 @@ function ModelPoolEditor({
             ))}
             {rows.length === 0 && (
               <tr>
-                <td colSpan={7} className="py-2 font-log text-sm italic text-ink/40">
+                <td colSpan={7} className="py-2 font-log text-sm italic text-subtext0">
                   Žádné modely. Přidej první níže.
                 </td>
               </tr>
@@ -543,9 +543,9 @@ function PricingEditor({
       </div>
 
       <div className="flex flex-col gap-1">
-        <p className="font-log text-xs text-ink/55">Cena za zprávu podle modelu (prázdné = výchozí {draft.perMessage}):</p>
+        <p className="font-log text-xs text-subtext1">Cena za zprávu podle modelu (prázdné = výchozí {draft.perMessage}):</p>
         {settings.models.map((id) => (
-          <label key={id} className="flex items-center justify-between gap-2 font-log text-sm text-ink/70">
+          <label key={id} className="flex items-center justify-between gap-2 font-log text-sm text-subtext1">
             <span className="truncate" title={id}>
               {id}
             </span>
@@ -555,15 +555,15 @@ function PricingEditor({
               placeholder={String(draft.perMessage)}
               value={models[id] ?? ""}
               onChange={(e) => setModels({ ...models, [id]: e.target.value })}
-              className="w-24 rounded border border-ink/25 bg-bg-crust px-2 py-1 text-right text-ink"
+              className="w-24 rounded border border-surface2 bg-bg-crust px-2 py-1 text-right text-text"
             />
           </label>
         ))}
-        {settings.models.length === 0 && <p className="font-log text-xs italic text-ink/40">Žádné modely nenastaveny.</p>}
+        {settings.models.length === 0 && <p className="font-log text-xs italic text-subtext0">Žádné modely nenastaveny.</p>}
       </div>
 
-      <details className="font-log text-sm text-ink/70">
-        <summary className="cursor-pointer text-ink/55">TTS & token cost-basis</summary>
+      <details className="font-log text-sm text-subtext1">
+        <summary className="cursor-pointer text-subtext1">TTS & token cost-basis</summary>
         <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
           {basis.map((f) => (
             <NumField key={f.k} label={f.label} value={draft[f.k] as number} onChange={(n) => setDraft({ ...draft, [f.k]: n })} />
@@ -580,14 +580,14 @@ function PricingEditor({
 
 function NumField({ label, value, onChange }: { label: string; value: number; onChange: (n: number) => void }) {
   return (
-    <label className="flex items-center justify-between gap-2 font-log text-sm text-ink/70">
+    <label className="flex items-center justify-between gap-2 font-log text-sm text-subtext1">
       <span>{label}</span>
       <input
         type="number"
         min={0}
         value={value}
         onChange={(e) => onChange(Number(e.target.value))}
-        className="w-24 rounded border border-ink/25 bg-bg-crust px-2 py-1 text-right text-ink"
+        className="w-24 rounded border border-surface2 bg-bg-crust px-2 py-1 text-right text-text"
       />
     </label>
   );
@@ -605,11 +605,11 @@ function UsageTab({ onErr }: { onErr: ErrHandler }) {
       else onErr(r);
     })();
   }, [onErr, offset]);
-  if (!u) return <p className="font-log text-sm text-ink/50">Načítám…</p>;
+  if (!u) return <p className="font-log text-sm text-subtext0">Načítám…</p>;
 
   return (
     <div className="flex flex-col gap-4">
-      {!u.creditsEnabled && <p className="font-log text-xs text-ink/50">Metering je vypnutý — data jsou jen z ručních grantů.</p>}
+      {!u.creditsEnabled && <p className="font-log text-xs text-subtext0">Metering je vypnutý — data jsou jen z ručních grantů.</p>}
       <div className="flex flex-wrap gap-3">
         <Stat label="Utraceno" value={u.totals.spent} />
         <Stat label="Přiděleno" value={u.totals.granted} />
@@ -620,7 +620,7 @@ function UsageTab({ onErr }: { onErr: ErrHandler }) {
         <H2>Podle důvodu</H2>
         <table className="w-full border-collapse text-sm">
           <thead>
-            <tr className="border-b border-ink/20 text-left font-log text-xs uppercase text-ink/50">
+            <tr className="border-b border-surface1 text-left font-log text-xs uppercase text-subtext0">
               <th className="py-1 pr-3">Důvod</th>
               <th className="py-1 pr-3">Utraceno</th>
               <th className="py-1 pr-3">Přiděleno</th>
@@ -629,7 +629,7 @@ function UsageTab({ onErr }: { onErr: ErrHandler }) {
           </thead>
           <tbody>
             {u.byReason.map((r) => (
-              <tr key={r.reason} className="border-b border-ink/10 font-log text-ink/75">
+              <tr key={r.reason} className="border-b border-surface1 font-log text-text">
                 <td className="py-1 pr-3">{r.reason}</td>
                 <td className="py-1 pr-3">{r.spent}</td>
                 <td className="py-1 pr-3">{r.granted}</td>
@@ -644,7 +644,7 @@ function UsageTab({ onErr }: { onErr: ErrHandler }) {
         <H2>Podle uživatele</H2>
         <table className="w-full border-collapse text-sm">
           <thead>
-            <tr className="border-b border-ink/20 text-left font-log text-xs uppercase text-ink/50">
+            <tr className="border-b border-surface1 text-left font-log text-xs uppercase text-subtext0">
               <th className="py-1 pr-3">Uživatel</th>
               <th className="py-1 pr-3">Zůstatek</th>
               <th className="py-1 pr-3">Utraceno</th>
@@ -653,7 +653,7 @@ function UsageTab({ onErr }: { onErr: ErrHandler }) {
           </thead>
           <tbody>
             {u.byUser.map((r) => (
-              <tr key={r.userId} className="border-b border-ink/10 font-log text-ink/75">
+              <tr key={r.userId} className="border-b border-surface1 font-log text-text">
                 <td className="py-1 pr-3">{r.email ?? r.userId}</td>
                 <td className="py-1 pr-3">{r.balance}</td>
                 <td className="py-1 pr-3">{r.spent}</td>
@@ -689,7 +689,7 @@ function VaultsTab({ onErr }: { onErr: ErrHandler }) {
     <section className="overflow-x-auto">
       <table className="w-full border-collapse text-sm">
         <thead>
-          <tr className="border-b border-ink/20 text-left font-log text-xs uppercase text-ink/50">
+          <tr className="border-b border-surface1 text-left font-log text-xs uppercase text-subtext0">
             <th className="py-1 pr-3">Kampaň</th>
             <th className="py-1 pr-3">Vlastník</th>
             <th className="py-1 pr-3">Složka</th>
@@ -699,10 +699,10 @@ function VaultsTab({ onErr }: { onErr: ErrHandler }) {
         </thead>
         <tbody>
           {rows?.map((c) => (
-            <tr key={`${c.scope}/${c.folder}`} className="border-b border-ink/10 font-log text-ink/75">
+            <tr key={`${c.scope}/${c.folder}`} className="border-b border-surface1 font-log text-text">
               <td className="py-1.5 pr-3">{c.name}</td>
               <td className="py-1.5 pr-3">{c.scope === "__shared__" ? "sdílený" : c.ownerEmail ?? c.scope}</td>
-              <td className="py-1.5 pr-3 text-ink/50">{c.folder}</td>
+              <td className="py-1.5 pr-3 text-subtext0">{c.folder}</td>
               <td className="py-1.5 pr-3">{formatBytes(c.sizeBytes)}</td>
               <td className="py-1.5 pr-3">
                 <div className="flex flex-wrap items-center gap-2">
@@ -725,7 +725,7 @@ function VaultsTab({ onErr }: { onErr: ErrHandler }) {
           ))}
           {rows?.length === 0 && (
             <tr>
-              <td colSpan={5} className="py-2 font-log text-sm italic text-ink/50">
+              <td colSpan={5} className="py-2 font-log text-sm italic text-subtext0">
                 Žádné kampaně.
               </td>
             </tr>
@@ -753,7 +753,7 @@ function BackupsTab({ onErr }: { onErr: ErrHandler }) {
 
   return (
     <div className="flex flex-col gap-3">
-      <p className="font-log text-xs text-ink/55">
+      <p className="font-log text-xs text-subtext1">
         Záloha sbalí celý vault (databáze účtů, kampaně, světy, nastavení) do ZIP uloženého ve vaultu — přežije i nasazení.
       </p>
       <button
@@ -771,7 +771,7 @@ function BackupsTab({ onErr }: { onErr: ErrHandler }) {
 
       <table className="w-full border-collapse text-sm">
         <thead>
-          <tr className="border-b border-ink/20 text-left font-log text-xs uppercase text-ink/50">
+          <tr className="border-b border-surface1 text-left font-log text-xs uppercase text-subtext0">
             <th className="py-1 pr-3">Název</th>
             <th className="py-1 pr-3">Vytvořeno</th>
             <th className="py-1 pr-3">Velikost</th>
@@ -780,7 +780,7 @@ function BackupsTab({ onErr }: { onErr: ErrHandler }) {
         </thead>
         <tbody>
           {backups?.map((b) => (
-            <tr key={b.name} className="border-b border-ink/10 font-log text-ink/75">
+            <tr key={b.name} className="border-b border-surface1 font-log text-text">
               <td className="py-1.5 pr-3">{b.name}</td>
               <td className="py-1.5 pr-3">{new Date(b.createdAt).toLocaleString("cs-CZ")}</td>
               <td className="py-1.5 pr-3">{formatBytes(b.sizeBytes)}</td>
@@ -805,7 +805,7 @@ function BackupsTab({ onErr }: { onErr: ErrHandler }) {
           ))}
           {backups?.length === 0 && (
             <tr>
-              <td colSpan={4} className="py-2 font-log text-sm italic text-ink/50">
+              <td colSpan={4} className="py-2 font-log text-sm italic text-subtext0">
                 Zatím žádné zálohy.
               </td>
             </tr>
@@ -834,15 +834,15 @@ function AuditTab({ onErr }: { onErr: ErrHandler }) {
 
   return (
     <div className="flex flex-col gap-1">
-      <ul className="flex flex-col gap-1 font-log text-xs text-ink/60">
+      <ul className="flex flex-col gap-1 font-log text-xs text-subtext1">
         {audit.map((e) => (
           <li key={e.id}>
-            <span className="text-ink/40">{new Date(e.createdAt).toLocaleString("cs-CZ")}</span>{" "}
-            <span className="text-ink/80">{e.action}</span>
+            <span className="text-subtext0">{new Date(e.createdAt).toLocaleString("cs-CZ")}</span>{" "}
+            <span className="text-text">{e.action}</span>
             {e.detail && <span> · {e.detail}</span>}
           </li>
         ))}
-        {audit.length === 0 && <li className="italic font-log text-xs text-ink/60">Zatím žádné záznamy.</li>}
+        {audit.length === 0 && <li className="italic font-log text-xs text-subtext1">Zatím žádné záznamy.</li>}
       </ul>
       <Pager offset={offset} count={audit.length} total={total} onPage={setOffset} />
     </div>
@@ -885,25 +885,25 @@ function LogsTab({ onErr }: { onErr: ErrHandler }) {
   }, [refresh]);
 
   if (!available) {
-    return <p className="font-log text-sm text-ink/50">Prohlížeč logů není v tomto nasazení dostupný.</p>;
+    return <p className="font-log text-sm text-subtext0">Prohlížeč logů není v tomto nasazení dostupný.</p>;
   }
   return (
     <section className="flex flex-col gap-2">
       <div className="flex items-center justify-between">
-        <p className="font-log text-xs text-ink/50">Posledních {lines.length} řádků (nejnovější dole).</p>
+        <p className="font-log text-xs text-subtext0">Posledních {lines.length} řádků (nejnovější dole).</p>
         <button className="btn-link text-xs underline" onClick={() => void refresh()}>
           Obnovit
         </button>
       </div>
-      <pre className="max-h-[60vh] overflow-auto rounded border border-ink/15 bg-black/30 p-2 font-log text-xs leading-relaxed">
-        {lines.length === 0 && <span className="text-ink/40">Zatím žádné logy.</span>}
+      <pre className="max-h-[60vh] overflow-auto rounded border border-surface1 bg-black/30 p-2 font-log text-xs leading-relaxed">
+        {lines.length === 0 && <span className="text-subtext0">Zatím žádné logy.</span>}
         {lines.map((raw, i) => {
           const l = formatLogLine(raw);
           return (
             <div key={i}>
-              <span className="text-ink/40">{l.time}</span>{" "}
-              <span className={LEVEL_COLOR[l.level] ?? "text-ink/60"}>{l.level}</span>{" "}
-              <span className="text-ink/85">{l.msg}</span>
+              <span className="text-subtext0">{l.time}</span>{" "}
+              <span className={LEVEL_COLOR[l.level] ?? "text-subtext1"}>{l.level}</span>{" "}
+              <span className="text-text">{l.msg}</span>
             </div>
           );
         })}
@@ -915,14 +915,14 @@ function LogsTab({ onErr }: { onErr: ErrHandler }) {
 // --- Small shared bits -------------------------------------------------------
 
 function H2({ children }: { children: React.ReactNode }) {
-  return <h2 className="font-display text-sm uppercase tracking-wider text-ink/70">{children}</h2>;
+  return <h2 className="font-display text-sm uppercase tracking-wider text-subtext1">{children}</h2>;
 }
 
 function Stat({ label, value }: { label: string; value: number }) {
   return (
-    <div className="rounded border border-ink/15 px-3 py-2">
-      <div className="font-display text-xl text-ink">{value}</div>
-      <div className="font-log text-xs uppercase tracking-wide text-ink/50">{label}</div>
+    <div className="rounded border border-surface1 px-3 py-2">
+      <div className="font-display text-xl text-text">{value}</div>
+      <div className="font-log text-xs uppercase tracking-wide text-subtext0">{label}</div>
     </div>
   );
 }
@@ -930,8 +930,8 @@ function Stat({ label, value }: { label: string; value: number }) {
 function Row({ k, v }: { k: string; v: string }) {
   return (
     <div className="flex flex-col">
-      <dt className="text-xs uppercase tracking-wide text-ink/45">{k}</dt>
-      <dd className="truncate text-ink/80" title={v}>
+      <dt className="text-xs uppercase tracking-wide text-subtext0">{k}</dt>
+      <dd className="truncate text-text" title={v}>
         {v}
       </dd>
     </div>
@@ -940,7 +940,7 @@ function Row({ k, v }: { k: string; v: string }) {
 
 function Toggle({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
   return (
-    <label className="flex items-center gap-2 font-log text-sm text-ink/75">
+    <label className="flex items-center gap-2 font-log text-sm text-text">
       <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} className="accent-gold" />
       {label}
     </label>

@@ -188,6 +188,18 @@ ne „nice to have".
   ukazuje jména + ★ z `/api/state`.models.pool. Testy: `admin.test.ts`
   (perzistence + clamp hvězd + validace slugu). Doporučený ceník (mix 70/30
   průzkum/boj, ~3× marže): flash 20, pro 65, qwen 70, gemini 300, sonnet 450 kr.
+  **Nově — hráčův výběr modelu:** každý uživatel si v *Nastavení → AI Dungeon
+  Master* zvolí, kterým modelem z poolu hraje (per-user `Settings.selectedModel`,
+  uložené ve vlastním `settings.json`; UI ukazuje jen jméno + kredity + ★, ne
+  slug). Volba pohání `/api/action` i default `/api/regenerate` a klíčuje účtování
+  (`perModelMessage`). Validováno proti aktuálnímu poolu (stará/odebraná volba →
+  fallback na default). Test `settings-gate.test.ts`. Admin spravuje jen pool.
+- **[x] #56h — Uvítací kredity.** Nový účet dostane jednorázový bonus
+  (`config.credits.signupBonus`, env `CREDITS_SIGNUP_BONUS`, default **500**) při
+  *prvním* ověření e-mailu — idempotentně přes ledger reason `signup-bonus`
+  (`AuthService.onEmailVerified` → `CreditStore.hasReason`/`grant`), jen když jsou
+  kredity zapnuté (hosted). Upozornění v záložce *Kredity* (`/api/credits`
+  vrací `signupBonus`). Test `auth.test.ts`.
 
 ### #57 — Dev / admin panel
 

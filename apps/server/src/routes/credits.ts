@@ -7,6 +7,12 @@ import type { CreditStore } from "../credits/ledger.js";
 
 export interface CreditContext {
   credits: CreditStore;
+  /**
+   * The one-time signup welcome bonus (#56), surfaced so the Credits tab can
+   * advertise it. 0 when credits are disabled or the bonus is off. A getter so
+   * a live admin config change is reflected without a restart.
+   */
+  signupBonus: () => number;
 }
 
 export async function registerCreditRoutes(app: FastifyInstance, ctx: CreditContext): Promise<void> {
@@ -15,6 +21,7 @@ export async function registerCreditRoutes(app: FastifyInstance, ctx: CreditCont
     return reply.send({
       balance: ctx.credits.balance(req.user.id),
       history: ctx.credits.history(req.user.id, 50),
+      signupBonus: ctx.signupBonus(),
     });
   });
 }
