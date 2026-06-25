@@ -27,10 +27,7 @@ export function ProviderSettings() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
-  const [provider, setProvider] = useState<"auto" | "mock">("auto");
   const [llmBaseUrl, setLlmBaseUrl] = useState("");
-  const [llmModel, setLlmModel] = useState("");
-  const [llmAltModels, setLlmAltModels] = useState("");
   const [llmKey, setLlmKey] = useState("");
   const [imageEnabled, setImageEnabled] = useState(false);
   const [imageBaseUrl, setImageBaseUrl] = useState("");
@@ -45,10 +42,7 @@ export function ProviderSettings() {
 
   function apply(v: SettingsView) {
     setView(v);
-    setProvider(v.llm.provider);
     setLlmBaseUrl(v.llm.baseUrl);
-    setLlmModel(v.llm.model);
-    setLlmAltModels((v.llm.altModels ?? []).join("\n"));
     setLlmKey("");
     setImageEnabled(v.image.enabled);
     setImageBaseUrl(v.image.baseUrl);
@@ -80,11 +74,11 @@ export function ProviderSettings() {
     setError(null);
     try {
       const patch: Record<string, unknown> = {
+        // Models are governed by the model pool now; here we persist only the
+        // API access (key + endpoint). Omitting model/altModels/provider leaves
+        // the stored values untouched.
         llm: {
-          provider,
           baseUrl: llmBaseUrl,
-          model: llmModel,
-          altModels: llmAltModels.split(/[\n,]/).map((m) => m.trim()).filter(Boolean),
           ...(llmKey ? { apiKey: llmKey } : {}),
         },
         image: {
@@ -132,12 +126,10 @@ export function ProviderSettings() {
 
       <section className="flex flex-col gap-2">
         <H3>Jazykový model (AI DM)</H3>
-        <Field label="Režim">
-          <select className={INPUT} value={provider} onChange={(e) => setProvider(e.target.value as "auto" | "mock")}>
-            <option value="auto">Automaticky (model, je-li klíč)</option>
-            <option value="mock">Vynutit offline mock</option>
-          </select>
-        </Field>
+        <p className="font-log text-xs italic text-subtext0">
+          Tady je jen přístup k API — konkrétní modely, jejich ceny a hvězdičky spravuje
+          sekce <strong>Model pool</strong> výše. Hráči si z poolu volí, kterým modelem hrají.
+        </p>
         <Field label="API klíč">
           <input
             type="password"
@@ -149,17 +141,7 @@ export function ProviderSettings() {
           />
         </Field>
         <Field label="Base URL">
-          <input className={INPUT} value={llmBaseUrl} onChange={(e) => setLlmBaseUrl(e.target.value)} />
-        </Field>
-        <Field label="Model">
-          <input className={INPUT} value={llmModel} onChange={(e) => setLlmModel(e.target.value)} />
-        </Field>
-        <Field label="Alternativní modely („Jiným modelem“) — jeden na řádek">
-          <textarea
-            className={`${INPUT} min-h-[4rem] resize-y font-log text-xs`}
-            value={llmAltModels}
-            onChange={(e) => setLlmAltModels(e.target.value)}
-          />
+          <input className={INPUT} placeholder="https://openrouter.ai/api/v1" value={llmBaseUrl} onChange={(e) => setLlmBaseUrl(e.target.value)} />
         </Field>
       </section>
 
