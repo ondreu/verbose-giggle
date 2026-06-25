@@ -24,6 +24,12 @@ interface SettingsView {
   campaigns: string[];
   activeNarrator: "mock" | "llm";
   env: { basicAuth: boolean };
+  /**
+   * Whether this client may edit the global provider/SRD credentials. True for
+   * self-hosted (anonymous access on) and for admins; false for a regular
+   * hosted tenant, who manages providers via the /admin panel instead.
+   */
+  canEditProviders: boolean;
 }
 
 /**
@@ -95,8 +101,12 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
     setSaving(true);
     setError(null);
     try {
-      const patch: Record<string, unknown> = {
-        llm: {
+      // The campaign selection is per-user and always editable. Global
+      // provider/SRD credentials are only sent when this client may edit them
+      // (self-hosted or admin); otherwise the server would reject them (403).
+      const patch: Record<string, unknown> = { campaign };
+      if (view?.canEditProviders) {
+        patch.llm = {
           provider,
           baseUrl: llmBaseUrl,
           model: llmModel,
@@ -105,23 +115,22 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
             .map((m) => m.trim())
             .filter(Boolean),
           ...(llmKey ? { apiKey: llmKey } : {}),
-        },
-        image: {
+        };
+        patch.image = {
           enabled: imageEnabled,
           baseUrl: imageBaseUrl,
           model: imageModel,
           ...(imageKey ? { apiKey: imageKey } : {}),
-        },
-        tts: {
+        };
+        patch.tts = {
           azureRegion: ttsRegion,
           voice: ttsVoice,
           rate: ttsRate,
           pitch: ttsPitch,
           ...(ttsKey ? { azureKey: ttsKey } : {}),
-        },
-        srdPath,
-        campaign,
-      };
+        };
+        patch.srdPath = srdPath;
+      }
       const res = await fetch("/api/settings", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -178,6 +187,18 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
   // drive the real settings.json fields.
   const [tab, setTab] = useState<TabId>("aidm");
 
+  // Provider tabs are hidden when this client can't edit global credentials
+  // (hosted, non-admin); those settings live in the /admin panel instead.
+  const canEditProviders = view?.canEditProviders ?? true;
+  const providerTabs: TabId[] = ["aidm", "tts", "images"];
+  const visibleTabs = TABS.filter((t) => canEditProviders || !providerTabs.includes(t.id));
+
+  // If the active tab got hidden after load, fall back to a visible one.
+  useEffect(() => {
+    if (!canEditProviders && providerTabs.includes(tab)) setTab("account");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canEditProviders]);
+
   return (
     <div
       className="fixed inset-0 z-[2000] flex items-center justify-center bg-bg-crust/70 p-6 backdrop-blur-sm"
@@ -201,7 +222,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
           <div className="grid min-h-0 flex-1 grid-cols-1 sm:grid-cols-[12rem_1fr]">
             {/* Tab rail */}
             <nav className="flex flex-row flex-wrap gap-1 border-b border-ink/15 p-3 sm:flex-col sm:border-b-0 sm:border-r">
-              {TABS.map((t) => (
+              {visibleTabs.map((t) => (
                 <button
                   key={t.id}
                   onClick={() => setTab(t.id)}
@@ -397,28 +418,40 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                     {campaignChanged && (
                       <p className="text-xs italic text-blood">Změna kampaně se projeví po restartu serveru.</p>
                     )}
-                    <Field label="Cesta k SRD">
-                      <input
-                        className="settings-input"
-                        placeholder="./srd"
-                        value={srdPath}
-                        onChange={(e) => setSrdPath(e.target.value)}
-                      />
-                    </Field>
-                    {view.srd.total > 0 ? (
-                      <p className="text-xs italic text-verdigris">
-                        Dataset načten: {view.srd.total} záznamů — {view.srd.spells} kouzel, {view.srd.monsters} nestvůr,{" "}
-                        {view.srd.classes} povolání ({view.srd.subclasses} podtříd), {view.srd.races} ras (
-                        {view.srd.subraces} podras), {view.srd.feats} vlastností.
-                      </p>
+                    {canEditProviders ? (
+                      <>
+                        <Field label="Cesta k SRD">
+                          <input
+                            className="settings-input"
+                            placeholder="./srd"
+                            value={srdPath}
+                            onChange={(e) => setSrdPath(e.target.value)}
+                          />
+                        </Field>
+                        {view.srd.total > 0 ? (
+                          <p className="text-xs italic text-verdigris">
+                            Dataset načten: {view.srd.total} záznamů — {view.srd.spells} kouzel, {view.srd.monsters} nestvůr,{" "}
+                            {view.srd.classes} povolání ({view.srd.subclasses} podtříd), {view.srd.races} ras (
+                            {view.srd.subraces} podras), {view.srd.feats} vlastností.
+                          </p>
+                        ) : (
+                          <p className="text-xs italic text-blood">
+                            Žádný SRD dataset nenačten — zadej cestu ke složce s {`5e-SRD-*.json`} a ulož.
+                          </p>
+                        )}
+                        <p className="text-xs italic text-ink/50">
+                          Cesta k SRD se po uložení namountuje hned. Změna kampaně se projeví po restartu serveru.
+                        </p>
+                      </>
                     ) : (
-                      <p className="text-xs italic text-blood">
-                        Žádný SRD dataset nenačten — zadej cestu ke složce s {`5e-SRD-*.json`} a ulož.
+                      <p className="text-xs italic text-ink/60">
+                        Poskytovatele (jazykový model, obrázky, hlas) a SRD spravuje administrátor v{" "}
+                        <a className="underline" href="/admin">
+                          admin panelu
+                        </a>
+                        .
                       </p>
                     )}
-                    <p className="text-xs italic text-ink/50">
-                      Cesta k SRD se po uložení namountuje hned. Změna kampaně se projeví po restartu serveru.
-                    </p>
                   </fieldset>
                 )}
 

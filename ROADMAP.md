@@ -216,9 +216,15 @@ ne „nice to have".
   user řádek (úklid vault dat čeká na izolaci #55f-2). Front-end: `AccountPanel`
   v `SettingsModal` (jméno/e-mail/heslo/odhlášení/smazání), anonymní režim ukáže
   „nepřihlášen". Testy v `test/auth.test.ts`.
-- **#58b — Per-uživatel preference.** Voice/jazyk (#48) vázané na účet.
-  Provider-klíče: v hosted edici jen globální (op-only); v self-hosted BYO. Účet
-  v hosted edici **nesmí** nabízet pole pro vlastní API klíč.
+- **[~] #58b — Per-uživatel preference.** Voice/jazyk (#48) vázané na účet —
+  zbývá. **Hotovo (provider-klíče op-only):** globální provider/SRD creds
+  (LLM/obrázky/Azure TTS) se v hosted edici (`allowAnonymous=false`) dají měnit
+  jen rolí admin — `PUT /api/settings` vrací 403 ne-adminům, GET vystavuje
+  `canEditProviders`. Editace přesunuta do `/admin` → *Server* → Poskytovatelé
+  (`ProviderSettings`); ozubené kolo provider-pole ne-adminům skryje a odkáže na
+  admin panel. Self-hosted (anonymní) zůstává otevřený. `.env` provider proměnné
+  jsou už jen volitelný bootstrap (konfigurace v aplikaci, persistence ve vaultu).
+  Testy `test/settings-gate.test.ts`.
 - **#58c — Oddělit globální vs. uživatelská nastavení.** Refaktor `settings.ts`:
   server-config (admin #57) vs. per-user-config (#58); single-user self-hosted =
   obojí splývá.

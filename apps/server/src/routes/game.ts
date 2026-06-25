@@ -263,11 +263,37 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
     };
   }
 
-  app.get("/api/settings", async (req) => settingsView(await registry.resolve(req)));
+  /**
+   * Who may change the GLOBAL provider/SRD credentials (LLM/image/TTS/srdPath).
+   * Self-hosted (anonymous access on) keeps the open behaviour — anyone with
+   * access to the box can configure it. Hosted (anonymous off) locks it to the
+   * admin role, so a regular tenant can't read/rewrite the shared keys; they
+   * manage providers from the /admin panel. The per-user campaign selection is
+   * never gated by this.
+   */
+  function canEditProviders(req: FastifyRequest): boolean {
+    return config.auth.allowAnonymous || req.user?.role === "admin";
+  }
+
+  app.get("/api/settings", async (req) => {
+    const view = (await settingsView(await registry.resolve(req))) as Record<string, unknown>;
+    return { ...view, canEditProviders: canEditProviders(req) };
+  });
 
   app.put<{ Body: Settings }>("/api/settings", async (req, reply) => {
     const sess = await registry.resolve(req);
     const patch = (req.body ?? {}) as Settings;
+    // Global provider/SRD writes are admin-only in hosted mode (see above).
+    const touchesGlobal =
+      patch.llm !== undefined ||
+      patch.image !== undefined ||
+      patch.tts !== undefined ||
+      patch.srdPath !== undefined;
+    if (touchesGlobal && !canEditProviders(req)) {
+      return reply
+        .code(403)
+        .send({ error: "Nastavení poskytovatelů může měnit jen administrátor." });
+    }
     // Whitelist the editable fields — never let arbitrary keys through.
     const clean: Settings = {};
     if (patch.llm) {
@@ -304,13 +330,14 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
     const campaign = patch.campaign;
 
     try {
-      await saveSettings(config.vaultPath, clean);
+      if (Object.keys(clean).length > 0) await saveSettings(config.vaultPath, clean);
       if (campaign !== undefined) await saveSettings(sess.root, { campaign });
       // Rebuild the effective config from env + the new global settings, and
       // re-mount the SRD dataset live for every scope if its path changed.
       await reloadConfig();
       app.log.info(`Settings updated; narrator=${!config.llm.apiKey || config.llm.provider === "mock" ? "mock" : "llm"}`);
-      return settingsView(sess);
+      const view = (await settingsView(sess)) as Record<string, unknown>;
+      return { ...view, canEditProviders: canEditProviders(req) };
     } catch (err) {
       return reply.code(500).send({ error: err instanceof Error ? err.message : String(err) });
     }
