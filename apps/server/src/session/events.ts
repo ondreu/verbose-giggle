@@ -32,4 +32,10 @@ export class EventBus {
     this.emitter.on("event", listener);
     return () => this.emitter.off("event", listener);
   }
+
+  /** Live subscriber count (e.g. open SSE streams), so a registry never evicts
+   *  a scope whose event stream is still connected (#55f). */
+  listenerCount(): number {
+    return this.emitter.listenerCount("event");
+  }
 }

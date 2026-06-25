@@ -33,23 +33,23 @@ granty, záložka *Kredity*, ukazatel v hlavičce — chybí jen platby/Stripe),
 **#57** (admin role + bootstrap, správa uživatelů, audit log, `/admin` panel) a
 **#58a** (nastavení účtu). Vše s testy (`apps/server/test/`).
 
-**Zbývá — dva velké samostatné tracky + drobnosti:**
-1. **#55f část 2 — izolace dat per uživatel** (rozhodnutý layout:
-   `<vault>/users/<id>/`, migrace stávajícího vaultu na prvního admina).
-   Největší a nejrizikovější — přepis single-manager herní vrstvy na resolving
-   manageru + event streamu per request (~60 míst v `routes/game.ts`). Migrace
-   nemůže bezpečně přijít dřív, než je tento přepis hotový. **Čeká na explicitní
-   pokyn** (riziko rozbití funkční single-tenant verze).
-2. **#48 — i18n** (P1): infrastruktura lokalizace v `@adm/schemas` (`cs`/`en`,
+**Zbývá — jeden velký track + drobnosti:**
+1. **#48 — i18n** (P1): infrastruktura lokalizace v `@adm/schemas` (`cs`/`en`,
    runtime přepínání) + tři přepínače. Aditivní a nezávislé, nízké riziko.
-3. Drobnosti: **#58b/#58c** (per-user preference + rozdělení global vs user
+2. Drobnosti: **#58b/#58c** (per-user preference + rozdělení global vs user
    settings), zbytek **#57b** (globální settings, správa kampaní/vaultů, logy,
    health), platby (#56d), **#45** partials (obsah — dělá autor).
 
+> **#55f část 2 — izolace dat per uživatel: HOTOVO** (`session/registry.ts`,
+> `vault/migrate-user.ts`, `test/isolation.test.ts`). Single-tenant
+> self-hosted běží beze změny; hosted dává každému uživateli vlastní
+> `<vault>/users/<id>/`. Možné navázat: eviction scopů bez živých SSE
+> (`EventBus.listenerCount` už existuje), GDPR úklid vault dat při mazání účtu.
+
 ## P0 — Účty, kredity a provoz (nový směr, 2026-06-24)
 
-> **Status: z velké části IMPLEMENTOVÁNO** (viz „Stav" výše a `[x]` níže); zbývá
-> #55f-2 (izolace dat) a platby. Posouvá
+> **Status: z velké části IMPLEMENTOVÁNO** (viz „Stav" výše a `[x]` níže);
+> izolace dat (#55f-2) hotová, zbývají už jen platby (#56d). Posouvá
 > appku z dnešního **single-tenant self-hosted** modelu (jeden vault, jeden
 > Basic-Auth zámek, klíče vlastní provozovatel) k provozu, kde má **více
 > uživatelů vlastní účet, data a kredity**. `LoginScreen` a záložky
@@ -116,15 +116,24 @@ ne „nice to have".
   `GET /api/auth/config` → „pokračovat bez přihlášení" a odkaz na registraci se
   zobrazí jen podle serverových flagů (`allowAnonymous`/`registrationEnabled`,
   env `AUTH_ALLOW_ANONYMOUS`/`AUTH_REGISTRATION`).
-- **[~] #55f — Autorizace na endpointech.** **Hotovo (část 1 — autentizace):**
+- **[x] #55f — Autorizace na endpointech.** **Část 1 — autentizace:**
   `auth/middleware.ts` resolvuje session usera na `req.user` na každém requestu
   a — když je `allowAnonymous=false` (hosted) — blokuje chráněné `/api` routy
   bez session (401). Veřejné: `/api/auth/*`, `/api/health`, statika.
   Integrační testy (`test/auth-guard.test.ts`).
-  **Zbývá (část 2 — izolace dat):** protáhnout `userId` do `SessionManager`/
-  vaultu a izolovat kampaně per uživatel (dnes 1 sdílený vault + 1
-  `SessionManager` při startu). Architektonicky velké — čeká na rozhodnutí
-  o layoutu vaultu a vlastnictví stávajících dat.
+  **Část 2 — izolace dat (hotovo):** `session/registry.ts` (`SessionRegistry`/
+  `UserSession`) resolvuje *scope* per request — sdílený vault když je
+  `allowAnonymous=true` (self-hosted, beze změny), jinak vlastní podstrom
+  `<vault>/users/<id>/` (kampaně, světy, sezení, vlastní `EventBus`). Manager
+  se otevírá líně a memoizovaně (race-safe; concurrent first-touch sdílí jednu
+  inicializaci), nový uživatel dostane seed kampaň. `routes/game.ts` čte
+  `sess.manager`/`sess.bus`; cesty ke kampaním/světům jdou přes
+  `sess.scopedPath` (confinement = hranice tenanta). Výběr kampaně je per-user
+  (`<vault>/users/<id>/settings.json`), provider/SRD creds zůstávají globální.
+  Migrace stávajícího vaultu na bootstrap admina (`ADMIN_EMAIL`) je
+  marker-latchovaná a idempotentní (`vault/migrate-user.ts`). Testy
+  `test/isolation.test.ts` (hranice izolace, parita sdíleného režimu, race,
+  seed, migrace, přežití SSE busu přes reopen).
 
 ### #56 — Uživatelské kredity / metering
 

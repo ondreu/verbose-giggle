@@ -1,13 +1,10 @@
 import { promises as fs } from "node:fs";
-import path from "node:path";
 import { fileURLToPath } from "node:url";
 import Fastify from "fastify";
 import fastifyStatic from "@fastify/static";
 import fastifyCookie from "@fastify/cookie";
 import { applySettings, loadConfig } from "./config.js";
 import { loadSettings } from "./settings.js";
-import { EventBus } from "./session/events.js";
-import { SessionManager } from "./session/manager.js";
 import { registerGameRoutes } from "./routes/game.js";
 import { registerAuthRoutes } from "./routes/auth.js";
 import { registerAdminRoutes } from "./routes/admin.js";
@@ -21,29 +18,6 @@ import { loadOrCreateSecret } from "./auth/tokens.js";
 import { LogEmailSender, SmtpEmailSender, type EmailSender } from "./auth/email.js";
 import { AuthService } from "./auth/service.js";
 import { registerAuthGuard } from "./auth/middleware.js";
-
-async function findCampaignDir(vaultPath: string, selected?: string): Promise<string> {
-  // Precedence: GUI setting → CAMPAIGN env → first folder found.
-  const explicit = selected || process.env.CAMPAIGN;
-  const campaignsRoot = path.join(vaultPath, "campaigns");
-  if (explicit) return path.join(campaignsRoot, explicit);
-  let entries;
-  try {
-    entries = await fs.readdir(campaignsRoot, { withFileTypes: true });
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === "ENOENT") {
-      throw new Error(
-        `Vault has no campaigns/ folder at ${campaignsRoot}. ` +
-          `Point VAULT_PATH at a vault that contains campaigns/, or seed one ` +
-          `(e.g. copy data/vault.example/* into it).`,
-      );
-    }
-    throw err;
-  }
-  const first = entries.find((e) => e.isDirectory());
-  if (!first) throw new Error(`No campaigns found in ${campaignsRoot}`);
-  return path.join(campaignsRoot, first.name);
-}
 
 async function main(): Promise<void> {
   const env = loadConfig();
@@ -94,14 +68,14 @@ async function main(): Promise<void> {
   await registerAdminRoutes(app, { users, sessions, audit, credits });
   await registerCreditRoutes(app, { credits });
 
-  const campaignDir = await findCampaignDir(config.vaultPath, settings.campaign);
-  app.log.info(`Loading campaign from ${campaignDir}`);
-  const manager = await SessionManager.open(campaignDir, { srdDir: config.srdPath });
-  const bus = new EventBus();
+  // The game layer resolves a SessionManager per scope (shared vault when
+  // anonymous, <vault>/users/<id> per user when accounts are on, #55f). The
+  // registry is owned by the game routes; in self-hosted mode it eager-opens
+  // the shared scope at registration so a vault with no campaigns still fails
+  // fast at boot, exactly as before.
+  await registerGameRoutes(app, { config, credits });
 
-  await registerGameRoutes(app, { manager, bus, config, credits });
-
-  app.get("/api/health", async () => ({ ok: true, campaign: manager.campaign.config.name }));
+  app.get("/api/health", async () => ({ ok: true }));
 
   // Serve the built web client if present (single-port deployment, §14.1).
   const webDist =
