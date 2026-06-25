@@ -21,8 +21,13 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
 ENV_FILE="$SCRIPT_DIR/.env"
-ENV_EXAMPLE="$SCRIPT_DIR/../.env.example"
 CADDYFILE="$SCRIPT_DIR/Caddyfile"
+
+# Where to fetch companion files (compose + Caddyfile) if they aren't already
+# next to this script. Lets you run it on a NAS with NO git checkout — just
+# download setup.sh and it pulls the rest. Override the branch with ADM_REF.
+ADM_REF="${ADM_REF:-main}"
+ADM_RAW_BASE="${ADM_RAW_BASE:-https://raw.githubusercontent.com/ondreu/verbose-giggle/$ADM_REF/docker}"
 
 bold() { printf '\033[1m%s\033[0m\n' "$1"; }
 info() { printf '  %s\n' "$1"; }
@@ -63,6 +68,22 @@ gen_secret() {
     openssl rand -base64 48 | tr -d '\n'
   else
     head -c 48 /dev/urandom | base64 | tr -d '\n'
+  fi
+}
+
+# Ensure a companion file exists next to the script; download it if missing.
+# Used so the script works on a NAS with no git checkout.
+fetch_if_missing() {
+  local name="$1"
+  [ -f "$SCRIPT_DIR/$name" ] && return 0
+  info "Stahuji $name z $ADM_REF…"
+  if command -v curl >/dev/null 2>&1; then
+    curl -fsSL "$ADM_RAW_BASE/$name" -o "$SCRIPT_DIR/$name"
+  elif command -v wget >/dev/null 2>&1; then
+    wget -qO "$SCRIPT_DIR/$name" "$ADM_RAW_BASE/$name"
+  else
+    info "CHYBA: chybí curl i wget — stáhni ručně $ADM_RAW_BASE/$name vedle skriptu."
+    exit 1
   fi
 }
 
@@ -172,11 +193,10 @@ CREDITS_PER_IMAGE=50
 EOF
 
   # Write the domain into the Caddyfile (replace the placeholder host line).
-  if [ -f "$CADDYFILE" ]; then
-    cp "$CADDYFILE" "$CADDYFILE.bak"
-    sed -i.tmp "s/^dnd\.example\.org {/$domain {/" "$CADDYFILE" && rm -f "$CADDYFILE.tmp"
-    info "Caddyfile: doména nastavena na $domain (záloha .bak)."
-  fi
+  fetch_if_missing "Caddyfile"
+  cp "$CADDYFILE" "$CADDYFILE.bak"
+  sed -i.tmp "s/^dnd\.example\.org {/$domain {/" "$CADDYFILE" && rm -f "$CADDYFILE.tmp"
+  info "Caddyfile: doména nastavena na $domain (záloha .bak)."
 
   COMPOSE_FILE="docker-compose.commercial.yml"
 else
@@ -193,7 +213,8 @@ else
     cf_token="$(ask "CLOUDFLARE_TUNNEL_TOKEN" "")"
   elif [ "$ingress" = "caddy" ]; then
     domain="$(ask "Doména pro Caddy (např. dnd.example.com)" "")"
-    if [ -n "$domain" ] && [ -f "$CADDYFILE" ]; then
+    if [ -n "$domain" ]; then
+      fetch_if_missing "Caddyfile"
       cp "$CADDYFILE" "$CADDYFILE.bak"
       sed -i.tmp "s/^dnd\.example\.org {/$domain {/" "$CADDYFILE" && rm -f "$CADDYFILE.tmp"
       info "Caddyfile: doména nastavena na $domain (záloha .bak)."
@@ -221,6 +242,9 @@ EOF
 fi
 
 info ".env zapsán: $ENV_FILE"
+
+# Make sure the chosen compose file is present (download if no git checkout).
+fetch_if_missing "$COMPOSE_FILE"
 echo
 
 # ---------------------------------------------------------------------------

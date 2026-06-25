@@ -117,6 +117,17 @@ The fastest path for either edition is the interactive setup script — it asks 
 ./docker/setup.sh
 ```
 
+**No git on the NAS?** You don't need it — the stack runs from prebuilt GHCR images, and the script downloads its companion files (`docker-compose.*.yml`, `Caddyfile`) itself. Over SSH, just fetch the one script and run it:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ondreu/verbose-giggle/main/docker/setup.sh -o setup.sh
+bash setup.sh
+```
+
+(Pin a different branch with `ADM_REF=<branch> bash setup.sh`.)
+
+**NAS with a Docker GUI but no shell** (Ugreen / Synology / QNAP): there's nothing to run — paste a compose file straight into the GUI's "Project / Stack" editor and add the env vars in its form. Use [`docker/docker-compose.nas.yml`](docker/docker-compose.nas.yml) (self-hosted, Cloudflare Tunnel built in) or [`docker/docker-compose.commercial.yml`](docker/docker-compose.commercial.yml); the `[COMMERCIAL]`-marked vars in [`.env.example`](.env.example) tell you what to fill in (generate `AUTH_SECRET` with `openssl rand -base64 48`).
+
 Prefer to wire it by hand? Follow the per-edition steps below.
 
 ### Self-hosted
