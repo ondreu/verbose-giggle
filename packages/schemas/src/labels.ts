@@ -574,7 +574,7 @@ export function csItemName(id: string, fallback?: string): string {
 }
 
 /** Quest lifecycle status → Czech (#19). */
-const QUEST_STATUS_CS: Record<string, string> = {
+export const QUEST_STATUS_CS: Record<string, string> = {
   active: "Aktivní",
   completed: "Splněno",
   failed: "Nezdařeno",

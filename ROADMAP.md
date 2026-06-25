@@ -35,7 +35,8 @@ granty, záložka *Kredity*, ukazatel v hlavičce — chybí jen platby/Stripe),
 
 **Zbývá — jeden velký track + drobnosti:**
 1. **#48 — i18n** (P1): infrastruktura lokalizace v `@adm/schemas` (`cs`/`en`,
-   runtime přepínání) + tři přepínače. Aditivní a nezávislé, nízké riziko.
+   runtime přepínání) **hotová (#48a)**; zbývá zapojit tři přepínače do UI/promptu
+   (#48b/#48c/#48d) a Settings (#48e). Aditivní a nezávislé, nízké riziko.
 2. Drobnosti: **#58b/#58c** (per-user preference + rozdělení global vs user
    settings), zbytek **#57b** (už jen prohlížeč serverových logů — globální
    settings, správa kampaní/vaultů, health i zálohy hotové), platby (#56d),
@@ -294,9 +295,17 @@ kredity = bezpečnost přestává být „nice to have". **Stav:** všechny polo
 Přidat angličtinu vedle češtiny + infrastrukturu pro další jazyky. Tři nezávislé
 přepínače:
 
-- **#48a — Infrastruktura.** Lokalizace v `packages/schemas/src/i18n/` —
-  oddělené soubory per jazyk/kategorie, runtime přepínání bez reloadu. Stávající
-  Czech mapy v `labels.ts` se stanou `cs`; přidat `en`.
+- **[x] #48a — Infrastruktura.** Lokalizace v `packages/schemas/src/i18n/`:
+  `types.ts` (`Locale` `cs`/`en`, tři přepínače `LocaleSettings` ui/terms/stats,
+  `LabelBundle`), `cs.ts` (reusuje stávající `*_CS` mapy z `labels.ts` jako
+  source-of-truth), `en.ts` (anglické labely + popisy; dlouhý ocas jmen kouzel/
+  předmětů se prettify-uje z id). `index.ts` má **čisté** resolvery
+  (`localizeX(id, locale)`) + `makeLocalizer(settings)`, který routuje kategorie
+  na správný přepínač (terminologie→`terms`, vlastnosti→`stats`, UI+popisy→`ui`).
+  Bez globálního stavu → bezpečné pro multi-tenant server (#55f); živý stav drží
+  web a předává ho dovnitř (#48e). Stávající `csXxx`/`*_CS` zůstávají beze změny.
+  Testy `test/i18n.test.ts` (parita cs s legacy mapami, pokrytí enumů v obou
+  jazycích, fallbacky, routování přepínačů).
 - **#48b — Přepínač #1: obecné UI.** DM narace (systémový prompt), UI labely,
   tooltipy. TTS se řídí tímto přepínačem (DM mluví zvoleným jazykem).
 - **#48c — Přepínač #2: herní terminologie.** Názvy kouzel/feats/skills/podmínek
