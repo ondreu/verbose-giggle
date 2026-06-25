@@ -39,6 +39,12 @@ export interface AdminContext {
   reloadConfig: () => Promise<Config>;
   /** Process boot time (ms) for the uptime readout. */
   startedAtMs: number;
+  /**
+   * Vault persistence marker captured at boot (id + createdAt). Surfaced in the
+   * health view so the operator can confirm the vault is on durable storage: a
+   * stable `createdAt` across restarts proves persistence. Optional for tests.
+   */
+  vaultMarker?: { id: string; createdAt: string };
   /** ISO clock, injectable for deterministic backup filenames in tests. */
   now?: () => string;
   /**
@@ -341,6 +347,7 @@ export async function registerAdminRoutes(app: FastifyInstance, ctx: AdminContex
       node: process.version,
       memory: { rss: mem.rss, heapUsed: mem.heapUsed, heapTotal: mem.heapTotal },
       vaultPath: c.vaultPath,
+      vault: ctx.vaultMarker ?? null,
       users: ctx.users.list().length,
       activeSessions: ctx.sessions.countActive(),
       auth: {

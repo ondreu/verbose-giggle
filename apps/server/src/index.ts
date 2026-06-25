@@ -22,6 +22,7 @@ import { RateLimiter } from "./auth/rate-limit.js";
 import { makeTurnstileVerifier } from "./auth/turnstile.js";
 import { applyPendingRestore, exportUserData } from "./admin/ops.js";
 import { LogBuffer } from "./admin/log-buffer.js";
+import { ensureVaultMarker, inspectVault } from "./vault/persistence.js";
 
 async function main(): Promise<void> {
   const startedAtMs = Date.now();
@@ -63,6 +64,27 @@ async function main(): Promise<void> {
   // reads vault data, so the SQLite handle below sees the restored file.
   if (await applyPendingRestore(config.vaultPath, (msg) => app.log.warn(msg))) {
     app.log.info("Vault restored from a staged backup at startup.");
+  }
+
+  // Persistence guard: prove (or disprove) that the vault survived the redeploy.
+  // The marker lives inside the vault, so a STABLE id/createdAt across restarts
+  // means storage is durable; a regenerated one means the vault was reset (most
+  // often a Docker named volume whose name drifted with the Compose project).
+  // We log it loudly so "my settings disappeared" is never a silent mystery.
+  const vaultMarker = await ensureVaultMarker(config.vaultPath);
+  const vaultInventory = await inspectVault(config.vaultPath);
+  app.log.info(
+    `[persistence] vault=${config.vaultPath} id=${vaultMarker.id} created=${vaultMarker.createdAt} ` +
+      `settings.json=${vaultInventory.hasSettings ? "present" : "MISSING"} ` +
+      `modelPool=${config.modelPool.length} campaigns=${vaultInventory.campaigns} userVaults=${vaultInventory.userVaults}`,
+  );
+  if (vaultMarker.fresh && (vaultInventory.campaigns > 0 || vaultInventory.userVaults > 0 || vaultInventory.hasSettings)) {
+    app.log.warn(
+      "[persistence] No prior vault marker found but the vault already holds data — " +
+        "either this is a one-time upgrade, or the vault is NOT on durable storage. " +
+        "Compare the 'created' timestamp after the next restart: if it changes, your " +
+        "VAULT_PATH/volume is not persisting and operator settings (model pool) will reset.",
+    );
   }
 
   // Accounts (#55): app DB + auth service. File-first SQLite in the vault.
@@ -177,6 +199,7 @@ async function main(): Promise<void> {
     bootAllowAnonymous: config.auth.allowAnonymous,
     getLogs: (limit) => logBuffer.tail(limit),
     startedAtMs,
+    vaultMarker: { id: vaultMarker.id, createdAt: vaultMarker.createdAt },
   });
   await registerCreditRoutes(app, {
     credits,
