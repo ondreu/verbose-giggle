@@ -37,8 +37,9 @@ granty, záložka *Kredity*, ukazatel v hlavičce — chybí jen platby/Stripe),
 1. **#48 — i18n** (P1): infrastruktura lokalizace v `@adm/schemas` (`cs`/`en`,
    runtime přepínání) + tři přepínače. Aditivní a nezávislé, nízké riziko.
 2. Drobnosti: **#58b/#58c** (per-user preference + rozdělení global vs user
-   settings), zbytek **#57b** (globální settings, správa kampaní/vaultů, logy,
-   health), platby (#56d), **#45** partials (obsah — dělá autor).
+   settings), zbytek **#57b** (už jen prohlížeč serverových logů — globální
+   settings, správa kampaní/vaultů, health i zálohy hotové), platby (#56d),
+   **#45** partials (obsah — dělá autor).
 
 > **#55f část 2 — izolace dat per uživatel: HOTOVO** (`session/registry.ts`,
 > `vault/migrate-user.ts`, `test/isolation.test.ts`). Single-tenant
@@ -172,9 +173,17 @@ ne „nice to have".
   `auth-guard.test.ts` + `auth.test.ts`.
 - **[~] #57b — Rozsah.** Hotovo: seznam uživatelů + overview počty; mutace
   `PUT /api/admin/users/:id/role`, `…/verify`, `DELETE …/:id` (ban — smaže i
-  session), s pojistkami proti self-demote/self-delete; `GET /api/admin/audit`.
-  Zbývá: ruční úprava kreditů (#56), přehled spotřeby/nákladů, globální server
-  settings, správa kampaní/vaultů, logy, health.
+  session), s pojistkami proti self-demote/self-delete; `GET /api/admin/audit`;
+  ruční úprava kreditů (#56d). **Nově (dev panel):** globální server settings
+  (`GET/PUT /api/admin/server-settings` — auth flagy + zapnutí kreditů + ceník,
+  perzistované do vault `settings.json` přes `Settings.server` a aplikované živě
+  sdíleným config holderem v `index.ts`); přehled spotřeby/nákladů
+  (`GET /api/admin/usage` ← `CreditStore.usageSummary`); správa kampaní/vaultů
+  napříč tenanty (`GET /api/admin/vaults`, export-zip, delete; confinement); běh
+  serveru (`GET /api/admin/health` — uptime, paměť, sezení, poskytovatelé);
+  zálohy celého vaultu (`POST/GET/DELETE /api/admin/backups`, ZIP uložený do
+  `<vault>/backups/` → přežije nasazení). UI: `AdminPage` rozdělená do záložek.
+  Zbývá: prohlížeč serverových logů (nad rámec audit logu).
 - **[x] #57c — Audit log.** Append-only tabulka `audit_log` (v3 migrace) +
   `AuditStore`; každá admin mutace (role/verify/delete) zapíše záznam s actorem,
   cílem a detailem. `auth/audit.ts`. Testy v `admin.test.ts`.

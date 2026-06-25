@@ -81,6 +81,46 @@ export class CreditStore {
     return row.bal;
   }
 
+  /**
+   * Aggregate spend/grant for the admin usage view (#57b). Returns per-reason
+   * totals (spent = sum of debits, granted = sum of credits) and a per-user
+   * roll-up (balance + total spent), newest activity first. Derived purely from
+   * the append-only ledger, so it's exact and survives a redeploy with the DB.
+   */
+  usageSummary(): {
+    byReason: { reason: string; spent: number; granted: number; count: number }[];
+    byUser: { userId: string; balance: number; spent: number; entries: number }[];
+    totals: { spent: number; granted: number; entries: number };
+  } {
+    const byReason = this.db
+      .prepare(
+        `SELECT reason,
+                COALESCE(SUM(CASE WHEN delta < 0 THEN -delta ELSE 0 END), 0) AS spent,
+                COALESCE(SUM(CASE WHEN delta > 0 THEN delta ELSE 0 END), 0) AS granted,
+                COUNT(*) AS count
+           FROM credit_ledger GROUP BY reason ORDER BY spent DESC, granted DESC`,
+      )
+      .all() as unknown as { reason: string; spent: number; granted: number; count: number }[];
+    const byUser = this.db
+      .prepare(
+        `SELECT user_id AS userId,
+                COALESCE(SUM(delta), 0) AS balance,
+                COALESCE(SUM(CASE WHEN delta < 0 THEN -delta ELSE 0 END), 0) AS spent,
+                COUNT(*) AS entries
+           FROM credit_ledger GROUP BY user_id ORDER BY spent DESC`,
+      )
+      .all() as unknown as { userId: string; balance: number; spent: number; entries: number }[];
+    const totals = byReason.reduce(
+      (acc, r) => ({
+        spent: acc.spent + r.spent,
+        granted: acc.granted + r.granted,
+        entries: acc.entries + r.count,
+      }),
+      { spent: 0, granted: 0, entries: 0 },
+    );
+    return { byReason, byUser, totals };
+  }
+
   /** Recent movements, newest first. */
   history(userId: string, limit = 100): LedgerEntry[] {
     // Tiebreak on rowid (insertion order) so entries created within the same

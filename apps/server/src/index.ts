@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 import Fastify from "fastify";
 import fastifyStatic from "@fastify/static";
 import fastifyCookie from "@fastify/cookie";
-import { applySettings, loadConfig } from "./config.js";
+import { applySettings, loadConfig, type Config } from "./config.js";
 import { loadSettings } from "./settings.js";
 import { registerGameRoutes } from "./routes/game.js";
 import { registerAuthRoutes } from "./routes/auth.js";
@@ -20,10 +20,21 @@ import { AuthService } from "./auth/service.js";
 import { registerAuthGuard } from "./auth/middleware.js";
 
 async function main(): Promise<void> {
+  const startedAtMs = Date.now();
   const env = loadConfig();
   const settings = await loadSettings(env.vaultPath);
   const config = applySettings(env, settings);
   const app = Fastify({ logger: true });
+
+  // Single window into the live, mutable config. Game routes own the canonical
+  // value and call `exposeConfig` to wire these handles; until then they read
+  // the boot config. The auth guard/flags and admin panel read through this so
+  // an operational-settings change (#57b) is honoured everywhere without a
+  // restart, while still persisting in the vault.
+  let configAccess: { get: () => Config; reload: () => Promise<Config> } = {
+    get: () => config,
+    reload: async () => config,
+  };
 
   if (config.basicAuth) {
     const expected = "Basic " + Buffer.from(config.basicAuth).toString("base64");
@@ -50,22 +61,39 @@ async function main(): Promise<void> {
     secret,
     publicUrl: config.auth.publicUrl,
     adminEmail: config.auth.adminEmail,
+    requireVerifiedEmail: () => configAccess.get().auth.requireVerifiedEmail,
   });
   // Promote the designated operator to admin if they already registered (#57).
   const admin = authService.ensureAdmin();
   if (admin) app.log.info(`Admin role ensured for ${admin.email}`);
   // Resolve req.user from the session and gate protected routes (#55f part 1).
-  registerAuthGuard(app, { service: authService, allowAnonymous: config.auth.allowAnonymous });
+  // Getters so a live config change (admin panel, #57b) is honoured per request.
+  registerAuthGuard(app, {
+    service: authService,
+    allowAnonymous: () => configAccess.get().auth.allowAnonymous,
+  });
   await registerAuthRoutes(app, {
     service: authService,
     cookieSecure: config.auth.publicUrl.startsWith("https://"),
-    flags: {
-      allowAnonymous: config.auth.allowAnonymous,
-      registrationEnabled: config.auth.registrationEnabled,
-      creditsEnabled: config.credits.enabled,
+    flags: () => {
+      const c = configAccess.get();
+      return {
+        allowAnonymous: c.auth.allowAnonymous,
+        registrationEnabled: c.auth.registrationEnabled,
+        creditsEnabled: c.credits.enabled,
+      };
     },
   });
-  await registerAdminRoutes(app, { users, sessions, audit, credits });
+  await registerAdminRoutes(app, {
+    users,
+    sessions,
+    audit,
+    credits,
+    vaultPath: config.vaultPath,
+    getConfig: () => configAccess.get(),
+    reloadConfig: () => configAccess.reload(),
+    startedAtMs,
+  });
   await registerCreditRoutes(app, { credits });
 
   // The game layer resolves a SessionManager per scope (shared vault when
@@ -73,7 +101,13 @@ async function main(): Promise<void> {
   // registry is owned by the game routes; in self-hosted mode it eager-opens
   // the shared scope at registration so a vault with no campaigns still fails
   // fast at boot, exactly as before.
-  await registerGameRoutes(app, { config, credits });
+  await registerGameRoutes(app, {
+    config,
+    credits,
+    exposeConfig: (access) => {
+      configAccess = access;
+    },
+  });
 
   app.get("/api/health", async () => ({ ok: true }));
 

@@ -1,4 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { promises as fs } from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { afterAll, describe, expect, it } from "vitest";
 import Fastify, { type FastifyInstance } from "fastify";
 import fastifyCookie from "@fastify/cookie";
 import { openInMemoryDatabase } from "../src/db/database.js";
@@ -10,6 +13,18 @@ import { AuthService } from "../src/auth/service.js";
 import { registerAuthGuard } from "../src/auth/middleware.js";
 import { registerAdminRoutes } from "../src/routes/admin.js";
 import { hashPassword } from "../src/auth/password.js";
+import { applySettings, loadConfig, type Config } from "../src/config.js";
+import { loadSettings } from "../src/settings.js";
+
+const tmpDirs: string[] = [];
+afterAll(async () => {
+  await Promise.all(tmpDirs.map((d) => fs.rm(d, { recursive: true, force: true })));
+});
+async function freshVault(): Promise<string> {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "adm-admin-"));
+  tmpDirs.push(root);
+  return path.join(root, "vault");
+}
 
 async function setup() {
   const db = openInMemoryDatabase();
@@ -28,13 +43,35 @@ async function setup() {
   const adminSid = (await service.login("admin@e.c", "Abcd1234")).session.id;
   const memberSid = (await service.login("member@e.c", "Abcd1234")).session.id;
 
+  const vaultPath = await freshVault();
+  await fs.mkdir(vaultPath, { recursive: true });
+  // Mirror index.ts: effective config = env floor + persisted vault settings,
+  // so a server-settings PUT round-trips through settings.json (deploy-persistent).
+  const build = async (): Promise<Config> =>
+    applySettings({ ...loadConfig(), vaultPath }, await loadSettings(vaultPath));
+  let config: Config = await build();
+  const reloadConfig = async () => (config = await build());
+
   const app: FastifyInstance = Fastify();
   await app.register(fastifyCookie);
   registerAuthGuard(app, { service, allowAnonymous: true });
-  await registerAdminRoutes(app, { users, sessions, audit, credits });
+  await registerAdminRoutes(app, {
+    users,
+    sessions,
+    audit,
+    credits,
+    vaultPath,
+    getConfig: () => config,
+    reloadConfig,
+    startedAtMs: Date.now(),
+    now: () => "2026-06-25T12:00:00.000Z",
+  });
   await app.ready();
 
-  return { app, users, sessions, audit, credits, service, admin, member, adminSid, memberSid };
+  return {
+    app, users, sessions, audit, credits, service, admin, member, adminSid, memberSid, vaultPath,
+    getConfig: () => config,
+  };
 }
 
 const asAdmin = (sid: string) => ({ cookies: { adm_session: sid } });
@@ -147,6 +184,151 @@ describe("admin user management (#57b/#57c)", () => {
       (await app.inject({ method: "DELETE", url: `/api/admin/users/${member.id}`, ...asAdmin(memberSid) }))
         .statusCode,
     ).toBe(403);
+    await app.close();
+  });
+});
+
+describe("admin dev panel (#57b)", () => {
+  it("reports runtime health", async () => {
+    const { app, adminSid } = await setup();
+    const res = await app.inject({ method: "GET", url: "/api/admin/health", ...asAdmin(adminSid) });
+    expect(res.statusCode).toBe(200);
+    const h = res.json();
+    expect(h.ok).toBe(true);
+    expect(h.users).toBe(2);
+    expect(h.activeSessions).toBeGreaterThanOrEqual(2);
+    expect(typeof h.node).toBe("string");
+    expect(h.providers.llm).toBeDefined();
+    await app.close();
+  });
+
+  it("persists server settings through settings.json and applies them live", async () => {
+    const { app, adminSid, getConfig } = await setup();
+    const res = await app.inject({
+      method: "PUT",
+      url: "/api/admin/server-settings",
+      payload: { creditsEnabled: true, requireVerifiedEmail: false, pricing: { perImage: 99 } },
+      ...asAdmin(adminSid),
+    });
+    expect(res.statusCode).toBe(200);
+    const view = res.json();
+    expect(view.creditsEnabled).toBe(true);
+    expect(view.requireVerifiedEmail).toBe(false);
+    expect(view.pricing.perImage).toBe(99);
+    // Effective config rebuilt from the persisted file.
+    expect(getConfig().credits.enabled).toBe(true);
+    expect(getConfig().credits.pricing.perImage).toBe(99);
+    await app.close();
+  });
+
+  it("rejects a negative price", async () => {
+    const { app, adminSid } = await setup();
+    const res = await app.inject({
+      method: "PUT",
+      url: "/api/admin/server-settings",
+      payload: { pricing: { perImage: -1 } },
+      ...asAdmin(adminSid),
+    });
+    expect(res.statusCode).toBe(400);
+    await app.close();
+  });
+
+  it("aggregates credit usage by reason and user", async () => {
+    const { app, credits, member, admin, adminSid } = await setup();
+    credits.grant(member.id, 1000, "admin-grant");
+    credits.charge(member.id, 30, "llm");
+    credits.charge(member.id, 50, "image");
+    credits.charge(admin.id, 20, "llm");
+    const res = await app.inject({ method: "GET", url: "/api/admin/usage", ...asAdmin(adminSid) });
+    expect(res.statusCode).toBe(200);
+    const u = res.json();
+    expect(u.totals.spent).toBe(100);
+    expect(u.totals.granted).toBe(1000);
+    const llm = u.byReason.find((r: { reason: string }) => r.reason === "llm");
+    expect(llm.spent).toBe(50);
+    const memberRow = u.byUser.find((r: { userId: string }) => r.userId === member.id);
+    expect(memberRow.email).toBe("member@e.c");
+    expect(memberRow.spent).toBe(80);
+    await app.close();
+  });
+
+  it("lists, exports and deletes campaigns across scopes", async () => {
+    const { app, adminSid, vaultPath } = await setup();
+    // Seed a shared campaign and a per-user one.
+    await fs.mkdir(path.join(vaultPath, "campaigns", "saga"), { recursive: true });
+    await fs.writeFile(path.join(vaultPath, "campaigns", "saga", "campaign.yaml"), "name: Velká sága\n");
+    await fs.mkdir(path.join(vaultPath, "users", "u1", "campaigns", "solo"), { recursive: true });
+    await fs.writeFile(path.join(vaultPath, "users", "u1", "campaigns", "solo", "campaign.yaml"), "name: Solo\n");
+
+    const list = await app.inject({ method: "GET", url: "/api/admin/vaults", ...asAdmin(adminSid) });
+    const campaigns = list.json().campaigns;
+    expect(campaigns).toHaveLength(2);
+    expect(campaigns.find((c: { folder: string }) => c.folder === "saga").name).toBe("Velká sága");
+
+    const exp = await app.inject({
+      method: "GET",
+      url: "/api/admin/vaults/__shared__/campaigns/saga/export",
+      ...asAdmin(adminSid),
+    });
+    expect(exp.statusCode).toBe(200);
+    expect(exp.headers["content-type"]).toContain("application/zip");
+    expect(exp.rawPayload.length).toBeGreaterThan(0);
+
+    const del = await app.inject({
+      method: "DELETE",
+      url: "/api/admin/vaults/u1/campaigns/solo",
+      ...asAdmin(adminSid),
+    });
+    expect(del.statusCode).toBe(200);
+    const after = await app.inject({ method: "GET", url: "/api/admin/vaults", ...asAdmin(adminSid) });
+    expect(after.json().campaigns).toHaveLength(1);
+    await app.close();
+  });
+
+  it("rejects path traversal in campaign management", async () => {
+    const { app, adminSid } = await setup();
+    const res = await app.inject({
+      method: "DELETE",
+      url: "/api/admin/vaults/..%2f..%2f/campaigns/x",
+      ...asAdmin(adminSid),
+    });
+    expect(res.statusCode).toBe(404);
+    await app.close();
+  });
+
+  it("creates, lists, downloads and deletes a full-vault backup", async () => {
+    const { app, adminSid, vaultPath } = await setup();
+    await fs.writeFile(path.join(vaultPath, "settings.json"), '{"campaign":"x"}');
+
+    const create = await app.inject({ method: "POST", url: "/api/admin/backups", ...asAdmin(adminSid) });
+    expect(create.statusCode).toBe(200);
+    const name = create.json().name;
+    expect(name).toMatch(/^vault-.*\.zip$/);
+
+    const list = await app.inject({ method: "GET", url: "/api/admin/backups", ...asAdmin(adminSid) });
+    expect(list.json().backups).toHaveLength(1);
+
+    const dl = await app.inject({ method: "GET", url: `/api/admin/backups/${name}`, ...asAdmin(adminSid) });
+    expect(dl.statusCode).toBe(200);
+    expect(dl.headers["content-type"]).toContain("application/zip");
+
+    // A second backup must not contain the first (backups/ is excluded).
+    const create2 = await app.inject({ method: "POST", url: "/api/admin/backups", ...asAdmin(adminSid) });
+    expect(create2.statusCode).toBe(200);
+
+    const del = await app.inject({ method: "DELETE", url: `/api/admin/backups/${name}`, ...asAdmin(adminSid) });
+    expect(del.statusCode).toBe(200);
+    await app.close();
+  });
+
+  it("rejects an unsafe backup name", async () => {
+    const { app, adminSid } = await setup();
+    const res = await app.inject({
+      method: "DELETE",
+      url: "/api/admin/backups/..%2f..%2fapp.db",
+      ...asAdmin(adminSid),
+    });
+    expect(res.statusCode).toBe(404);
     await app.close();
   });
 });

@@ -74,6 +74,8 @@ export interface Config {
      * registration. Null = no designated admin (pure single-tenant).
      */
     adminEmail: string | null;
+    /** Require a verified email before login is allowed. */
+    requireVerifiedEmail: boolean;
   };
   /** Credits / metering (#56). */
   credits: {
@@ -156,6 +158,7 @@ export function loadConfig(): Config {
       allowAnonymous: process.env.AUTH_ALLOW_ANONYMOUS !== "false",
       registrationEnabled: process.env.AUTH_REGISTRATION !== "false",
       adminEmail: process.env.ADMIN_EMAIL?.trim().toLowerCase() || null,
+      requireVerifiedEmail: process.env.AUTH_REQUIRE_VERIFIED !== "false",
     },
     credits: {
       enabled: process.env.CREDITS_ENABLED === "true",
@@ -220,11 +223,35 @@ export function applySettings(base: Config, s: Settings): Config {
         }
       : null;
 
+  // Operational server settings (#57b): the admin panel persists these into the
+  // vault `settings.json` so they survive a redeploy and overlay the env floor.
+  const srv = s.server ?? {};
+  const auth = {
+    ...base.auth,
+    allowAnonymous: srv.allowAnonymous ?? base.auth.allowAnonymous,
+    registrationEnabled: srv.registrationEnabled ?? base.auth.registrationEnabled,
+    requireVerifiedEmail: srv.requireVerifiedEmail ?? base.auth.requireVerifiedEmail,
+  };
+  const credits = {
+    enabled: srv.creditsEnabled ?? base.credits.enabled,
+    pricing: {
+      perThousandPromptTokens:
+        srv.pricing?.perThousandPromptTokens ?? base.credits.pricing.perThousandPromptTokens,
+      perThousandCompletionTokens:
+        srv.pricing?.perThousandCompletionTokens ?? base.credits.pricing.perThousandCompletionTokens,
+      perImage: srv.pricing?.perImage ?? base.credits.pricing.perImage,
+      perThousandTtsChars:
+        srv.pricing?.perThousandTtsChars ?? base.credits.pricing.perThousandTtsChars,
+    },
+  };
+
   return {
     ...base,
     srdPath: s.srdPath?.trim() || base.srdPath,
     llm,
     image,
     azureTts,
+    auth,
+    credits,
   };
 }

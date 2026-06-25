@@ -33,6 +33,14 @@ export interface GameContext {
   config: Config;
   /** Credit ledger for metering LLM usage (#56b); null disables metering. */
   credits: CreditStore | null;
+  /**
+   * Hook to share the live, mutable config with the rest of the app (#57b).
+   * Game routes own the canonical `config` (handlers read it at call time so a
+   * reassignment is seen everywhere); this hands `index.ts` a getter + a reload
+   * so the admin panel can change operational settings and the auth guard /
+   * flags see them without a restart. All changes persist in the vault.
+   */
+  exposeConfig?: (access: { get: () => Config; reload: () => Promise<Config> }) => void;
 }
 
 /** Thrown by the metering helper when a user has no credits left (#56c). */
@@ -79,6 +87,24 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
     const shared = await registry.openShared();
     app.log.info(`Loaded campaign from ${shared.manager.campaign.dir}`);
   }
+
+  /**
+   * Rebuild the effective config from env + the persisted vault settings.json
+   * and (if the SRD path changed) re-mount the dataset for every live scope.
+   * Shared by the GUI settings route and the admin server-settings route so a
+   * change made in either place is seen by all handlers and the auth layer.
+   */
+  async function reloadConfig(): Promise<Config> {
+    const prevSrdPath = config.srdPath;
+    config = applySettings(loadConfig(), await loadSettings(config.vaultPath));
+    if (config.srdPath !== prevSrdPath) {
+      await registry.invalidateAll("srd-remounted");
+      app.log.info(`SRD remounted from ${config.srdPath}`);
+    }
+    return config;
+  }
+  // Hand index.ts a window into the live config (auth guard / flags / admin).
+  ctx.exposeConfig?.({ get: () => config, reload: reloadConfig });
 
   /**
    * Build the narrator for the current config. Falls back to the offline mock
@@ -265,19 +291,11 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
     const campaign = patch.campaign;
 
     try {
-      const prevSrdPath = config.srdPath;
-      const merged = await saveSettings(config.vaultPath, clean);
+      await saveSettings(config.vaultPath, clean);
       if (campaign !== undefined) await saveSettings(sess.root, { campaign });
-      // Rebuild the effective config from env + the new global settings.
-      config = applySettings(loadConfig(), merged);
-      // If the SRD dataset path changed, re-mount it live for EVERY scope so
-      // creation/leveling see the new dataset without a restart, and tell each
-      // scope's clients to re-hydrate.
-      if (config.srdPath !== prevSrdPath) {
-        await registry.invalidateAll("srd-remounted");
-        const s = sess.manager.srdStats();
-        app.log.info(`SRD remounted from ${config.srdPath}: ${s.total} records (${s.spells} spells, ${s.monsters} monsters)`);
-      }
+      // Rebuild the effective config from env + the new global settings, and
+      // re-mount the SRD dataset live for every scope if its path changed.
+      await reloadConfig();
       app.log.info(`Settings updated; narrator=${!config.llm.apiKey || config.llm.provider === "mock" ? "mock" : "llm"}`);
       return settingsView(sess);
     } catch (err) {

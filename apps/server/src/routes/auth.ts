@@ -7,12 +7,21 @@ import type { FastifyInstance, FastifyReply } from "fastify";
 import { AuthError, AuthService } from "../auth/service.js";
 import type { User } from "../auth/users.js";
 
+export interface AuthFlags {
+  allowAnonymous: boolean;
+  registrationEnabled: boolean;
+  creditsEnabled: boolean;
+}
+
 export interface AuthContext {
   service: AuthService;
   /** Send the cookie with the Secure flag (true behind HTTPS). */
   cookieSecure: boolean;
-  /** Public auth flags surfaced to the client (#55e, #56e). */
-  flags: { allowAnonymous: boolean; registrationEnabled: boolean; creditsEnabled: boolean };
+  /**
+   * Public auth flags surfaced to the client (#55e, #56e). A getter so a live
+   * config change from the admin panel (#57b) is reflected without restart.
+   */
+  flags: AuthFlags | (() => AuthFlags);
 }
 
 /** Name of the session cookie. */
@@ -75,6 +84,8 @@ f.addEventListener('submit',async(e)=>{
 }
 
 export async function registerAuthRoutes(app: FastifyInstance, ctx: AuthContext): Promise<void> {
+  const getFlags = (): AuthFlags => (typeof ctx.flags === "function" ? ctx.flags() : ctx.flags);
+
   function setSessionCookie(reply: FastifyReply, value: string, maxAgeMs: number): void {
     reply.setCookie(SESSION_COOKIE, value, {
       httpOnly: true,
@@ -92,6 +103,9 @@ export async function registerAuthRoutes(app: FastifyInstance, ctx: AuthContext)
       if (typeof email !== "string" || typeof password !== "string") {
         return reply.code(400).send({ error: "Chybí e-mail nebo heslo." });
       }
+      if (!getFlags().registrationEnabled) {
+        return reply.code(403).send({ error: "Registrace je vypnutá." });
+      }
       try {
         const user = await ctx.service.register(email, password);
         return reply.code(201).send({ ok: true, userId: user.id, emailVerified: user.emailVerified });
@@ -103,7 +117,7 @@ export async function registerAuthRoutes(app: FastifyInstance, ctx: AuthContext)
   );
 
   // Public flags so the login screen can adapt (anonymous access, registration).
-  app.get("/api/auth/config", async () => ({ ...ctx.flags }));
+  app.get("/api/auth/config", async () => ({ ...getFlags() }));
 
   app.post<{ Body: { email?: string } }>("/api/auth/resend-verification", async (req, reply) => {
     const email = req.body?.email;

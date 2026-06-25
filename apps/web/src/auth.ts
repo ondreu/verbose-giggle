@@ -127,6 +127,89 @@ export const adminDeleteUser = (id: string) => request("DELETE", `/api/admin/use
 export const adminGrantCredits = (id: string, amount: number, reason?: string) =>
   request<{ balance: number }>("POST", `/api/admin/users/${id}/credits`, { amount, reason });
 
+// --- Admin: server settings / health / usage / vaults / backups (#57b) -----
+
+export interface CreditPricing {
+  perThousandPromptTokens: number;
+  perThousandCompletionTokens: number;
+  perImage: number;
+  perThousandTtsChars: number;
+}
+export interface ServerSettings {
+  allowAnonymous: boolean;
+  registrationEnabled: boolean;
+  requireVerifiedEmail: boolean;
+  creditsEnabled: boolean;
+  pricing: CreditPricing;
+  providers: {
+    llm: { provider: string; model: string; baseUrl: string; hasKey: boolean };
+    image: { enabled: boolean; model: string | null };
+    tts: { engine: string };
+    srdPath: string;
+  };
+}
+export type ServerSettingsPatch = Partial<
+  Pick<ServerSettings, "allowAnonymous" | "registrationEnabled" | "requireVerifiedEmail" | "creditsEnabled">
+> & { pricing?: Partial<CreditPricing> };
+
+export const adminGetServerSettings = () =>
+  request<ServerSettings>("GET", "/api/admin/server-settings");
+export const adminSaveServerSettings = (patch: ServerSettingsPatch) =>
+  put<ServerSettings>("/api/admin/server-settings", patch);
+
+export interface AdminHealth {
+  ok: boolean;
+  startedAt: string;
+  uptimeSec: number;
+  node: string;
+  memory: { rss: number; heapUsed: number; heapTotal: number };
+  vaultPath: string;
+  users: number;
+  activeSessions: number;
+  auth: {
+    allowAnonymous: boolean;
+    registrationEnabled: boolean;
+    requireVerifiedEmail: boolean;
+    smtp: boolean;
+    publicUrl: string;
+  };
+  credits: { enabled: boolean; pricing: CreditPricing };
+  providers: ServerSettings["providers"];
+}
+export const adminHealth = () => request<AdminHealth>("GET", "/api/admin/health");
+
+export interface AdminUsage {
+  byReason: { reason: string; spent: number; granted: number; count: number }[];
+  byUser: { userId: string; email: string | null; balance: number; spent: number; entries: number }[];
+  totals: { spent: number; granted: number; entries: number };
+  creditsEnabled: boolean;
+}
+export const adminUsage = () => request<AdminUsage>("GET", "/api/admin/usage");
+
+export interface AdminCampaign {
+  scope: string;
+  folder: string;
+  name: string;
+  sizeBytes: number;
+  ownerEmail: string | null;
+}
+export const adminListVaults = () => request<{ campaigns: AdminCampaign[] }>("GET", "/api/admin/vaults");
+export const adminDeleteCampaign = (scope: string, folder: string) =>
+  request("DELETE", `/api/admin/vaults/${encodeURIComponent(scope)}/campaigns/${encodeURIComponent(folder)}`);
+export const adminExportCampaignUrl = (scope: string, folder: string) =>
+  `/api/admin/vaults/${encodeURIComponent(scope)}/campaigns/${encodeURIComponent(folder)}/export`;
+
+export interface BackupInfo {
+  name: string;
+  sizeBytes: number;
+  createdAt: string;
+}
+export const adminListBackups = () => request<{ backups: BackupInfo[] }>("GET", "/api/admin/backups");
+export const adminCreateBackup = () => post<BackupInfo>("/api/admin/backups", {});
+export const adminDeleteBackup = (name: string) =>
+  request("DELETE", `/api/admin/backups/${encodeURIComponent(name)}`);
+export const adminBackupUrl = (name: string) => `/api/admin/backups/${encodeURIComponent(name)}`;
+
 // --- Credits (#56e) --------------------------------------------------------
 
 export interface CreditMovement {
