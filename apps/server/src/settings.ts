@@ -33,6 +33,8 @@ export interface ModelPoolEntry {
   intelligence: number;
   /** Price rating, 1–5 stars. */
   price: number;
+  /** Free-text tooltip shown to the player on hover in the model picker. */
+  tooltip: string;
 }
 
 export interface Settings {

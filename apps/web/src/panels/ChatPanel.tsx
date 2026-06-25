@@ -271,7 +271,7 @@ function DmMessage({
   /** Alternate model ids the player can re-roll with (#54). */
   altModels: string[];
   /** Operator model pool with names + ★ ratings (#56g); preferred over altModels. */
-  pool: { name: string; model: string; perMessage: number; intelligence: number; price: number }[];
+  pool: { name: string; model: string; perMessage: number; intelligence: number; price: number; tooltip: string }[];
   /** The DM's currently configured model (shown as the default re-roll). */
   currentModel: string;
 }) {
@@ -342,9 +342,11 @@ function DmMessage({
                             onClick={run(() => onRegenerate(m.model))}
                             disabled={busy || m.model === currentModel}
                             title={
-                              m.model === currentModel
-                                ? "Aktuální model"
-                                : `${m.model} · ${m.perMessage} kr./zpráva`
+                              m.tooltip?.trim()
+                                ? `${m.tooltip} (${m.perMessage} kr./zpráva)`
+                                : m.model === currentModel
+                                  ? "Aktuální model"
+                                  : `${m.model} · ${m.perMessage} kr./zpráva`
                             }
                           >
                             <Icon name="d20" size={13} />

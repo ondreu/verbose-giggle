@@ -991,6 +991,7 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
           perMessage: m.perMessage,
           intelligence: m.intelligence,
           price: m.price,
+          tooltip: m.tooltip ?? "",
         })),
       },
     };

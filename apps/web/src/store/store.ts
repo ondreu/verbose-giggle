@@ -131,7 +131,14 @@ interface GameStore {
   models: {
     current: string;
     alts: string[];
-    pool?: { name: string; model: string; perMessage: number; intelligence: number; price: number }[];
+    pool?: {
+      name: string;
+      model: string;
+      perMessage: number;
+      intelligence: number;
+      price: number;
+      tooltip: string;
+    }[];
   };
 
   setView: (v: View) => void;

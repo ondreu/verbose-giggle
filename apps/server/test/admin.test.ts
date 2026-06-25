@@ -309,7 +309,7 @@ describe("admin dev panel (#57b)", () => {
       url: "/api/admin/server-settings",
       payload: {
         modelPool: [
-          { name: "Flash", model: "deepseek/deepseek-v4-flash", perMessage: 20, intelligence: 1, price: 1 },
+          { name: "Flash", model: "deepseek/deepseek-v4-flash", perMessage: 20, intelligence: 1, price: 1, tooltip: "  Rychlý a levný  " },
           // stars out of range get clamped to 1–5; perMessage rounds up.
           { name: "", model: "anthropic/claude-sonnet-4.6", perMessage: 449.2, intelligence: 9, price: 0 },
         ],
@@ -319,6 +319,8 @@ describe("admin dev panel (#57b)", () => {
     expect(res.statusCode).toBe(200);
     const view = res.json();
     expect(view.modelPool).toHaveLength(2);
+    expect(view.modelPool[0].tooltip).toBe("Rychlý a levný"); // trimmed
+    expect(view.modelPool[1].tooltip).toBe(""); // missing → empty
     expect(view.modelPool[1].name).toBe("anthropic/claude-sonnet-4.6"); // falls back to slug
     expect(view.modelPool[1].perMessage).toBe(450); // ceil
     expect(view.modelPool[1].intelligence).toBe(5); // clamped

@@ -398,7 +398,10 @@ function ModelPoolEditor({
     setRows(rows.map((r, j) => (j === i ? { ...r, ...patch } : r)));
   const remove = (i: number) => setRows(rows.filter((_, j) => j !== i));
   const add = () =>
-    setRows([...rows, { name: "", model: "", perMessage: settings.pricing.perMessage, intelligence: 3, price: 3 }]);
+    setRows([
+      ...rows,
+      { name: "", model: "", perMessage: settings.pricing.perMessage, intelligence: 3, price: 3, tooltip: "" },
+    ]);
 
   return (
     <div className="flex flex-col gap-2">
@@ -411,6 +414,7 @@ function ModelPoolEditor({
               <th className="py-1 pr-2">Kr./zpráva</th>
               <th className="py-1 pr-2">Inteligence</th>
               <th className="py-1 pr-2">Cena</th>
+              <th className="py-1 pr-2">Tooltip</th>
               <th className="py-1 pr-2"></th>
             </tr>
           </thead>
@@ -449,6 +453,15 @@ function ModelPoolEditor({
                   <StarRating value={r.price} onChange={(n) => update(i, { price: n })} />
                 </td>
                 <td className="py-1 pr-2">
+                  <input
+                    value={r.tooltip ?? ""}
+                    maxLength={280}
+                    placeholder="Rychlý a levný; ideální na průzkum."
+                    onChange={(e) => update(i, { tooltip: e.target.value })}
+                    className="w-56 rounded border border-ink/25 bg-bg-crust px-2 py-1 text-ink"
+                  />
+                </td>
+                <td className="py-1 pr-2">
                   <button className="btn-link text-xs text-blood underline" onClick={() => remove(i)}>
                     smazat
                   </button>
@@ -457,7 +470,7 @@ function ModelPoolEditor({
             ))}
             {rows.length === 0 && (
               <tr>
-                <td colSpan={6} className="py-2 font-log text-sm italic text-ink/40">
+                <td colSpan={7} className="py-2 font-log text-sm italic text-ink/40">
                   Žádné modely. Přidej první níže.
                 </td>
               </tr>

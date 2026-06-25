@@ -178,6 +178,8 @@ export interface ModelPoolEntry {
   intelligence: number;
   /** Price rating, 1–5 stars. */
   price: number;
+  /** Free-text tooltip shown to the player on hover. */
+  tooltip: string;
 }
 export interface ServerSettings {
   allowAnonymous: boolean;

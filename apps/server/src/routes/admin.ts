@@ -308,6 +308,7 @@ export async function registerAdminRoutes(app: FastifyInstance, ctx: AdminContex
             perMessage: Math.ceil(perMessage),
             intelligence: star(raw?.intelligence),
             price: star(raw?.price),
+            tooltip: String(raw?.tooltip ?? "").trim().slice(0, 280),
           });
         }
         srv.modelPool = pool;
