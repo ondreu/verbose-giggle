@@ -177,6 +177,17 @@ ne „nice to have".
   Testy: `credits.test.ts` (`creditsPerMessage`), `admin.test.ts` (perzistence
   per-model ceníku + validace). Zbývá (volitelně): per-model i pro obrázky/TTS,
   reálný $ přepočet cost vs markup v přehledu spotřeby.
+- **[x] #56g — Model pool.** Provozovatelský seznam vybíratelných modelů
+  (`Settings.server.modelPool`, `Config.modelPool`): jméno, OpenRouter slug,
+  kredit cena/zpráva a ukazatele **inteligence** + **cena** stylem hvězd (★ 1–5).
+  Vše přes jednu OpenRouter chat-completions URL — liší se jen slug. Pool je
+  autoritativní zdroj per-model cen: `applySettings` jeho `perMessage` promítá do
+  `pricing.perModelMessage`, takže účtování (`creditsPerMessage`) zůstává beze
+  změny. Admin: sekce *Model pool* (řádkový editor s klikacími hvězdami),
+  `GET/PUT /api/admin/server-settings`.modelPool. Hráč: přepínač „Jiným modelem"
+  ukazuje jména + ★ z `/api/state`.models.pool. Testy: `admin.test.ts`
+  (perzistence + clamp hvězd + validace slugu). Doporučený ceník (mix 70/30
+  průzkum/boj, ~3× marže): flash 20, pro 65, qwen 70, gemini 300, sonnet 450 kr.
 
 ### #57 — Dev / admin panel
 

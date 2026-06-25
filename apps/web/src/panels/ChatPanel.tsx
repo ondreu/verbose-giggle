@@ -130,6 +130,7 @@ export function ChatPanel() {
               onVisualize={() => void generateImage("scene", undefined, "Atmosféra scény")}
               onRegenerate={(model) => void regenerate(model)}
               altModels={models.alts}
+              pool={models.pool ?? []}
               currentModel={models.current}
             />
           );
@@ -255,6 +256,7 @@ function DmMessage({
   onVisualize,
   onRegenerate,
   altModels,
+  pool,
   currentModel,
 }: {
   text: string;
@@ -268,6 +270,8 @@ function DmMessage({
   onRegenerate: (model?: string) => void;
   /** Alternate model ids the player can re-roll with (#54). */
   altModels: string[];
+  /** Operator model pool with names + ★ ratings (#56g); preferred over altModels. */
+  pool: { name: string; model: string; perMessage: number; intelligence: number; price: number }[];
   /** The DM's currently configured model (shown as the default re-roll). */
   currentModel: string;
 }) {
@@ -325,10 +329,32 @@ function DmMessage({
                   />
                   {swapOpen && (
                     <div className="mt-0.5 flex flex-col border-t border-surface1 pt-0.5">
-                      {altModels.length === 0 ? (
+                      {pool.length === 0 && altModels.length === 0 ? (
                         <p className="px-3 py-1.5 font-log text-[11px] italic leading-snug text-subtext0">
-                          Přidej modely v Nastavení → AI DM.
+                          Přidej modely v Admin → Server → Model pool.
                         </p>
+                      ) : pool.length > 0 ? (
+                        pool.map((m) => (
+                          <button
+                            key={m.model}
+                            role="menuitem"
+                            className="flex items-center gap-2.5 px-3 py-1.5 pl-7 text-left font-body text-[13px] text-subtext1 transition-colors hover:bg-gold/10 hover:text-gold disabled:opacity-40"
+                            onClick={run(() => onRegenerate(m.model))}
+                            disabled={busy || m.model === currentModel}
+                            title={
+                              m.model === currentModel
+                                ? "Aktuální model"
+                                : `${m.model} · ${m.perMessage} kr./zpráva`
+                            }
+                          >
+                            <Icon name="d20" size={13} />
+                            <span className="min-w-0 flex-1 truncate">{m.name}</span>
+                            <span className="shrink-0 font-log text-[10px] text-subtext0">
+                              <span title="inteligence">{"★".repeat(m.intelligence)}</span>{" "}
+                              <span title="cena">{"$".repeat(m.price)}</span>
+                            </span>
+                          </button>
+                        ))
                       ) : (
                         altModels.map((m) => (
                           <button

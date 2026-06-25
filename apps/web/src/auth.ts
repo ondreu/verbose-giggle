@@ -167,6 +167,18 @@ export interface CreditPricing {
   perThousandPromptTokens: number;
   perThousandCompletionTokens: number;
 }
+/** One selectable model in the operator-managed pool (#56g). */
+export interface ModelPoolEntry {
+  name: string;
+  /** OpenRouter model slug. */
+  model: string;
+  /** Credits charged per message. */
+  perMessage: number;
+  /** Intelligence rating, 1–5 stars. */
+  intelligence: number;
+  /** Price rating, 1–5 stars. */
+  price: number;
+}
 export interface ServerSettings {
   allowAnonymous: boolean;
   /** True when the live value differs from the boot snapshot routing uses (#59f). */
@@ -175,7 +187,9 @@ export interface ServerSettings {
   requireVerifiedEmail: boolean;
   creditsEnabled: boolean;
   pricing: CreditPricing;
-  /** Models the per-message price table covers (primary + re-roll alternates). */
+  /** Operator-managed selectable model pool (#56g). */
+  modelPool: ModelPoolEntry[];
+  /** Models the per-message price table covers (primary + pool + re-roll alternates). */
   models: string[];
   providers: {
     llm: { provider: string; model: string; baseUrl: string; hasKey: boolean };
@@ -186,7 +200,7 @@ export interface ServerSettings {
 }
 export type ServerSettingsPatch = Partial<
   Pick<ServerSettings, "allowAnonymous" | "registrationEnabled" | "requireVerifiedEmail" | "creditsEnabled">
-> & { pricing?: Partial<CreditPricing> };
+> & { pricing?: Partial<CreditPricing>; modelPool?: ModelPoolEntry[] };
 
 export const adminGetServerSettings = () =>
   request<ServerSettings>("GET", "/api/admin/server-settings");

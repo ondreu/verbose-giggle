@@ -126,9 +126,13 @@ interface GameStore {
   /** Out-of-combat speaker mode (#47): false = act as the active character,
    *  true = address the whole party. Ignored in combat (initiative speaks). */
   partyVoice: boolean;
-  /** The DM's current model + configured alternates, for the "Jiným modelem"
-   *  re-roll picker (#54). Populated on hydrate from /api/state. */
-  models: { current: string; alts: string[] };
+  /** The DM's current model + configured alternates + the operator model pool
+   *  (#54/#56g), for the "Jiným modelem" re-roll picker. From /api/state. */
+  models: {
+    current: string;
+    alts: string[];
+    pool?: { name: string; model: string; perMessage: number; intelligence: number; price: number }[];
+  };
 
   setView: (v: View) => void;
   /** Select which party member the rail (sheet/inventory) displays (#47). */
@@ -240,7 +244,7 @@ export const useGame = create<GameStore>((set, get) => ({
   targetRequest: null,
   viewedPlayer: null,
   partyVoice: false,
-  models: { current: "", alts: [] },
+  models: { current: "", alts: [], pool: [] },
 
   setView: (v) => set({ view: v }),
 
@@ -276,7 +280,7 @@ export const useGame = create<GameStore>((set, get) => ({
       actors: data.actors,
       locations: data.locations ?? {},
       encounters: data.encounters ?? {},
-      models: data.models ?? { current: "", alts: [] },
+      models: data.models ?? { current: "", alts: [], pool: [] },
       ttsEnabled: data.campaign?.tts?.enabled ?? false,
       narration: (data.session?.chat ?? [])
         .filter((m: { role: string }) => m.role === "user" || m.role === "assistant")
