@@ -234,8 +234,8 @@ ne „nice to have".
 
 Vyvstalo při stavbě dev panelu (#57b). Privilegovaná, mutující plocha + reálné
 kredity = bezpečnost přestává být „nice to have". **Stav:** všechny položky
-(#59a–#59h) jsou hotové; zbývají jen drobné navazující úkoly označené „Zbývá"
-(CAPTCHA pro auth #59b, souhlas/consent u GDPR #59e).
+(#59a–#59h) jsou hotové; zbývá už jen souhlas/consent u GDPR (#59e) a
+volitelný self-hosted CAPTCHA fallback bez třetí strany (Altcha PoW, #59b).
 
 - **[x] #59a — CSRF.** Hotovo: `registerCsrfGuard`
   (`apps/server/src/auth/middleware.ts`) vyžaduje vlastní hlavičku
@@ -243,10 +243,17 @@ kredity = bezpečnost přestává být „nice to have". **Stav:** všechny polo
   `POST` ji bez CORS preflightu nenastaví. Klient ji přidává centrálně přes patch
   `window.fetch` (`apps/web/src/csrf.ts`); server-rendered reset formulář ji
   posílá taky.
-- **[~] #59b — Rate-limit & brute-force.** Hotovo: per-IP fixed-window limiter
+- **[x] #59b — Rate-limit & brute-force.** Hotovo: per-IP fixed-window limiter
   (`apps/server/src/auth/rate-limit.ts`) na `/api/auth/login` a
   `/api/auth/register`, konfigurovatelný přes `AUTH_*_RATE_*`; úspěšné přihlášení
-  vynuluje okno dané IP. Zbývá: CAPTCHA.
+  vynuluje okno dané IP. **CAPTCHA hotová:** Cloudflare Turnstile na login +
+  registraci (`auth/turnstile.ts`, `makeTurnstileVerifier`), aktivní jen když je
+  nastaven keypair `TURNSTILE_SITE_KEY`/`TURNSTILE_SECRET_KEY` (jinak beze změny
+  — self-hosted/BYO bez widgetu). Server ověřuje token přes Cloudflare siteverify
+  s IP klienta (fail-closed), site key se vystavuje v `/api/auth/config`; klient
+  renderuje widget explicitně (`TurnstileWidget.tsx`) a posílá `turnstileToken`.
+  Testy `test/turnstile.test.ts`. Zvážit self-hosted PoW fallback (Altcha) —
+  viz pozn. níže.
 - **[x] #59c — Hardening záloh (#57b).** Hotovo: (1) Konzistence — před zipem
   `PRAGMA wal_checkpoint(TRUNCATE)` (`checkpointDatabase`). (2) Paměť — `zipDirToFile`
   streamuje archiv po jednom souboru na disk místo plnění `Buffer`u. (3) Retence —
@@ -286,8 +293,9 @@ kredity = bezpečnost přestává být „nice to have". **Stav:** všechny polo
 
 ### Co snadno zapomeneme
 
-- **Bezpečnost:** viz **#59** — rate-limit, CAPTCHA, CSRF, ochrana cizích
-  kreditů, secret management.
+- **Bezpečnost:** viz **#59** — rate-limit + CAPTCHA (Turnstile), CSRF, ochrana
+  cizích kreditů, secret management. Zvážit Altcha (PoW) jako self-hosted CAPTCHA
+  fallback bez závislosti na Cloudflare.
 - **Email infra:** dnes nulová — SMTP nebo služba (Resend/SES) + setup docs.
 - **GDPR:** mazání účtu i admin ban smažou vault data; export hotový
   (`/api/account/export`); zbývá souhlas (české UI → EU).

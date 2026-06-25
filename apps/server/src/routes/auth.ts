@@ -6,12 +6,18 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { AuthError, AuthService } from "../auth/service.js";
 import { RateLimiter } from "../auth/rate-limit.js";
+import type { TurnstileVerifier } from "../auth/turnstile.js";
 import type { User } from "../auth/users.js";
 
 export interface AuthFlags {
   allowAnonymous: boolean;
   registrationEnabled: boolean;
   creditsEnabled: boolean;
+  /**
+   * Cloudflare Turnstile site key the login screen renders the widget with
+   * (#59b), or null when CAPTCHA is disabled. Public by design.
+   */
+  captchaSiteKey: string | null;
 }
 
 export interface AuthContext {
@@ -44,6 +50,12 @@ export interface AuthContext {
    * omit it; when absent the export endpoint reports it unavailable (501).
    */
   exportUserData?: (user: User) => Promise<Buffer>;
+  /**
+   * Cloudflare Turnstile CAPTCHA verifier (#59b). When present, login and
+   * register require a valid `turnstileToken`; absent = no CAPTCHA (self-hosted
+   * / BYO), exactly as before.
+   */
+  captcha?: TurnstileVerifier;
 }
 
 /** Name of the session cookie. */
@@ -125,6 +137,22 @@ export async function registerAuthRoutes(app: FastifyInstance, ctx: AuthContext)
     return true;
   }
 
+  /**
+   * Verify the Turnstile token when CAPTCHA is enabled (#59b). Returns true and
+   * sends a 403 when the check fails; the handler should stop. No verifier
+   * configured = always passes.
+   */
+  async function captchaFailed(
+    token: string | undefined,
+    req: FastifyRequest,
+    reply: FastifyReply,
+  ): Promise<boolean> {
+    if (!ctx.captcha) return false;
+    if (await ctx.captcha.verify(token, req.ip)) return false;
+    reply.code(403).send({ error: "Ověření CAPTCHA selhalo. Zkus to znovu." });
+    return true;
+  }
+
   function setSessionCookie(reply: FastifyReply, value: string, maxAgeMs: number): void {
     reply.setCookie(SESSION_COOKIE, value, {
       httpOnly: true,
@@ -135,10 +163,11 @@ export async function registerAuthRoutes(app: FastifyInstance, ctx: AuthContext)
     });
   }
 
-  app.post<{ Body: { email?: string; password?: string } }>(
+  app.post<{ Body: { email?: string; password?: string; turnstileToken?: string } }>(
     "/api/auth/register",
     async (req, reply) => {
       if (throttled(ctx.rateLimit?.register, req, reply)) return;
+      if (await captchaFailed(req.body?.turnstileToken, req, reply)) return;
       const { email, password } = req.body ?? {};
       if (typeof email !== "string" || typeof password !== "string") {
         return reply.code(400).send({ error: "Chybí e-mail nebo heslo." });
@@ -184,10 +213,11 @@ export async function registerAuthRoutes(app: FastifyInstance, ctx: AuthContext)
     }
   });
 
-  app.post<{ Body: { email?: string; password?: string } }>(
+  app.post<{ Body: { email?: string; password?: string; turnstileToken?: string } }>(
     "/api/auth/login",
     async (req, reply) => {
       if (throttled(ctx.rateLimit?.login, req, reply)) return;
+      if (await captchaFailed(req.body?.turnstileToken, req, reply)) return;
       const { email, password } = req.body ?? {};
       if (typeof email !== "string" || typeof password !== "string") {
         return reply.code(400).send({ error: "Chybí e-mail nebo heslo." });

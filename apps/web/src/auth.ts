@@ -17,6 +17,8 @@ export interface AuthConfig {
   allowAnonymous: boolean;
   registrationEnabled: boolean;
   creditsEnabled: boolean;
+  /** Turnstile site key for the CAPTCHA widget (#59b), or null when disabled. */
+  captchaSiteKey: string | null;
 }
 
 export type AuthResult<T = void> =
@@ -55,7 +57,12 @@ export async function fetchAuthConfig(): Promise<AuthConfig> {
     /* fall through */
   }
   // Safe default if the endpoint is unreachable: behave like self-hosted.
-  return { allowAnonymous: true, registrationEnabled: true, creditsEnabled: false };
+  return {
+    allowAnonymous: true,
+    registrationEnabled: true,
+    creditsEnabled: false,
+    captchaSiteKey: null,
+  };
 }
 
 export async function fetchCurrentUser(): Promise<AuthUser | null> {
@@ -68,11 +75,15 @@ export async function fetchCurrentUser(): Promise<AuthUser | null> {
   return null;
 }
 
-export const login = (email: string, password: string) =>
-  post<{ user: AuthUser }>("/api/auth/login", { email, password });
+export const login = (email: string, password: string, turnstileToken?: string) =>
+  post<{ user: AuthUser }>("/api/auth/login", { email, password, turnstileToken });
 
-export const register = (email: string, password: string) =>
-  post<{ userId: string; emailVerified: boolean }>("/api/auth/register", { email, password });
+export const register = (email: string, password: string, turnstileToken?: string) =>
+  post<{ userId: string; emailVerified: boolean }>("/api/auth/register", {
+    email,
+    password,
+    turnstileToken,
+  });
 
 export const resendVerification = (email: string) =>
   post("/api/auth/resend-verification", { email });
