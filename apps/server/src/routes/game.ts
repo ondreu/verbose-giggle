@@ -10,8 +10,8 @@ import { ImageClient, buildMapPrompt, buildPrompt, type ImageSubject } from "../
 import { synthesizeAzure } from "../tts/azure.js";
 import { resolveAiTurns, runArrival, runIntro, runRecap, runTurn } from "../session/loop.js";
 import { startEncounter } from "../session/encounter.js";
-import type { EventBus } from "../session/events.js";
-import { SessionManager } from "../session/manager.js";
+import type { SessionManager } from "../session/manager.js";
+import { SessionRegistry, type UserSession } from "../session/registry.js";
 import { createCampaign } from "../vault/scaffold.js";
 import { instantiateTemplate, listTemplates } from "../vault/templates.js";
 import { listFiles, unzipInto, zipDir } from "../vault/zip.js";
@@ -30,8 +30,6 @@ import { loadSettings, saveSettings, type Settings } from "../settings.js";
 import { csSpellName, csItemName } from "@adm/schemas";
 
 export interface GameContext {
-  manager: SessionManager;
-  bus: EventBus;
   config: Config;
   /** Credit ledger for metering LLM usage (#56b); null disables metering. */
   credits: CreditStore | null;
@@ -71,27 +69,39 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
   // binding), so reassignment is picked up everywhere.
   let config = ctx.config;
 
+  // Per-scope game state (#55f): a shared vault when anonymous, a
+  // <vault>/users/<id> subtree per user when accounts are on. Every handler
+  // resolves its scope from the request and reads `sess.manager`/`sess.bus`.
+  const registry = new SessionRegistry({ getConfig: () => config });
+  // Self-hosted: open + validate the boot campaign now, so a vault with no
+  // campaigns fails fast at startup exactly as it did before.
+  if (config.auth.allowAnonymous) {
+    const shared = await registry.openShared();
+    app.log.info(`Loaded campaign from ${shared.manager.campaign.dir}`);
+  }
+
   /**
    * Build the narrator for the current config. Falls back to the offline mock
    * when no API key is configured (or provider is forced to "mock"), so the
-   * full loop + UI run without secrets.
+   * full loop + UI run without secrets. The mock introspects live state, so it
+   * takes the request's resolved manager.
    */
-  function makeLlm(modelOverride?: string): Llm {
+  function makeLlm(manager: SessionManager, modelOverride?: string): Llm {
     const useMock = !config.llm.apiKey || config.llm.provider === "mock";
     if (!useMock) return new LlmClient(config, modelOverride);
     return new MockLlmClient(() => {
-      const actors = ctx.manager.campaign.actors;
-      const alive = (id: string) => (ctx.manager.session.actors[id]?.hp?.current ?? 1) > 0;
+      const actors = manager.campaign.actors;
+      const alive = (id: string) => (manager.session.actors[id]?.hp?.current ?? 1) > 0;
       const friendly = new Set(["party", "ally"]);
       return {
-        activePlayer: ctx.manager.session.active_player,
+        activePlayer: manager.session.active_player,
         partyIds: Object.values(actors)
           .filter((a) => friendly.has(a.faction))
           .map((a) => a.id),
         hostileIds: Object.values(actors)
           .filter((a) => a.faction === "hostile" && alive(a.id))
           .map((a) => a.id),
-        inCombat: ctx.manager.session.combat !== null,
+        inCombat: manager.session.combat !== null,
         enemyOf: (actorId: string) => {
           const self = actors[actorId];
           if (!self) return null;
@@ -108,7 +118,6 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
     });
   }
 
-  let llm: Llm = makeLlm();
   if (!config.llm.apiKey || config.llm.provider === "mock") {
     app.log.warn("No LLM API key configured — using offline mock narrator");
   }
@@ -157,10 +166,9 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
 
   // --- Settings (GUI-editable runtime config; §9.1) ------------------------
   /** Campaign folders available for selection (for the settings dropdown). */
-  async function listCampaigns(): Promise<string[]> {
+  async function listCampaigns(sess: UserSession): Promise<string[]> {
     try {
-      const root = path.join(config.vaultPath, "campaigns");
-      const entries = await fs.readdir(root, { withFileTypes: true });
+      const entries = await fs.readdir(sess.scopedPath("campaigns"), { withFileTypes: true });
       return entries.filter((e) => e.isDirectory()).map((e) => e.name).sort();
     } catch {
       return [];
@@ -168,8 +176,12 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
   }
 
   /** Masked view of the effective settings — never leaks secret values. */
-  async function settingsView(): Promise<unknown> {
+  async function settingsView(sess: UserSession): Promise<unknown> {
+    // Provider/SRD credentials are global (op-only); the campaign selection is
+    // per-scope (#55f). In shared mode `sess.root` IS the vault, so this is
+    // identical to reading the single settings file.
     const stored = await loadSettings(config.vaultPath);
+    const scoped = sess.isShared ? stored : await loadSettings(sess.root);
     return {
       llm: {
         baseUrl: config.llm.baseUrl,
@@ -199,11 +211,11 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
       },
       srdPath: config.srdPath,
       // SRD dataset load summary so the table can confirm it's mounted.
-      srd: ctx.manager.srdStats(),
+      srd: sess.manager.srdStats(),
       // The selectable identity is the campaign *folder*, not its display name.
-      campaign: stored.campaign ?? path.basename(ctx.manager.campaign.dir),
-      campaignName: ctx.manager.campaign.config.name,
-      campaigns: await listCampaigns(),
+      campaign: scoped.campaign ?? path.basename(sess.manager.campaign.dir),
+      campaignName: sess.manager.campaign.config.name,
+      campaigns: await listCampaigns(sess),
       activeNarrator: !config.llm.apiKey || config.llm.provider === "mock" ? "mock" : "llm",
       // Bootstrap values that stay in the environment (shown read-only).
       env: {
@@ -212,9 +224,10 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
     };
   }
 
-  app.get("/api/settings", async () => settingsView());
+  app.get("/api/settings", async (req) => settingsView(await registry.resolve(req)));
 
   app.put<{ Body: Settings }>("/api/settings", async (req, reply) => {
+    const sess = await registry.resolve(req);
     const patch = (req.body ?? {}) as Settings;
     // Whitelist the editable fields — never let arbitrary keys through.
     const clean: Settings = {};
@@ -247,49 +260,44 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
       if (patch.tts.style !== undefined) clean.tts.style = patch.tts.style;
     }
     if (patch.srdPath !== undefined) clean.srdPath = patch.srdPath;
-    if (patch.campaign !== undefined) clean.campaign = patch.campaign;
+    // The campaign selection is per-scope (#55f): route it to the user's own
+    // settings, never the global file. Provider/SRD creds stay global.
+    const campaign = patch.campaign;
 
     try {
       const prevSrdPath = config.srdPath;
       const merged = await saveSettings(config.vaultPath, clean);
-      // Rebuild the effective config + narrator from env + the new settings.
+      if (campaign !== undefined) await saveSettings(sess.root, { campaign });
+      // Rebuild the effective config from env + the new global settings.
       config = applySettings(loadConfig(), merged);
-      llm = makeLlm();
-      // If the SRD dataset path changed, re-mount it live so creation/leveling
-      // see the new dataset without a restart, and tell clients to re-hydrate.
+      // If the SRD dataset path changed, re-mount it live for EVERY scope so
+      // creation/leveling see the new dataset without a restart, and tell each
+      // scope's clients to re-hydrate.
       if (config.srdPath !== prevSrdPath) {
-        await reopenManager();
-        const s = ctx.manager.srdStats();
+        await registry.invalidateAll("srd-remounted");
+        const s = sess.manager.srdStats();
         app.log.info(`SRD remounted from ${config.srdPath}: ${s.total} records (${s.spells} spells, ${s.monsters} monsters)`);
-        ctx.bus.emit({ type: "reload", reason: "srd-remounted" });
       }
       app.log.info(`Settings updated; narrator=${!config.llm.apiKey || config.llm.provider === "mock" ? "mock" : "llm"}`);
-      return settingsView();
+      return settingsView(sess);
     } catch (err) {
       return reply.code(500).send({ error: err instanceof Error ? err.message : String(err) });
     }
   });
 
   // --- Campaigns: start-menu management + hot-swap (§2) ---------------------
-  /** Re-open the SessionManager in place; handlers read ctx.manager lazily. */
-  async function reopenManager(folder?: string): Promise<void> {
-    const dir = folder
-      ? path.join(config.vaultPath, "campaigns", folder)
-      : ctx.manager.campaign.dir;
-    ctx.manager = await SessionManager.open(dir, { srdDir: config.srdPath });
-  }
-
   /** List campaigns with display name + party size for the start menu. */
-  app.get("/api/campaigns", async () => {
-    const folders = await listCampaigns();
-    const active = path.basename(ctx.manager.campaign.dir);
+  app.get("/api/campaigns", async (req) => {
+    const sess = await registry.resolve(req);
+    const folders = await listCampaigns(sess);
+    const active = path.basename(sess.manager.campaign.dir);
     const campaigns = [];
     for (const folder of folders) {
       let name = folder;
       let party = 0;
       try {
         const raw = await fs.readFile(
-          path.join(config.vaultPath, "campaigns", folder, "campaign.yaml"),
+          sess.scopedPath("campaigns", folder, "campaign.yaml"),
           "utf8",
         );
         const cfg = YAML.parse(raw) ?? {};
@@ -304,8 +312,9 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
   });
 
   /** List shared worlds available in the vault, for the forge picker (#49). */
-  app.get("/api/worlds", async () => {
-    const root = path.join(config.vaultPath, "worlds");
+  app.get("/api/worlds", async (req) => {
+    const sess = await registry.resolve(req);
+    const root = sess.scopedPath("worlds");
     let names: string[] = [];
     try {
       const entries = await fs.readdir(root, { withFileTypes: true });
@@ -329,16 +338,16 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
   });
 
   // --- World management: browse / edit / download / upload (#worlds) --------
-  /** Resolve a world id to its dir, confined to <vault>/worlds. */
-  function worldDir(id: string): string | null {
+  /** Resolve a world id to its dir, confined to the scope's worlds folder. */
+  function worldDir(sess: UserSession, id: string): string | null {
     const safe = path.basename((id ?? "").trim());
     if (!safe || safe !== (id ?? "").trim()) return null;
-    return path.join(config.vaultPath, "worlds", safe);
+    return sess.scopedPath("worlds", safe);
   }
 
   /** Resolve a relative path inside a world, refusing escapes (zip-slip/..). */
-  function worldFilePath(id: string, rel: string): string | null {
-    const dir = worldDir(id);
+  function worldFilePath(sess: UserSession, id: string, rel: string): string | null {
+    const dir = worldDir(sess, id);
     if (!dir) return null;
     const base = path.resolve(dir);
     const target = path.resolve(base, rel ?? "");
@@ -352,7 +361,8 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
 
   /** Read-only file tree of a world's vault folder. */
   app.get<{ Params: { id: string } }>("/api/worlds/:id/files", async (req, reply) => {
-    const dir = worldDir(req.params.id);
+    const sess = await registry.resolve(req);
+    const dir = worldDir(sess, req.params.id);
     if (!dir) return reply.code(400).send({ error: "invalid world" });
     try {
       await fs.access(dir);
@@ -366,9 +376,10 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
   app.get<{ Params: { id: string }; Querystring: { path?: string } }>(
     "/api/worlds/:id/file",
     async (req, reply) => {
+      const sess = await registry.resolve(req);
       const rel = (req.query?.path ?? "").trim();
       if (!rel) return reply.code(400).send({ error: "missing path" });
-      const target = worldFilePath(req.params.id, rel);
+      const target = worldFilePath(sess, req.params.id, rel);
       if (!target) return reply.code(400).send({ error: "invalid path" });
       const editable = TEXT_EXT.has(path.extname(rel).toLowerCase());
       if (!editable) return reply.code(415).send({ error: "Soubor není textový — jen ke stažení." });
@@ -385,7 +396,8 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
   app.put<{ Params: { id: string }; Body: { path?: string; content?: string } }>(
     "/api/worlds/:id/file",
     async (req, reply) => {
-      const dir = worldDir(req.params.id);
+      const sess = await registry.resolve(req);
+      const dir = worldDir(sess, req.params.id);
       if (!dir) return reply.code(400).send({ error: "invalid world" });
       try {
         await fs.access(dir);
@@ -393,7 +405,7 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
         return reply.code(404).send({ error: "unknown world" });
       }
       const rel = (req.body?.path ?? "").trim();
-      const target = worldFilePath(req.params.id, rel);
+      const target = worldFilePath(sess, req.params.id, rel);
       if (!rel || !target) return reply.code(400).send({ error: "invalid path" });
       if (!TEXT_EXT.has(path.extname(rel).toLowerCase())) {
         return reply.code(415).send({ error: "Lze upravovat jen textové soubory." });
@@ -413,7 +425,8 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
 
   /** Export a world folder as a .zip download. */
   app.get<{ Params: { id: string } }>("/api/worlds/:id/export", async (req, reply) => {
-    const dir = worldDir(req.params.id);
+    const sess = await registry.resolve(req);
+    const dir = worldDir(sess, req.params.id);
     if (!dir) return reply.code(400).send({ error: "invalid world" });
     try {
       await fs.access(dir);
@@ -435,7 +448,8 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
     "/api/worlds/:id/import",
     { bodyLimit: 96 * 1024 * 1024 },
     async (req, reply) => {
-      const dir = worldDir(req.params.id);
+      const sess = await registry.resolve(req);
+      const dir = worldDir(sess, req.params.id);
       if (!dir) return reply.code(400).send({ error: "invalid world" });
       const b64 = req.body?.zipBase64;
       if (typeof b64 !== "string" || !b64) return reply.code(400).send({ error: "missing zip" });
@@ -449,9 +463,9 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
         await fs.mkdir(dir, { recursive: true });
         const written = await unzipInto(dir, buf);
         // If the running campaign uses this world, reload so edits take effect.
-        if (ctx.manager.campaign.config.world === path.basename(dir)) {
-          await reopenManager();
-          ctx.bus.emit({ type: "reload", reason: "world-imported" });
+        if (sess.manager.campaign.config.world === path.basename(dir)) {
+          await sess.reopen();
+          sess.bus.emit({ type: "reload", reason: "world-imported" });
         }
         return { ok: true, written };
       } catch (err) {
@@ -464,18 +478,17 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
   app.post<{ Body: { name: string; folder?: string; startingLocationName?: string; select?: boolean } }>(
     "/api/campaigns",
     async (req, reply) => {
+      const sess = await registry.resolve(req);
       try {
-        const folder = await createCampaign(config.vaultPath, {
+        const folder = await createCampaign(sess.root, {
           name: req.body?.name ?? "",
           folder: req.body?.folder,
           startingLocationName: req.body?.startingLocationName,
         });
         if (req.body?.select) {
-          await saveSettings(config.vaultPath, { campaign: folder });
-          config = applySettings(loadConfig(), await loadSettings(config.vaultPath));
-          await reopenManager(folder);
-          llm = makeLlm();
-          ctx.bus.emit({ type: "reload", reason: "campaign-created" });
+          await saveSettings(sess.root, { campaign: folder });
+          await sess.reopen(folder);
+          sess.bus.emit({ type: "reload", reason: "campaign-created" });
         }
         return { ok: true, folder };
       } catch (err) {
@@ -491,16 +504,15 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
   app.post<{ Body: { template: string; name?: string; select?: boolean } }>(
     "/api/campaigns/from-template",
     async (req, reply) => {
+      const sess = await registry.resolve(req);
       const template = (req.body?.template ?? "").trim();
       if (!template) return reply.code(400).send({ error: "missing template" });
       try {
-        const folder = await instantiateTemplate(config.vaultPath, template, req.body?.name);
+        const folder = await instantiateTemplate(sess.root, template, req.body?.name);
         if (req.body?.select !== false) {
-          await saveSettings(config.vaultPath, { campaign: folder });
-          config = applySettings(loadConfig(), await loadSettings(config.vaultPath));
-          await reopenManager(folder);
-          llm = makeLlm();
-          ctx.bus.emit({ type: "reload", reason: "campaign-from-template" });
+          await saveSettings(sess.root, { campaign: folder });
+          await sess.reopen(folder);
+          sess.bus.emit({ type: "reload", reason: "campaign-from-template" });
         }
         return { ok: true, folder };
       } catch (err) {
@@ -511,14 +523,14 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
 
   /** Build a campaign with the AI from a player brief, then switch to it. */
   app.post<{ Body: ForgeInput & { select?: boolean } }>("/api/campaigns/forge", async (req, reply) => {
+    const sess = await registry.resolve(req);
+    const llm = makeLlm(sess.manager);
     try {
-      const { folder, usedLlm } = await forgeCampaign(config.vaultPath, llm, req.body as ForgeInput);
+      const { folder, usedLlm } = await forgeCampaign(sess.root, llm, req.body as ForgeInput);
       if (req.body?.select !== false) {
-        await saveSettings(config.vaultPath, { campaign: folder });
-        config = applySettings(loadConfig(), await loadSettings(config.vaultPath));
-        await reopenManager(folder);
-        llm = makeLlm();
-        ctx.bus.emit({ type: "reload", reason: "campaign-forged" });
+        await saveSettings(sess.root, { campaign: folder });
+        await sess.reopen(folder);
+        sess.bus.emit({ type: "reload", reason: "campaign-forged" });
       }
       return { ok: true, folder, usedLlm };
     } catch (err) {
@@ -528,6 +540,8 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
 
   /** Streaming SSE variant — emits progress events for each generation phase (#46b). */
   app.post<{ Body: ForgeInput & { select?: boolean } }>("/api/campaigns/forge/stream", async (req, reply) => {
+    const sess = await registry.resolve(req);
+    const llm = makeLlm(sess.manager);
     reply.raw.writeHead(200, {
       "Content-Type": "text/event-stream",
       "Cache-Control": "no-cache",
@@ -545,7 +559,7 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
     try {
       const onProgress: ProgressCallback = (phase, msg) => send("progress", { phase, msg });
       const { folder, usedLlm } = await forgeCampaign(
-        config.vaultPath,
+        sess.root,
         llm,
         req.body as ForgeInput,
         onProgress,
@@ -553,11 +567,9 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
 
       if (req.body?.select !== false) {
         send("progress", { phase: "Aktivace", msg: "Přepínám aktivní kampaň…" });
-        await saveSettings(config.vaultPath, { campaign: folder });
-        config = applySettings(loadConfig(), await loadSettings(config.vaultPath));
-        await reopenManager(folder);
-        llm = makeLlm();
-        ctx.bus.emit({ type: "reload", reason: "campaign-forged" });
+        await saveSettings(sess.root, { campaign: folder });
+        await sess.reopen(folder);
+        sess.bus.emit({ type: "reload", reason: "campaign-forged" });
       }
 
       send("done", { ok: true, folder, usedLlm });
@@ -572,33 +584,33 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
 
   /** Switch the active campaign — persists the choice and hot-swaps in place. */
   app.post<{ Body: { folder: string } }>("/api/campaigns/select", async (req, reply) => {
+    const sess = await registry.resolve(req);
     const folder = (req.body?.folder ?? "").trim();
     if (!folder) return reply.code(400).send({ error: "missing folder" });
-    const dir = path.join(config.vaultPath, "campaigns", folder);
+    const dir = sess.scopedPath("campaigns", folder);
     try {
       await fs.access(path.join(dir, "campaign.yaml"));
     } catch {
       return reply.code(404).send({ error: "unknown campaign" });
     }
-    await saveSettings(config.vaultPath, { campaign: folder });
-    config = applySettings(loadConfig(), await loadSettings(config.vaultPath));
-    await reopenManager(folder);
-    llm = makeLlm();
-    ctx.bus.emit({ type: "reload", reason: "campaign-changed" });
-    return { ok: true, campaign: ctx.manager.campaign.config.name };
+    await saveSettings(sess.root, { campaign: folder });
+    await sess.reopen(folder);
+    sess.bus.emit({ type: "reload", reason: "campaign-changed" });
+    return { ok: true, campaign: sess.manager.campaign.config.name };
   });
 
   // --- Campaign management: browse / export / delete (#35) -----------------
   /** Resolve a campaign folder param to its dir, confined to the vault. */
-  function campaignDir(folder: string): string | null {
+  function campaignDir(sess: UserSession, folder: string): string | null {
     const safe = path.basename((folder ?? "").trim());
     if (!safe || safe !== folder.trim()) return null;
-    return path.join(config.vaultPath, "campaigns", safe);
+    return sess.scopedPath("campaigns", safe);
   }
 
   /** Read-only file tree of a campaign's vault (relative POSIX paths). */
   app.get<{ Params: { folder: string } }>("/api/campaigns/:folder/files", async (req, reply) => {
-    const dir = campaignDir(req.params.folder);
+    const sess = await registry.resolve(req);
+    const dir = campaignDir(sess, req.params.folder);
     if (!dir) return reply.code(400).send({ error: "invalid folder" });
     try {
       await fs.access(path.join(dir, "campaign.yaml"));
@@ -610,7 +622,8 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
 
   /** Export the campaign folder as a .zip download. */
   app.get<{ Params: { folder: string } }>("/api/campaigns/:folder/export", async (req, reply) => {
-    const dir = campaignDir(req.params.folder);
+    const sess = await registry.resolve(req);
+    const dir = campaignDir(sess, req.params.folder);
     if (!dir) return reply.code(400).send({ error: "invalid folder" });
     try {
       await fs.access(path.join(dir, "campaign.yaml"));
@@ -625,9 +638,10 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
 
   /** Delete a campaign folder. Refuses the currently active campaign. */
   app.delete<{ Params: { folder: string } }>("/api/campaigns/:folder", async (req, reply) => {
-    const dir = campaignDir(req.params.folder);
+    const sess = await registry.resolve(req);
+    const dir = campaignDir(sess, req.params.folder);
     if (!dir) return reply.code(400).send({ error: "invalid folder" });
-    if (path.basename(dir) === path.basename(ctx.manager.campaign.dir)) {
+    if (path.basename(dir) === path.basename(sess.manager.campaign.dir)) {
       return reply.code(409).send({ error: "Nelze smazat aktivní kampaň — nejdřív přepni na jinou." });
     }
     try {
@@ -644,24 +658,25 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
    * base map (#37). Stretch/optional: a failure (no image config, upstream
    * error) leaves the campaign untouched — it plays fine without the image.
    */
-  app.post("/api/campaigns/map", async (_req, reply) => {
+  app.post("/api/campaigns/map", async (req, reply) => {
     if (!config.image)
       return reply.code(503).send({ error: "Generování obrázků není nakonfigurováno" });
+    const sess = await registry.resolve(req);
     try {
-      const prompt = buildMapPrompt(ctx.manager.campaign.config.name, ctx.manager.campaign.locations);
+      const prompt = buildMapPrompt(sess.manager.campaign.config.name, sess.manager.campaign.locations);
       const { url } = await new ImageClient(config.image).generate(prompt);
       const { buf, ext } = await fetchImageBytes(url);
       const rel = `maps/overworld-ai.${ext}`;
-      const abs = path.join(ctx.manager.campaign.dir, rel);
+      const abs = path.join(sess.manager.campaign.dir, rel);
       await fs.mkdir(path.dirname(abs), { recursive: true });
       await fs.writeFile(abs, buf);
       // Point the campaign at the new base map.
-      const cfgPath = path.join(ctx.manager.campaign.dir, "campaign.yaml");
+      const cfgPath = path.join(sess.manager.campaign.dir, "campaign.yaml");
       const cfg = YAML.parse(await fs.readFile(cfgPath, "utf8")) ?? {};
       cfg.world_map = rel;
       await fs.writeFile(cfgPath, YAML.stringify(cfg), "utf8");
-      await reopenManager();
-      ctx.bus.emit({ type: "reload", reason: "map-generated" });
+      await sess.reopen();
+      sess.bus.emit({ type: "reload", reason: "map-generated" });
       return { ok: true, world_map: rel };
     } catch (err) {
       return reply.code(500).send({ error: err instanceof Error ? err.message : String(err) });
@@ -669,20 +684,25 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
   });
 
   // --- Snapshots: campaign rollback (§7) -----------------------------------
-  app.get("/api/snapshots", async () => ({
-    snapshots: await listSnapshots(ctx.manager.campaign.dir),
-  }));
+  app.get("/api/snapshots", async (req) => {
+    const sess = await registry.resolve(req);
+    return { snapshots: await listSnapshots(sess.manager.campaign.dir) };
+  });
 
-  app.post<{ Body: { label?: string } }>("/api/snapshots", async (req) => ({
-    ok: true,
-    snapshot: await createSnapshot(ctx.manager.campaign.dir, { label: req.body?.label }),
-  }));
+  app.post<{ Body: { label?: string } }>("/api/snapshots", async (req) => {
+    const sess = await registry.resolve(req);
+    return {
+      ok: true,
+      snapshot: await createSnapshot(sess.manager.campaign.dir, { label: req.body?.label }),
+    };
+  });
 
   app.post<{ Params: { id: string } }>("/api/snapshots/:id/restore", async (req, reply) => {
+    const sess = await registry.resolve(req);
     try {
-      await restoreSnapshot(ctx.manager.campaign.dir, req.params.id);
-      await reopenManager();
-      ctx.bus.emit({ type: "reload", reason: "snapshot-restored" });
+      await restoreSnapshot(sess.manager.campaign.dir, req.params.id);
+      await sess.reopen();
+      sess.bus.emit({ type: "reload", reason: "snapshot-restored" });
       return { ok: true };
     } catch (err) {
       return reply.code(400).send({ error: err instanceof Error ? err.message : String(err) });
@@ -690,8 +710,9 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
   });
 
   app.delete<{ Params: { id: string } }>("/api/snapshots/:id", async (req, reply) => {
+    const sess = await registry.resolve(req);
     try {
-      await deleteSnapshot(ctx.manager.campaign.dir, req.params.id);
+      await deleteSnapshot(sess.manager.campaign.dir, req.params.id);
       return { ok: true };
     } catch (err) {
       return reply.code(400).send({ error: err instanceof Error ? err.message : String(err) });
@@ -699,12 +720,13 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
   });
 
   /** Undo the last player turn (in-chat quick rollback). */
-  app.post("/api/undo", async (_req, reply) => {
+  app.post("/api/undo", async (req, reply) => {
+    const sess = await registry.resolve(req);
     try {
-      const undone = await undoLastTurn(ctx.manager.campaign.dir);
+      const undone = await undoLastTurn(sess.manager.campaign.dir);
       if (!undone) return reply.code(400).send({ error: "Není co vrátit — žádný předchozí tah." });
-      await reopenManager();
-      ctx.bus.emit({ type: "reload", reason: "undo" });
+      await sess.reopen();
+      sess.bus.emit({ type: "reload", reason: "undo" });
       return { ok: true };
     } catch (err) {
       return reply.code(400).send({ error: err instanceof Error ? err.message : String(err) });
@@ -713,7 +735,8 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
 
   // --- SRD item resolution (#20): equipment + magic items, for inventory/loot.
   app.get<{ Querystring: { ids?: string } }>("/api/srd/items", async (req) => {
-    const srd = ctx.manager.srd();
+    const sess = await registry.resolve(req);
+    const srd = sess.manager.srd();
     const ids = (req.query?.ids ?? "").split(",").map((s) => s.trim()).filter(Boolean);
     const out: Record<string, { name: string; nameCs: string; category?: string; rarity?: string; magic: boolean; description?: string; properties?: string[] }> = {};
     for (const id of ids) {
@@ -733,17 +756,19 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
 
   /** Look up one spell by id. Returns 404 when the SRD dataset isn't mounted
    *  or the spell is unknown; the client falls back to showing the raw id. */
-  app.get<{ Params: { id: string } }>("/api/srd/spell/:id", (req) => {
-    const spell = ctx.manager.srd().spell(req.params.id);
+  app.get<{ Params: { id: string } }>("/api/srd/spell/:id", async (req) => {
+    const sess = await registry.resolve(req);
+    const spell = sess.manager.srd().spell(req.params.id);
     // Attach the player-facing Czech name (#45b); ids/name stay English.
     return spell ? { ...spell, nameCs: csSpellName(spell.id, spell.name) } : {};
   });
 
   /** Batch spell lookup by comma-separated ids (for sheet/picker tooltips). */
-  app.get<{ Querystring: { ids?: string } }>("/api/srd/spells", (req) => {
+  app.get<{ Querystring: { ids?: string } }>("/api/srd/spells", async (req) => {
+    const sess = await registry.resolve(req);
     const ids = (req.query?.ids ?? "").split(",").map((s) => s.trim()).filter(Boolean);
     const out: Record<string, unknown> = {};
-    const srd = ctx.manager.srd();
+    const srd = sess.manager.srd();
     for (const id of ids) {
       const s = srd.spell(id);
       if (s) out[id] = { ...s, nameCs: csSpellName(s.id, s.name) };
@@ -752,42 +777,48 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
   });
 
   /** Look up a feat by id for hover cards (#42c). */
-  app.get<{ Params: { id: string } }>("/api/srd/feat/:id", (req) => {
-    return ctx.manager.srd().feat(req.params.id) ?? {};
+  app.get<{ Params: { id: string } }>("/api/srd/feat/:id", async (req) => {
+    const sess = await registry.resolve(req);
+    return sess.manager.srd().feat(req.params.id) ?? {};
   });
 
   /** Look up a class/racial feature by id for hover cards (#42c). Falls back to
    *  the racial trait table when the id isn't a class feature, so a single
    *  endpoint serves the sheet's "Schopnosti" row (features + traits mixed). */
-  app.get<{ Params: { id: string } }>("/api/srd/feature/:id", (req) => {
-    const srd = ctx.manager.srd();
+  app.get<{ Params: { id: string } }>("/api/srd/feature/:id", async (req) => {
+    const sess = await registry.resolve(req);
+    const srd = sess.manager.srd();
     return srd.feature(req.params.id) ?? srd.trait(req.params.id) ?? {};
   });
 
   // --- Character creation (#14) --------------------------------------------
-  app.get("/api/creation/options", async () => creationOptions(ctx.manager.srd()));
+  app.get("/api/creation/options", async (req) => {
+    const sess = await registry.resolve(req);
+    return creationOptions(sess.manager.srd());
+  });
 
   app.post<{ Body: CharacterDraft }>("/api/characters", async (req, reply) => {
+    const sess = await registry.resolve(req);
     try {
       // If the campaign is over (a fallen solo hero, #23), this creation is a
       // replacement: remember the ending so we can retire the dead PC and
       // resume play with the newcomer.
-      const ending = ctx.manager.session.ending;
-      const { id } = await createCharacter(ctx.manager.campaign, req.body as CharacterDraft, ctx.manager.srd());
-      if (ending?.actor) await removeFromParty(ctx.manager.campaign.dir, ending.actor);
+      const ending = sess.manager.session.ending;
+      const { id } = await createCharacter(sess.manager.campaign, req.body as CharacterDraft, sess.manager.srd());
+      if (ending?.actor) await removeFromParty(sess.manager.campaign.dir, ending.actor);
       // Reload so the new actor + party membership are live.
-      await reopenManager();
+      await sess.reopen();
       if (ending) {
         // Lift the game-over state and hand control to the new character.
-        ctx.manager.session.ending = null;
-        ctx.manager.session.active_player = id;
-        await ctx.manager.persist();
-      } else if (!ctx.manager.session.active_player) {
+        sess.manager.session.ending = null;
+        sess.manager.session.active_player = id;
+        await sess.manager.persist();
+      } else if (!sess.manager.session.active_player) {
         // First character of a fresh campaign: point the hotseat at them.
-        ctx.manager.session.active_player = id;
-        await ctx.manager.persist();
+        sess.manager.session.active_player = id;
+        await sess.manager.persist();
       }
-      ctx.bus.emit({ type: "reload", reason: "character-created" });
+      sess.bus.emit({ type: "reload", reason: "character-created" });
       return { ok: true, id };
     } catch (err) {
       return reply.code(400).send({ error: err instanceof Error ? err.message : String(err) });
@@ -796,10 +827,11 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
 
   // --- Level-up (#13): options the next level grants (SRD-derived) ---------
   app.get<{ Querystring: { actor?: string } }>("/api/level-up/options", async (req, reply) => {
+    const sess = await registry.resolve(req);
     const id = req.query?.actor;
-    const actor = id ? ctx.manager.campaign.actors[id] : undefined;
+    const actor = id ? sess.manager.campaign.actors[id] : undefined;
     if (!actor) return reply.code(400).send({ error: "unknown actor" });
-    return levelUpOptions(ctx.manager.srd(), actor);
+    return levelUpOptions(sess.manager.srd(), actor);
   });
 
   // --- Level-up (#13): wire the GUI choices through the engine --------------
@@ -808,12 +840,13 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
   }>(
     "/api/level-up",
     async (req, reply) => {
+      const sess = await registry.resolve(req);
       const actor = req.body?.actor;
       if (!actor) return reply.code(400).send({ error: "missing actor" });
-      const gs = ctx.manager.buildGameState();
-      const before = ctx.manager.session.log.length;
+      const gs = sess.manager.buildGameState();
+      const before = sess.manager.session.log.length;
 
-      const lv = await ctx.manager.applyTool(gs, "level_up", { actor });
+      const lv = await sess.manager.applyTool(gs, "level_up", { actor });
       if (!lv.ok) return reply.code(400).send({ error: lv.error });
       // The engine signals a refused level-up (e.g. not enough XP) by returning
       // an `{ error }` result rather than throwing, so `lv.ok` stays true. Surface
@@ -821,68 +854,72 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
       const lvErr = (lv.result as { error?: string } | undefined)?.error;
       if (typeof lvErr === "string") return reply.code(400).send({ error: lvErr });
       if (req.body?.subclass) {
-        const r = await ctx.manager.applyTool(gs, "choose_subclass", { actor, subclass: req.body.subclass });
+        const r = await sess.manager.applyTool(gs, "choose_subclass", { actor, subclass: req.body.subclass });
         if (!r.ok) return reply.code(400).send({ error: r.error });
       }
       if (req.body?.asi && Object.keys(req.body.asi).length) {
-        const r = await ctx.manager.applyTool(gs, "ability_increase", { actor, increments: req.body.asi });
+        const r = await sess.manager.applyTool(gs, "ability_increase", { actor, increments: req.body.asi });
         if (!r.ok) return reply.code(400).send({ error: r.error });
       }
       if (Array.isArray(req.body?.feats) && req.body.feats.length) {
-        await ctx.manager.applyTool(gs, "grant_feat", { actor, feats: req.body.feats });
+        await sess.manager.applyTool(gs, "grant_feat", { actor, feats: req.body.feats });
       }
       if (Array.isArray(req.body?.spells) && req.body.spells.length) {
-        await ctx.manager.applyTool(gs, "learn_spell", { actor, spells: req.body.spells });
+        await sess.manager.applyTool(gs, "learn_spell", { actor, spells: req.body.spells });
       }
 
-      for (const entry of ctx.manager.session.log.slice(before)) ctx.bus.emit({ type: "log", entry });
+      for (const entry of sess.manager.session.log.slice(before)) sess.bus.emit({ type: "log", entry });
       // Level-up is a durable sheet change; persist notes and reload in place.
-      await ctx.manager.flushDurable(gs);
-      await reopenManager();
-      ctx.bus.emit({ type: "reload", reason: "level-up" });
+      await sess.manager.flushDurable(gs);
+      await sess.reopen();
+      sess.bus.emit({ type: "reload", reason: "level-up" });
       return { ok: true, result: lv.result };
     },
   );
 
   /** Full scene + state snapshot for initial client hydration. */
-  app.get("/api/state", async () => {
+  app.get("/api/state", async (req) => {
+    const sess = await registry.resolve(req);
     // The current model + any alternates, so the chat's "Jiným modelem" re-roll
     // (#54) can offer a picker without a separate round-trip.
     const stored = await loadSettings(config.vaultPath);
     return {
-      campaign: ctx.manager.campaign.config,
-      session: ctx.manager.session,
-      actors: ctx.manager.campaign.actors,
-      locations: ctx.manager.campaign.locations,
-      encounters: ctx.manager.campaign.encounters,
-      items: ctx.manager.campaign.items,
-      lore: ctx.manager.campaign.lore,
-      factions: ctx.manager.campaign.factions,
-      npcs: ctx.manager.campaign.npcs,
-      worldEvents: ctx.manager.campaign.worldEvents,
+      campaign: sess.manager.campaign.config,
+      session: sess.manager.session,
+      actors: sess.manager.campaign.actors,
+      locations: sess.manager.campaign.locations,
+      encounters: sess.manager.campaign.encounters,
+      items: sess.manager.campaign.items,
+      lore: sess.manager.campaign.lore,
+      factions: sess.manager.campaign.factions,
+      npcs: sess.manager.campaign.npcs,
+      worldEvents: sess.manager.campaign.worldEvents,
       models: { current: config.llm.model, alts: stored.llm?.altModels ?? [] },
     };
   });
 
   /** Instantiate an authored encounter into live combat, then auto-resolve AI. */
   app.post<{ Params: { id: string } }>("/api/encounter/:id", async (req, reply) => {
-    const gs = ctx.manager.buildGameState();
-    const before = ctx.manager.session.log.length;
-    const res = await startEncounter(ctx.manager, gs, req.params.id);
+    const sess = await registry.resolve(req);
+    const llm = makeLlm(sess.manager);
+    const gs = sess.manager.buildGameState();
+    const before = sess.manager.session.log.length;
+    const res = await startEncounter(sess.manager, gs, req.params.id);
     if (!res.ok) return reply.code(400).send({ error: res.error });
-    for (const entry of ctx.manager.session.log.slice(before)) {
-      ctx.bus.emit({ type: "log", entry });
+    for (const entry of sess.manager.session.log.slice(before)) {
+      sess.bus.emit({ type: "log", entry });
     }
-    await ctx.manager.checkpoint(gs);
-    ctx.bus.emit({ type: "state", state: ctx.manager.session });
-    await meteredTurn(req, "llm-ai-turns", llm, (l) => resolveAiTurns({ manager: ctx.manager, llm: l, bus: ctx.bus, gs }), false);
+    await sess.manager.checkpoint(gs);
+    sess.bus.emit({ type: "state", state: sess.manager.session });
+    await meteredTurn(req, "llm-ai-turns", llm, (l) => resolveAiTurns({ manager: sess.manager, llm: l, bus: sess.bus, gs }), false);
     return res;
   });
 
   /** Serve a campaign asset (map images, etc.), path-confined to the campaign. */
   app.get<{ Params: { "*": string } }>("/api/asset/*", async (req, reply) => {
+    const sess = await registry.resolve(req);
     const rel = req.params["*"] ?? "";
-    const base = path.resolve(ctx.manager.campaign.dir);
+    const base = path.resolve(sess.manager.campaign.dir);
     const target = path.resolve(base, rel);
     // Confine to the campaign dir and to image assets only (never notes/state).
     if (!target.startsWith(base + path.sep)) {
@@ -911,13 +948,15 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
   /** DM opening scene for a fresh campaign (#31). Runs once — a no-op if the
       session already has any chat history, so reloads never re-trigger it. */
   app.post("/api/intro", async (req, reply) => {
-    const hasHistory = ctx.manager.session.chat.some(
+    const sess = await registry.resolve(req);
+    const llm = makeLlm(sess.manager);
+    const hasHistory = sess.manager.session.chat.some(
       (m) => m.role === "user" || m.role === "assistant",
     );
-    if (hasHistory || ctx.manager.session.ending) return { started: false };
+    if (hasHistory || sess.manager.session.ending) return { started: false };
     try {
       const { intro } = await meteredTurn(req, "llm-intro", llm, (l) =>
-        runIntro({ manager: ctx.manager, llm: l, bus: ctx.bus }),
+        runIntro({ manager: sess.manager, llm: l, bus: sess.bus }),
       );
       return { started: true, intro };
     } catch (err) {
@@ -928,9 +967,11 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
 
   /** Generate a "previously on…" recap of the story so far (§6.6). */
   app.post("/api/recap", async (req, reply) => {
+    const sess = await registry.resolve(req);
+    const llm = makeLlm(sess.manager);
     try {
       return await meteredTurn(req, "llm-recap", llm, (l) =>
-        runRecap({ manager: ctx.manager, llm: l, bus: ctx.bus }),
+        runRecap({ manager: sess.manager, llm: l, bus: sess.bus }),
       );
     } catch (err) {
       if (err instanceof InsufficientCreditsError) return reply.code(402).send({ error: err.message });
@@ -939,8 +980,9 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
   });
 
   /** The append-only human-readable session diary (handoff/inspection, §6.6). */
-  app.get("/api/log", async () => {
-    const file = path.join(ctx.manager.campaign.dir, "state", "session-log.md");
+  app.get("/api/log", async (req) => {
+    const sess = await registry.resolve(req);
+    const file = path.join(sess.manager.campaign.dir, "state", "session-log.md");
     try {
       const text = await fs.readFile(file, "utf8");
       return { exists: true, text };
@@ -951,31 +993,34 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
 
   /** Read-only: cells the actor can reach this turn (for grid highlighting). */
   app.get<{ Params: { actor: string } }>("/api/reachable/:actor", async (req) => {
-    const gs = ctx.manager.buildGameState();
-    const result = await ctx.manager.applyTool(gs, "reachable", { actor: req.params.actor });
+    const sess = await registry.resolve(req);
+    const gs = sess.manager.buildGameState();
+    const result = await sess.manager.applyTool(gs, "reachable", { actor: req.params.actor });
     return result.ok ? result.result : { cells: [], budget: 0 };
   });
 
   /** Player free-text action → the LLM/engine turn loop. */
   app.post<{ Body: { input: string; as?: string } }>("/api/action", async (req, reply) => {
+    const sess = await registry.resolve(req);
+    const llm = makeLlm(sess.manager);
     const input = (req.body?.input ?? "").trim();
     if (!input) return reply.code(400).send({ error: "empty input" });
     // A finished campaign (party wipe, #23) accepts no further actions until
     // the player rolls back to an earlier snapshot.
-    if (ctx.manager.session.ending)
-      return reply.code(409).send({ error: ctx.manager.session.ending.reason });
+    if (sess.manager.session.ending)
+      return reply.code(409).send({ error: sess.manager.session.ending.reason });
     try {
       // Checkpoint the pre-turn state so the player can undo this message.
-      await checkpointTurn(ctx.manager.campaign.dir, `Před: „${input.slice(0, 40)}“`);
+      await checkpointTurn(sess.manager.campaign.dir, `Před: „${input.slice(0, 40)}“`);
       const partyVoice = req.body?.as === "party";
       const { narration } = await meteredTurn(req, "llm-turn", llm, (l) =>
-        runTurn({ manager: ctx.manager, llm: l, bus: ctx.bus, input, partyVoice }),
+        runTurn({ manager: sess.manager, llm: l, bus: sess.bus, input, partyVoice }),
       );
       return { narration };
     } catch (err) {
       if (err instanceof InsufficientCreditsError) return reply.code(402).send({ error: err.message });
       const message = err instanceof Error ? err.message : String(err);
-      ctx.bus.emit({ type: "error", message });
+      sess.bus.emit({ type: "error", message });
       return reply.code(500).send({ error: message });
     }
   });
@@ -989,35 +1034,39 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
    * (#12) is unaffected.
    */
   app.post<{ Body: { model?: string } }>("/api/regenerate", async (req, reply) => {
+    const sess = await registry.resolve(req);
     // The player's last stated action — captured before the rewind wipes it.
-    const lastUser = [...ctx.manager.session.chat].reverse().find((m) => m.role === "user");
+    const lastUser = [...sess.manager.session.chat].reverse().find((m) => m.role === "user");
     if (!lastUser?.content) return reply.code(400).send({ error: "Není co přegenerovat — žádný předchozí tah." });
     const input = lastUser.content;
-    const dir = ctx.manager.campaign.dir;
+    const dir = sess.manager.campaign.dir;
     try {
       // Rewind to before the last turn (also clears an ending it may have caused),
       // re-open the manager on the rewound state, then re-checkpoint so the
       // regenerated turn can itself be undone.
       const undone = await undoLastTurn(dir);
       if (!undone) return reply.code(400).send({ error: "Není co přegenerovat — žádný předchozí tah." });
-      await reopenManager();
+      await sess.reopen();
       await checkpointTurn(dir, `Před: „${input.slice(0, 40)}“`);
-      const model = req.body?.model?.trim();
-      const turnLlm = model ? makeLlm(model) : llm;
+      // Build the narrator AFTER the rewind so the mock introspects the
+      // rewound manager, not the stale one.
+      const turnLlm = makeLlm(sess.manager, req.body?.model?.trim() || undefined);
       const { narration } = await meteredTurn(req, "llm-regenerate", turnLlm, (l) =>
-        runTurn({ manager: ctx.manager, llm: l, bus: ctx.bus, input }),
+        runTurn({ manager: sess.manager, llm: l, bus: sess.bus, input }),
       );
       return { narration };
     } catch (err) {
       if (err instanceof InsufficientCreditsError) return reply.code(402).send({ error: err.message });
       const message = err instanceof Error ? err.message : String(err);
-      ctx.bus.emit({ type: "error", message });
+      sess.bus.emit({ type: "error", message });
       return reply.code(500).send({ error: message });
     }
   });
 
   /** Direct engine command (UI buttons: move token, cast spell, etc.) — no LLM. */
   app.post<{ Body: { tool: string; args: unknown } }>("/api/command", async (req, reply) => {
+    const sess = await registry.resolve(req);
+    const llm = makeLlm(sess.manager);
     const { tool, args } = req.body ?? { tool: "", args: {} };
     if (!tool) return reply.code(400).send({ error: "missing tool" });
 
@@ -1027,7 +1076,7 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
     let enrichedArgs = args as Record<string, unknown>;
     if (tool === "travel") {
       const dest = (args as { to?: string }).to;
-      const here = ctx.manager.campaign.locations[ctx.manager.session.current_location];
+      const here = sess.manager.campaign.locations[sess.manager.session.current_location];
       const edge = dest ? (here?.connections ?? []).find((c) => c.to === dest) : undefined;
       const hasDuration = enrichedArgs.days !== undefined || enrichedArgs.hours !== undefined;
       if (edge?.travel?.days && !hasDuration) {
@@ -1035,37 +1084,38 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
       }
     }
 
-    const gs = ctx.manager.buildGameState();
-    const before = ctx.manager.session.log.length;
-    const result = await ctx.manager.applyTool(gs, tool, enrichedArgs);
-    for (const entry of ctx.manager.session.log.slice(before)) {
-      ctx.bus.emit({ type: "log", entry });
+    const gs = sess.manager.buildGameState();
+    const before = sess.manager.session.log.length;
+    const result = await sess.manager.applyTool(gs, tool, enrichedArgs);
+    for (const entry of sess.manager.session.log.slice(before)) {
+      sess.bus.emit({ type: "log", entry });
     }
-    await ctx.manager.checkpoint(gs);
-    ctx.bus.emit({ type: "state", state: ctx.manager.session });
+    await sess.manager.checkpoint(gs);
+    sess.bus.emit({ type: "state", state: sess.manager.session });
 
     // After successful travel, have the DM narrate the arrival scene (#41b).
     // These LLM follow-ups are metered but not balance-gated — the engine
     // command already ran; enforcement happens at the player-action boundary.
     if (tool === "travel" && result.ok) {
-      await meteredTurn(req, "llm-arrival", llm, (l) => runArrival({ manager: ctx.manager, llm: l, bus: ctx.bus }), false);
+      await meteredTurn(req, "llm-arrival", llm, (l) => runArrival({ manager: sess.manager, llm: l, bus: sess.bus }), false);
     } else {
       // For non-travel commands, auto-resolve AI turns as before (§8.3).
-      await meteredTurn(req, "llm-ai-turns", llm, (l) => resolveAiTurns({ manager: ctx.manager, llm: l, bus: ctx.bus, gs }), false);
+      await meteredTurn(req, "llm-ai-turns", llm, (l) => resolveAiTurns({ manager: sess.manager, llm: l, bus: sess.bus, gs }), false);
     }
 
     return result;
   });
 
   /** SSE stream of game events (§13). */
-  app.get("/api/events", (req, reply) => {
+  app.get("/api/events", async (req, reply) => {
+    const sess = await registry.resolve(req);
     reply.raw.writeHead(200, {
       "Content-Type": "text/event-stream",
       "Cache-Control": "no-cache",
       Connection: "keep-alive",
     });
     reply.raw.write(`event: ready\ndata: {}\n\n`);
-    const unsubscribe = ctx.bus.subscribe((event) => {
+    const unsubscribe = sess.bus.subscribe((event) => {
       reply.raw.write(`event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`);
     });
     const keepAlive = setInterval(() => reply.raw.write(`: ping\n\n`), 25000);
@@ -1081,15 +1131,16 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
     async (req, reply) => {
       if (!config.image)
         return reply.code(503).send({ error: "Generování obrázků není nakonfigurováno (chybí adresa poskytovatele)" });
+      const sess = await registry.resolve(req);
       const { subject, id } = req.body ?? {};
       if (!subject) return reply.code(400).send({ error: "Chybí subject" });
       try {
         enforceCredits(req);
         const prompt = buildPrompt(
           subject,
-          ctx.manager.campaign.actors,
-          ctx.manager.campaign.locations,
-          ctx.manager.session,
+          sess.manager.campaign.actors,
+          sess.manager.campaign.locations,
+          sess.manager.session,
           id,
         );
         const client = new ImageClient(config.image);
