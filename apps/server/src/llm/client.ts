@@ -60,6 +60,13 @@ function parseArgs(raw: string): unknown {
 export class LlmClient implements Llm {
   private client: OpenAI;
   private model: string;
+  /**
+   * Whether to emit Anthropic-style prompt-cache breakpoints (#56b cost). Only
+   * OpenRouter passes `cache_control` through to the upstream provider; the
+   * Mistral default ignores/​rejects it, so we gate on the base URL to keep that
+   * path byte-identical.
+   */
+  private readonly cacheable: boolean;
 
   /**
    * `modelOverride` swaps the model for this instance only (#54 "Jiným
@@ -69,6 +76,7 @@ export class LlmClient implements Llm {
   constructor(config: Config, modelOverride?: string) {
     this.client = new OpenAI({ apiKey: config.llm.apiKey || "missing", baseURL: config.llm.baseUrl });
     this.model = modelOverride?.trim() || config.llm.model;
+    this.cacheable = /openrouter\.ai/i.test(config.llm.baseUrl);
   }
 
   async chat(
@@ -80,7 +88,7 @@ export class LlmClient implements Llm {
 
     const resp = await this.client.chat.completions.create({
       model: this.model,
-      messages: messages as never,
+      messages: (this.cacheable ? withCacheBreakpoints(messages) : messages) as never,
       tools: tools as never,
       tool_choice: "auto",
       temperature: 0.7,
@@ -107,7 +115,7 @@ export class LlmClient implements Llm {
   ): Promise<LlmResponse> {
     const stream = await this.client.chat.completions.create({
       model: this.model,
-      messages: messages as never,
+      messages: (this.cacheable ? withCacheBreakpoints(messages) : messages) as never,
       tools: tools as never,
       tool_choice: "auto",
       temperature: 0.7,
@@ -142,6 +150,39 @@ export class LlmClient implements Llm {
     }));
     return { content: content || null, toolCalls, usage };
   }
+}
+
+/**
+ * Add Anthropic-style prompt-cache breakpoints (#56b cost). The turn loop
+ * resends the whole context on every one of up to MAX_TOOL_ROUNDS rounds, so
+ * the dominant cost is that repeated prefix. Two `cache_control` breakpoints
+ * (max 4 for Anthropic) cover it:
+ *
+ *   1. the system prompt — large and byte-identical on every call;
+ *   2. a rolling breakpoint on the final message — caches the entire request
+ *      prefix, so the next round (which shares that prefix verbatim) reads it at
+ *      ~0.1x instead of paying full input price again.
+ *
+ * OpenRouter forwards `cache_control` to Anthropic/Gemini; DeepSeek caches
+ * automatically and ignores it. Messages are shallow-cloned so the caller's
+ * array is untouched; only string content is wrapped (null-content assistant
+ * tool-call turns are skipped).
+ */
+function withCacheBreakpoints(messages: ChatMsg[]): ChatMsg[] {
+  const out = messages.map((m) => ({ ...m }));
+  const mark = (m: ChatMsg): boolean => {
+    if (typeof m.content !== "string" || m.content.length === 0) return false;
+    (m as { content: unknown }).content = [
+      { type: "text", text: m.content, cache_control: { type: "ephemeral" } },
+    ];
+    return true;
+  };
+  const sys = out.find((m) => m.role === "system");
+  if (sys) mark(sys);
+  for (let i = out.length - 1; i >= 0; i--) {
+    if (out[i] !== sys && mark(out[i]!)) break;
+  }
+  return out;
 }
 
 /** Map an OpenAI-shaped usage object to our minimal {@link TokenUsage}. */
