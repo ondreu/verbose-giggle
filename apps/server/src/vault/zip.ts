@@ -32,22 +32,32 @@ interface Entry {
   offset: number;
 }
 
-/** Recursively collect files under `dir` as POSIX-relative entries. */
-async function collect(dir: string, base = ""): Promise<{ name: string; data: Buffer }[]> {
+/**
+ * Recursively collect files under `dir` as POSIX-relative entries. An optional
+ * `exclude` predicate (tested against the POSIX-relative path) skips files or
+ * whole subtrees — used by the vault backup (#57b) to avoid zipping the backups
+ * folder into itself.
+ */
+async function collect(
+  dir: string,
+  exclude?: (rel: string) => boolean,
+  base = "",
+): Promise<{ name: string; data: Buffer }[]> {
   const out: { name: string; data: Buffer }[] = [];
   const entries = await fs.readdir(dir, { withFileTypes: true });
   for (const e of entries) {
     const abs = path.join(dir, e.name);
     const rel = base ? `${base}/${e.name}` : e.name;
-    if (e.isDirectory()) out.push(...(await collect(abs, rel)));
+    if (exclude?.(rel)) continue;
+    if (e.isDirectory()) out.push(...(await collect(abs, exclude, rel)));
     else if (e.isFile()) out.push({ name: rel, data: await fs.readFile(abs) });
   }
   return out;
 }
 
 /** Build a ZIP archive (STORE method) of every file under `dir`. */
-export async function zipDir(dir: string): Promise<Buffer> {
-  const files = await collect(dir);
+export async function zipDir(dir: string, exclude?: (rel: string) => boolean): Promise<Buffer> {
+  const files = await collect(dir, exclude);
   const local: Buffer[] = [];
   const entries: Entry[] = [];
   let offset = 0;
@@ -116,6 +126,16 @@ export async function zipDir(dir: string): Promise<Buffer> {
 export async function listFiles(dir: string): Promise<string[]> {
   const files = await collect(dir);
   return files.map((f) => f.name).sort();
+}
+
+/** Total byte size of every file under `dir` (0 if it doesn't exist). */
+export async function dirSize(dir: string): Promise<number> {
+  try {
+    const files = await collect(dir);
+    return files.reduce((sum, f) => sum + f.data.length, 0);
+  } catch {
+    return 0;
+  }
 }
 
 /** Reject zip-slip / absolute entries; return a confined POSIX-relative path. */

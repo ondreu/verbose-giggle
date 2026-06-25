@@ -37,8 +37,9 @@ granty, záložka *Kredity*, ukazatel v hlavičce — chybí jen platby/Stripe),
 1. **#48 — i18n** (P1): infrastruktura lokalizace v `@adm/schemas` (`cs`/`en`,
    runtime přepínání) + tři přepínače. Aditivní a nezávislé, nízké riziko.
 2. Drobnosti: **#58b/#58c** (per-user preference + rozdělení global vs user
-   settings), zbytek **#57b** (globální settings, správa kampaní/vaultů, logy,
-   health), platby (#56d), **#45** partials (obsah — dělá autor).
+   settings), zbytek **#57b** (už jen prohlížeč serverových logů — globální
+   settings, správa kampaní/vaultů, health i zálohy hotové), platby (#56d),
+   **#45** partials (obsah — dělá autor).
 
 > **#55f část 2 — izolace dat per uživatel: HOTOVO** (`session/registry.ts`,
 > `vault/migrate-user.ts`, `test/isolation.test.ts`). Single-tenant
@@ -161,6 +162,20 @@ ne „nice to have".
   pohybů; anonym vidí vysvětlení) přes `GET /api/credits`. Ukazatel zůstatku
   v hlavičce (`CreditBadge`, jen hosted + přihlášený, polluje). Admin má
   per-uživatele tlačítko „kredity". Zbývá jen „koupit" (čeká na platby/Stripe).
+- **[x] #56f — AI management & ceník per model / per akce.** Účtování přepnuto
+  z tokenového na **per akci**: plochá cena **za zprávu** (jeden LLM tah), klíčovaná
+  modelem (`pricing.perModelMessage[model]` s fallbackem `perMessage`), plus plochá
+  cena **za obrázek** a **za generování kampaně** (`perCampaign`). Generování kampaně
+  (`forgeCampaign`) je nově metrované a gated (dřív zdarma). Tokenové sazby zůstaly
+  jako **cost-basis** (loguje se na tah), neúčtují se. Účtuje se jen hráčův tah
+  (`llm-turn`/`llm-regenerate`); systémové beaty (intro/recap/arrival/AI tahy) běží
+  bez per-message poplatku. Vše perzistované ve `Settings.server.pricing` a živé přes
+  config holder. Dev panel: sekce *AI & ceník (per akce)* — výchozí cena/zpráva,
+  cena/kampaň, cena/obrázek, **tabulka per-model** (primární + `altModels` z
+  `GET /api/admin/server-settings`.models), TTS + token cost-basis pod „details".
+  Testy: `credits.test.ts` (`creditsPerMessage`), `admin.test.ts` (perzistence
+  per-model ceníku + validace). Zbývá (volitelně): per-model i pro obrázky/TTS,
+  reálný $ přepočet cost vs markup v přehledu spotřeby.
 
 ### #57 — Dev / admin panel
 
@@ -172,9 +187,17 @@ ne „nice to have".
   `auth-guard.test.ts` + `auth.test.ts`.
 - **[~] #57b — Rozsah.** Hotovo: seznam uživatelů + overview počty; mutace
   `PUT /api/admin/users/:id/role`, `…/verify`, `DELETE …/:id` (ban — smaže i
-  session), s pojistkami proti self-demote/self-delete; `GET /api/admin/audit`.
-  Zbývá: ruční úprava kreditů (#56), přehled spotřeby/nákladů, globální server
-  settings, správa kampaní/vaultů, logy, health.
+  session), s pojistkami proti self-demote/self-delete; `GET /api/admin/audit`;
+  ruční úprava kreditů (#56d). **Nově (dev panel):** globální server settings
+  (`GET/PUT /api/admin/server-settings` — auth flagy + zapnutí kreditů + ceník,
+  perzistované do vault `settings.json` přes `Settings.server` a aplikované živě
+  sdíleným config holderem v `index.ts`); přehled spotřeby/nákladů
+  (`GET /api/admin/usage` ← `CreditStore.usageSummary`); správa kampaní/vaultů
+  napříč tenanty (`GET /api/admin/vaults`, export-zip, delete; confinement); běh
+  serveru (`GET /api/admin/health` — uptime, paměť, sezení, poskytovatelé);
+  zálohy celého vaultu (`POST/GET/DELETE /api/admin/backups`, ZIP uložený do
+  `<vault>/backups/` → přežije nasazení). UI: `AdminPage` rozdělená do záložek.
+  Zbývá: prohlížeč serverových logů (nad rámec audit logu).
 - **[x] #57c — Audit log.** Append-only tabulka `audit_log` (v3 migrace) +
   `AuditStore`; každá admin mutace (role/verify/delete) zapíše záznam s actorem,
   cílem a detailem. `auth/audit.ts`. Testy v `admin.test.ts`.
@@ -200,10 +223,41 @@ ne „nice to have".
   server-config (admin #57) vs. per-user-config (#58); single-user self-hosted =
   obojí splývá.
 
+### #59 — Bezpečnost & hardening (dev panel / multi-tenant)
+
+Vyvstalo při stavbě dev panelu (#57b). Privilegovaná, mutující plocha + reálné
+kredity = bezpečnost přestává být „nice to have".
+
+- **[ ] #59a — CSRF.** Admin i ostatní mutace (`PUT/POST/DELETE`) se autentizují
+  jen session cookie (`SameSite=Lax`). Lax zastaví cross-site GET, ne cross-site
+  `POST` z formuláře (např. `POST /api/admin/backups`). Přidat CSRF token nebo
+  vyžadovat vlastní hlavičku (`X-Requested-With`) na state-changing `/api` routách.
+- **[ ] #59b — Rate-limit & brute-force.** Limit na `/api/auth/login` a
+  `/api/auth/register` (+ případně CAPTCHA). Dnes bez omezení.
+- **[ ] #59c — Hardening záloh (#57b).** (1) Konzistence: zálohuje se živý SQLite
+  soubor — před zipem `PRAGMA wal_checkpoint(TRUNCATE)` / `VACUUM INTO` pro čistý
+  snapshot. (2) Paměť: `zipDir` staví celý archiv v `Buffer` — u velkého vaultu
+  (mapy) hrozí nafouknutí RSS; streamovat. (3) Retence: zálohy rostou bez limitu
+  ve vault volume — „nech posledních N" + strop. (4) Hlídaný restore (upload →
+  validace → swap při příštím startu). (5) Záloha obsahuje hashe hesel — citlivá.
+- **[ ] #59d — Mazání otevřené kampaně.** `DELETE /api/admin/vaults/...` smaže
+  složku, ale neinvaliduje cachovaný `SessionManager` daného scope → další tah
+  může spadnout. Reopen/invalidace dotčeného scope.
+- **[ ] #59e — GDPR mazání dat.** Po izolaci (#55f-2) má každý uživatel
+  `<vault>/users/<id>/`; `deleteAccount` by měl tento podstrom smazat (+ export
+  dat, souhlas). Dnes maže jen řádek uživatele a session.
+- **[ ] #59f — Živý přepínač `allowAnonymous`.** Přepnutí za běhu mění routing
+  izolace dat uprostřed sezení (ostrá hrana). Buď varovat v UI, nebo udělat tento
+  jeden flag „až po restartu".
+- **[ ] #59g — Prohlížeč serverových logů.** Poslední otevřená položka #57b
+  (tail běhových logů nad rámec audit logu).
+- **[ ] #59h — Stránkování.** Seznamy users/usage/audit/vaults jsou bez limitu;
+  poroste-li ledger/audit, doplnit paginaci.
+
 ### Co snadno zapomeneme
 
-- **Bezpečnost:** rate-limit registrace/loginu (brute-force), CAPTCHA, CSRF
-  u cookie session, ochrana cizích kreditů, secret management.
+- **Bezpečnost:** viz **#59** — rate-limit, CAPTCHA, CSRF, ochrana cizích
+  kreditů, secret management.
 - **Email infra:** dnes nulová — SMTP nebo služba (Resend/SES) + setup docs.
 - **GDPR:** mazání účtu smaže i vault data; export; souhlas (české UI → EU).
 - **Migrace dat:** dnešní vault nemá majitele — přiřadit „adminovi" nebo nechat

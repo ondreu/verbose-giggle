@@ -57,6 +57,14 @@ export class SessionStore {
     this.db.prepare("DELETE FROM sessions WHERE user_id = ?").run(userId);
   }
 
+  /** Count sessions that haven't expired (admin health view, #57b). */
+  countActive(): number {
+    const row = this.db
+      .prepare("SELECT COUNT(*) AS n FROM sessions WHERE expires_at > ?")
+      .get(new Date().toISOString()) as { n: number };
+    return Number(row.n);
+  }
+
   /** Remove expired rows (housekeeping). Returns the number deleted. */
   pruneExpired(): number {
     const res = this.db

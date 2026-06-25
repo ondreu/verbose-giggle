@@ -22,8 +22,11 @@ export interface AuthServiceOptions {
   resetTtlMs?: number;
   /** Login session lifetime. Defaults to 30 days. */
   sessionTtlMs?: number;
-  /** Require a verified email before login is allowed. Defaults to true. */
-  requireVerifiedEmail?: boolean;
+  /**
+   * Require a verified email before login is allowed. Defaults to true.
+   * Accepts a getter so a live config change (admin panel, #57b) is honoured.
+   */
+  requireVerifiedEmail?: boolean | (() => boolean);
   /** Email granted the admin role on registration / bootstrap (#57). */
   adminEmail?: string | null;
 }
@@ -50,7 +53,7 @@ export class AuthService {
   private readonly verifyTtlMs: number;
   private readonly resetTtlMs: number;
   private readonly sessionTtlMs: number;
-  private readonly requireVerifiedEmail: boolean;
+  private readonly requireVerifiedEmail: () => boolean;
 
   constructor(
     private readonly users: UserStore,
@@ -61,7 +64,8 @@ export class AuthService {
     this.verifyTtlMs = opts.verifyTtlMs ?? DAY_MS;
     this.resetTtlMs = opts.resetTtlMs ?? 60 * 60 * 1000;
     this.sessionTtlMs = opts.sessionTtlMs ?? 30 * DAY_MS;
-    this.requireVerifiedEmail = opts.requireVerifiedEmail ?? true;
+    const rve = opts.requireVerifiedEmail ?? true;
+    this.requireVerifiedEmail = typeof rve === "function" ? rve : () => rve;
   }
 
   /** Session lifetime in ms (the cookie route mirrors this as Max-Age). */
@@ -155,7 +159,7 @@ export class AuthService {
     const hash = this.users.getPasswordHash(user.id);
     if (!hash || !(await verifyPassword(password, hash))) throw invalid;
 
-    if (this.requireVerifiedEmail && !user.emailVerified) {
+    if (this.requireVerifiedEmail() && !user.emailVerified) {
       throw new AuthError(403, "Než se přihlásíš, ověř svůj e-mail.");
     }
 

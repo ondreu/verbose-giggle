@@ -47,6 +47,34 @@ export interface Settings {
   srdPath?: string;
   /** Campaign folder name under <vault>/campaigns (applied on next start). */
   campaign?: string;
+  /**
+   * Operational server settings editable from the admin/dev panel (#57b).
+   * These overlay the env defaults (`applySettings`) the same way provider
+   * credentials do, so they persist with the vault and survive a redeploy.
+   * Distinct from per-user settings: this section is global / op-level.
+   */
+  server?: {
+    /** Hosted edition gate: false = a session is required for protected routes. */
+    allowAnonymous?: boolean;
+    /** Whether self-service registration is open. */
+    registrationEnabled?: boolean;
+    /** Require a verified email before login. */
+    requireVerifiedEmail?: boolean;
+    /** Charge metered token/image/TTS usage against user credits. */
+    creditsEnabled?: boolean;
+    /** Credit pricing (smallest unit). Missing fields fall back to env/defaults. */
+    pricing?: {
+      /** Per-action billing (#56f). */
+      perMessage?: number;
+      perModelMessage?: Record<string, number>;
+      perCampaign?: number;
+      perImage?: number;
+      perThousandTtsChars?: number;
+      /** Token cost-basis (logging). */
+      perThousandPromptTokens?: number;
+      perThousandCompletionTokens?: number;
+    };
+  };
 }
 
 function settingsPath(vaultPath: string): string {
@@ -77,11 +105,16 @@ export async function saveSettings(vaultPath: string, patch: Settings): Promise<
     llm: { ...current.llm, ...patch.llm },
     image: { ...current.image, ...patch.image },
     tts: { ...current.tts, ...patch.tts },
+    server: { ...current.server, ...patch.server,
+      pricing: { ...current.server?.pricing, ...patch.server?.pricing } },
   };
   // Drop empty sub-objects so the file stays tidy.
   if (merged.llm && Object.keys(merged.llm).length === 0) delete merged.llm;
   if (merged.image && Object.keys(merged.image).length === 0) delete merged.image;
   if (merged.tts && Object.keys(merged.tts).length === 0) delete merged.tts;
+  if (merged.server?.pricing && Object.keys(merged.server.pricing).length === 0)
+    delete merged.server.pricing;
+  if (merged.server && Object.keys(merged.server).length === 0) delete merged.server;
 
   const file = settingsPath(vaultPath);
   const tmp = `${file}.tmp`;

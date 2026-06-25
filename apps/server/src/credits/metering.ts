@@ -9,17 +9,37 @@
 import type { Llm, ChatMsg, LlmResponse, TokenUsage, ToolSpec } from "../llm/client.js";
 
 export interface CreditPricing {
-  /** Credits charged per 1000 prompt (input) tokens, after markup. */
-  perThousandPromptTokens: number;
-  /** Credits charged per 1000 completion (output) tokens, after markup. */
-  perThousandCompletionTokens: number;
+  /**
+   * Per-action billing (#56f). The player is charged a flat price per message
+   * (one LLM narration turn), keyed by the model that ran, with `perMessage` as
+   * the fallback when a model has no explicit rate. Predictable for players;
+   * per-model so a pricey model (Opus) can cost more than a cheap one (Haiku).
+   */
+  perMessage: number;
+  /** Per-model message-price overrides: model id → credits per message. */
+  perModelMessage: Record<string, number>;
+  /** Flat credits per campaign generation (the forge, #46). */
+  perCampaign: number;
   /** Credits charged per generated image, after markup. */
   perImage: number;
   /** Credits charged per 1000 characters of synthesized speech, after markup. */
   perThousandTtsChars: number;
+  /**
+   * Token rates, kept underneath as a **cost basis** (logged per turn) so the
+   * operator can sanity-check that the per-message price covers real token cost.
+   * No longer the primary charge for LLM turns.
+   */
+  perThousandPromptTokens: number;
+  perThousandCompletionTokens: number;
 }
 
-/** Integer credit cost for a token total at the given pricing (rounds up). */
+/** Flat per-message credit price for a model (its override, else the default). */
+export function creditsPerMessage(pricing: CreditPricing, model: string | undefined): number {
+  const rate = model != null ? pricing.perModelMessage[model] : undefined;
+  return Math.ceil(rate ?? pricing.perMessage);
+}
+
+/** Token cost basis for a turn at the given pricing (rounds up). For logging. */
 export function creditsForUsage(pricing: CreditPricing, usage: TokenUsage): number {
   const cost =
     (usage.promptTokens / 1000) * pricing.perThousandPromptTokens +
