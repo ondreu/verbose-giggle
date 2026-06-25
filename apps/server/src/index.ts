@@ -17,7 +17,7 @@ import { registerCreditRoutes } from "./routes/credits.js";
 import { loadOrCreateSecret } from "./auth/tokens.js";
 import { LogEmailSender, SmtpEmailSender, type EmailSender } from "./auth/email.js";
 import { AuthService } from "./auth/service.js";
-import { registerAuthGuard } from "./auth/middleware.js";
+import { registerAuthGuard, registerCsrfGuard } from "./auth/middleware.js";
 import { RateLimiter } from "./auth/rate-limit.js";
 
 async function main(): Promise<void> {
@@ -67,6 +67,8 @@ async function main(): Promise<void> {
   // Promote the designated operator to admin if they already registered (#57).
   const admin = authService.ensureAdmin();
   if (admin) app.log.info(`Admin role ensured for ${admin.email}`);
+  // Reject cross-site state-changing requests (#59a) before any handler runs.
+  registerCsrfGuard(app);
   // Resolve req.user from the session and gate protected routes (#55f part 1).
   // Getters so a live config change (admin panel, #57b) is honoured per request.
   registerAuthGuard(app, {

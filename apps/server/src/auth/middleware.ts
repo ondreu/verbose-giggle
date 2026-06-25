@@ -19,6 +19,32 @@ declare module "fastify" {
   }
 }
 
+/**
+ * CSRF guard (#59a). Session auth rides on a `SameSite=Lax` cookie, which stops
+ * cross-site GETs but NOT a cross-site state-changing `POST` (e.g. an attacker
+ * page auto-submitting a form to `/api/admin/backups`). We require a custom
+ * request header on every mutating `/api` call: browsers refuse to set custom
+ * headers cross-origin without a CORS preflight, and this app sends no
+ * permissive CORS headers, so the forged request never reaches the handler.
+ *
+ * Same-origin callers (the SPA and the server-rendered reset form) add the
+ * header explicitly. Safe methods (GET/HEAD/OPTIONS) and non-`/api` paths are
+ * exempt; so is the SPA shell and static assets.
+ */
+const CSRF_HEADER = "x-requested-with";
+const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
+
+export function registerCsrfGuard(app: FastifyInstance): void {
+  app.addHook("onRequest", async (req, reply) => {
+    if (SAFE_METHODS.has(req.method)) return;
+    const path = req.url.split("?", 1)[0]!;
+    if (!path.startsWith("/api/")) return;
+    if (typeof req.headers[CSRF_HEADER] !== "string") {
+      return reply.code(403).send({ error: "Chybí ochranná hlavička požadavku." });
+    }
+  });
+}
+
 /** API paths reachable without a session even when anonymous access is off. */
 function isPublicPath(url: string): boolean {
   // Strip query string for matching.

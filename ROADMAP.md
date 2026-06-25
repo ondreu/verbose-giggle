@@ -234,10 +234,12 @@ ne „nice to have".
 Vyvstalo při stavbě dev panelu (#57b). Privilegovaná, mutující plocha + reálné
 kredity = bezpečnost přestává být „nice to have".
 
-- **[ ] #59a — CSRF.** Admin i ostatní mutace (`PUT/POST/DELETE`) se autentizují
-  jen session cookie (`SameSite=Lax`). Lax zastaví cross-site GET, ne cross-site
-  `POST` z formuláře (např. `POST /api/admin/backups`). Přidat CSRF token nebo
-  vyžadovat vlastní hlavičku (`X-Requested-With`) na state-changing `/api` routách.
+- **[x] #59a — CSRF.** Hotovo: `registerCsrfGuard`
+  (`apps/server/src/auth/middleware.ts`) vyžaduje vlastní hlavičku
+  (`X-Requested-With`) na každém mutujícím `/api` požadavku — forged cross-site
+  `POST` ji bez CORS preflightu nenastaví. Klient ji přidává centrálně přes patch
+  `window.fetch` (`apps/web/src/csrf.ts`); server-rendered reset formulář ji
+  posílá taky.
 - **[~] #59b — Rate-limit & brute-force.** Hotovo: per-IP fixed-window limiter
   (`apps/server/src/auth/rate-limit.ts`) na `/api/auth/login` a
   `/api/auth/register`, konfigurovatelný přes `AUTH_*_RATE_*`; úspěšné přihlášení

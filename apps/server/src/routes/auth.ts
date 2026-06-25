@@ -84,7 +84,8 @@ const token=${tokenJson};
 const f=document.getElementById('f'),p=document.getElementById('p'),m=document.getElementById('m');
 f.addEventListener('submit',async(e)=>{
   e.preventDefault();m.textContent='';m.className='msg';
-  const res=await fetch('/api/auth/reset',{method:'POST',headers:{'content-type':'application/json'},
+  const res=await fetch('/api/auth/reset',{method:'POST',
+    headers:{'content-type':'application/json','x-requested-with':'fetch'},
     body:JSON.stringify({token,password:p.value})});
   const data=await res.json().catch(()=>({}));
   if(res.ok){m.textContent='Heslo bylo změněno. Můžeš se přihlásit.';m.className='msg ok';f.style.display='none';}
