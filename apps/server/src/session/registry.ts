@@ -175,6 +175,16 @@ export class SessionRegistry {
   }
 
   /**
+   * Forget a cached scope so its next resolve re-opens from disk (#59d/#59e).
+   * Used after a scope's data is deleted (account removal, campaign delete), so
+   * a stale in-memory `SessionManager` pointing at a now-gone directory can't be
+   * reused. No-op if the scope was never opened.
+   */
+  evict(key: string): void {
+    this.scopes.delete(key);
+  }
+
+  /**
    * Re-open every live scope's manager (e.g. the global SRD path changed) and
    * tell each scope's clients to re-hydrate. A single bus emit would only reach
    * the shared scope, so we fan out per-bus.

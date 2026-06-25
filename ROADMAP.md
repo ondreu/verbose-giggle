@@ -253,9 +253,11 @@ kredity = bezpečnost přestává být „nice to have".
 - **[ ] #59d — Mazání otevřené kampaně.** `DELETE /api/admin/vaults/...` smaže
   složku, ale neinvaliduje cachovaný `SessionManager` daného scope → další tah
   může spadnout. Reopen/invalidace dotčeného scope.
-- **[ ] #59e — GDPR mazání dat.** Po izolaci (#55f-2) má každý uživatel
-  `<vault>/users/<id>/`; `deleteAccount` by měl tento podstrom smazat (+ export
-  dat, souhlas). Dnes maže jen řádek uživatele a session.
+- **[~] #59e — GDPR mazání dat.** Hotovo: `DELETE /api/account` teď kromě řádku
+  uživatele a session maže i jeho izolovaný podstrom `<vault>/users/<id>/`
+  (`deleteUserVault`, `admin/ops.ts`) a evikuje cachovaný scope
+  (`SessionRegistry.evict`). Zbývá: export dat + souhlas; a totéž napojit na
+  admin smazání uživatele (`DELETE /api/admin/users/:id`).
 - **[ ] #59f — Živý přepínač `allowAnonymous`.** Přepnutí za běhu mění routing
   izolace dat uprostřed sezení (ostrá hrana). Buď varovat v UI, nebo udělat tento
   jeden flag „až po restartu".

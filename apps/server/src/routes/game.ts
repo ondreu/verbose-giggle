@@ -12,6 +12,7 @@ import { resolveAiTurns, runArrival, runIntro, runRecap, runTurn } from "../sess
 import { startEncounter } from "../session/encounter.js";
 import type { SessionManager } from "../session/manager.js";
 import { SessionRegistry, type UserSession } from "../session/registry.js";
+import { deleteUserVault } from "../admin/ops.js";
 import { createCampaign } from "../vault/scaffold.js";
 import { instantiateTemplate, listTemplates } from "../vault/templates.js";
 import { listFiles, unzipInto, zipDir } from "../vault/zip.js";
@@ -41,6 +42,13 @@ export interface GameContext {
    * flags see them without a restart. All changes persist in the vault.
    */
   exposeConfig?: (access: { get: () => Config; reload: () => Promise<Config> }) => void;
+  /**
+   * Hand `index.ts` a function that purges a user's isolated game data (#59e):
+   * deletes their `<vault>/users/<id>` subtree and evicts the cached scope so a
+   * stale manager isn't reused. Late-bound here (the registry lives in this
+   * module) and invoked by the account-deletion route.
+   */
+  exposePurgeUserScope?: (purge: (userId: string) => Promise<void>) => void;
 }
 
 /** Thrown by the metering helper when a user has no credits left (#56c). */
@@ -105,6 +113,11 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
   }
   // Hand index.ts a window into the live config (auth guard / flags / admin).
   ctx.exposeConfig?.({ get: () => config, reload: reloadConfig });
+  // …and a way to purge a deleted user's isolated data + drop its cached scope.
+  ctx.exposePurgeUserScope?.(async (userId) => {
+    await deleteUserVault(config.vaultPath, userId);
+    registry.evict(userId);
+  });
 
   /**
    * Build the narrator for the current config. Falls back to the offline mock

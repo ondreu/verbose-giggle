@@ -32,6 +32,12 @@ export interface AuthContext {
     login: RateLimiter;
     register: RateLimiter;
   };
+  /**
+   * Purge a deleted user's isolated game data (#59e): their `<vault>/users/<id>`
+   * subtree and cached scope. Optional so tests/self-hosted can omit it; when
+   * absent, account deletion still removes the DB row + sessions as before.
+   */
+  onAccountDeleted?: (userId: string) => Promise<void>;
 }
 
 /** Name of the session cookie. */
@@ -284,7 +290,10 @@ export async function registerAuthRoutes(app: FastifyInstance, ctx: AuthContext)
 
   app.delete("/api/account", async (req, reply) => {
     if (!req.user) return reply.code(401).send({ error: "Nepřihlášen." });
-    ctx.service.deleteAccount(req.user.id);
+    const userId = req.user.id;
+    ctx.service.deleteAccount(userId);
+    // GDPR (#59e): also purge the user's isolated vault data, not just the row.
+    await ctx.onAccountDeleted?.(userId);
     reply.clearCookie(SESSION_COOKIE, { path: "/" });
     return reply.send({ ok: true });
   });

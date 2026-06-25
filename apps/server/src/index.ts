@@ -36,6 +36,10 @@ async function main(): Promise<void> {
     get: () => config,
     reload: async () => config,
   };
+  // Late-bound by the game routes (which own the session registry, #59e). Until
+  // then a deleted account just drops its DB row; once wired it also purges the
+  // user's vault subtree and evicts their cached scope.
+  let purgeUserScope: (userId: string) => Promise<void> = async () => {};
 
   if (config.basicAuth) {
     const expected = "Basic " + Buffer.from(config.basicAuth).toString("base64");
@@ -107,6 +111,7 @@ async function main(): Promise<void> {
     service: authService,
     cookieSecure: config.auth.publicUrl.startsWith("https://"),
     rateLimit,
+    onAccountDeleted: (userId) => purgeUserScope(userId),
     flags: () => {
       const c = configAccess.get();
       return {
@@ -138,6 +143,9 @@ async function main(): Promise<void> {
     credits,
     exposeConfig: (access) => {
       configAccess = access;
+    },
+    exposePurgeUserScope: (purge) => {
+      purgeUserScope = purge;
     },
   });
 

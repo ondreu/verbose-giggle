@@ -52,6 +52,24 @@ export function scopeRoot(vaultPath: string, scope: string): string | null {
   return path.join(vaultPath, "users", scope);
 }
 
+/**
+ * Permanently delete a user's vault subtree (`<vault>/users/<id>`) on account
+ * deletion (GDPR, #59e). No-op (returns false) when the user never had isolated
+ * data or the id isn't a safe single segment. Confined to the vault, so it can
+ * never reach outside `<vault>/users/`.
+ */
+export async function deleteUserVault(vaultPath: string, userId: string): Promise<boolean> {
+  if (!isSafeSegment(userId)) return false;
+  const root = path.join(vaultPath, "users", userId);
+  try {
+    await fs.stat(root);
+  } catch {
+    return false; // nothing to delete
+  }
+  await fs.rm(root, { recursive: true, force: true });
+  return true;
+}
+
 export interface CampaignInfo {
   scope: string;
   folder: string;
