@@ -12,14 +12,16 @@
 #   * SMTP_*                       → real outbound mail for email verification
 #                                   and password reset (links use PUBLIC_URL).
 #   * TURNSTILE_*                  → Cloudflare Turnstile CAPTCHA on login/registration.
-#   * Caddy ingress is ALWAYS ON  → a commercial deploy is public, so public
-#                                   auto-HTTPS is the default (no --profile needed).
+#
+# Ingress is chosen with a --profile (see the cloudflared / caddy services
+# below). On a NAS, prefer cloudflare — it opens NO host ports, so it never
+# collides with the NAS admin UI already sitting on 80/443.
 #
 # Start it:
 #
 #   cd docker
 #   cp ../.env.example .env            # then fill in the [COMMERCIAL] items
-#   docker compose -f docker-compose.commercial.yml up -d
+#   docker compose -f docker-compose.commercial.yml --profile cloudflare up -d
 #
 # REQUIRED in .env before first start (see /.env.example for the full list):
 #   LLM_API_KEY, ADMIN_EMAIL, AUTH_SECRET, PUBLIC_URL,
@@ -117,16 +119,36 @@ services:
     expose:
       - "5000"
 
-  # Public auto-HTTPS. A commercial deploy is public by definition, so Caddy is
-  # a normal service here (NOT behind a --profile). Set your domain in
-  # docker/Caddyfile. Prefer Cloudflare Tunnel? Drop this service and add the
-  # cloudflared sidecar from docker-compose.yml instead.
+  # --- Ingress: pick ONE via --profile (a NAS often already uses 80/443 for
+  # its own admin UI, which makes Caddy fail to bind; Cloudflare Tunnel avoids
+  # that by opening NO host ports). -----------------------------------------
+  #
+  #   docker compose -f docker-compose.commercial.yml --profile cloudflare up -d
+  #   docker compose -f docker-compose.commercial.yml --profile caddy up -d
+  #
+  # Cloudflare Tunnel (recommended on a NAS): no open ports, cloudflared dials
+  # OUT to Cloudflare which terminates TLS and proxies to http://app:3000. Set
+  # CLOUDFLARE_TUNNEL_TOKEN in .env and route the tunnel's public hostname to
+  # http://app:3000 in the Zero Trust dashboard. PUBLIC_URL must be that hostname.
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    profiles: ["cloudflare"]
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
+    depends_on:
+      - app
+
+  # Caddy public HTTPS: only when the host's 80/443 are free. Set your domain
+  # in docker/Caddyfile.
   caddy:
     image: caddy:2
+    profiles: ["caddy"]
     restart: unless-stopped
     ports:
-      - "80:80"
-      - "443:443"
+      - "${CADDY_HTTP_PORT:-80}:80"
+      - "${CADDY_HTTPS_PORT:-443}:443"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile
       - caddy_data:/data
