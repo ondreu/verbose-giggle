@@ -267,6 +267,12 @@ function ServerTab({ onErr }: { onErr: ErrHandler }) {
       <section className="flex flex-col gap-2">
         <H2>Provoz účtů</H2>
         <Toggle label="Anonymní přístup (self-hosted)" checked={s.allowAnonymous} onChange={(v) => save({ allowAnonymous: v })} />
+        {s.allowAnonymousPendingRestart && (
+          <p className="font-log text-xs text-amber-400/90">
+            ⚠ Změna přihlašování se projeví hned, ale izolace dat (sdílený vs. per-uživatel vault)
+            se přepne až po restartu serveru.
+          </p>
+        )}
         <Toggle label="Registrace otevřená" checked={s.registrationEnabled} onChange={(v) => save({ registrationEnabled: v })} />
         <Toggle label="Vyžadovat ověřený e-mail při přihlášení" checked={s.requireVerifiedEmail} onChange={(v) => save({ requireVerifiedEmail: v })} />
         <Toggle label="Účtovat kredity (metering)" checked={s.creditsEnabled} onChange={(v) => save({ creditsEnabled: v })} />

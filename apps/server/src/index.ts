@@ -142,6 +142,7 @@ async function main(): Promise<void> {
     onScopeDataChanged: (scopeKey, reason) => invalidateScope(scopeKey, reason),
     checkpointDb: () => checkpointDatabase(db),
     backupRetention: config.backups.retention,
+    bootAllowAnonymous: config.auth.allowAnonymous,
     startedAtMs,
   });
   await registerCreditRoutes(app, { credits });

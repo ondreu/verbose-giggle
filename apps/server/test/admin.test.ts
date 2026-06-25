@@ -63,6 +63,7 @@ async function setup() {
     vaultPath,
     getConfig: () => config,
     reloadConfig,
+    bootAllowAnonymous: config.auth.allowAnonymous,
     startedAtMs: Date.now(),
     now: () => "2026-06-25T12:00:00.000Z",
   });
@@ -218,6 +219,25 @@ describe("admin dev panel (#57b)", () => {
     // Effective config rebuilt from the persisted file.
     expect(getConfig().credits.enabled).toBe(true);
     expect(getConfig().credits.pricing.perImage).toBe(99);
+    await app.close();
+  });
+
+  it("flags allowAnonymous as needing a restart once it drifts from boot (#59f)", async () => {
+    const { app, adminSid } = await setup();
+    // Boot value is true; before any change there's no pending restart.
+    const before = await app.inject({ method: "GET", url: "/api/admin/server-settings", ...asAdmin(adminSid) });
+    expect(before.json().allowAnonymousPendingRestart).toBe(false);
+
+    const res = await app.inject({
+      method: "PUT",
+      url: "/api/admin/server-settings",
+      payload: { allowAnonymous: false },
+      ...asAdmin(adminSid),
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().allowAnonymous).toBe(false);
+    // Live value now differs from the boot snapshot the routing still uses.
+    expect(res.json().allowAnonymousPendingRestart).toBe(true);
     await app.close();
   });
 

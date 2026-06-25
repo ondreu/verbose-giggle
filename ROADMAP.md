@@ -262,9 +262,11 @@ kredity = bezpečnost přestává být „nice to have".
   (`deleteUserVault`, `admin/ops.ts`) a evikuje cachovaný scope
   (`SessionRegistry.evict`). Zbývá: export dat + souhlas; a totéž napojit na
   admin smazání uživatele (`DELETE /api/admin/users/:id`).
-- **[ ] #59f — Živý přepínač `allowAnonymous`.** Přepnutí za běhu mění routing
-  izolace dat uprostřed sezení (ostrá hrana). Buď varovat v UI, nebo udělat tento
-  jeden flag „až po restartu".
+- **[x] #59f — Živý přepínač `allowAnonymous`.** Hotovo obojí: `SessionRegistry`
+  latchuje routing izolace dat z boot configu (přepne se až po restartu, ne
+  uprostřed sezení); admin panel varuje (`allowAnonymousPendingRestart`), když se
+  živá hodnota odchýlí od boot snapshotu. Auth gate (vyžadovat přihlášení) se mění
+  živě dál.
 - **[ ] #59g — Prohlížeč serverových logů.** Poslední otevřená položka #57b
   (tail běhových logů nad rámec audit logu).
 - **[ ] #59h — Stránkování.** Seznamy users/usage/audit/vaults jsou bez limitu;

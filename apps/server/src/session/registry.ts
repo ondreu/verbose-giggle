@@ -89,12 +89,23 @@ export class UserSession {
 
 export class SessionRegistry {
   private scopes = new Map<string, Promise<UserSession>>();
+  /**
+   * Data-isolation routing is latched at boot (#59f). Flipping `allowAnonymous`
+   * live (admin panel) changes the auth *gate* (whether login is required) right
+   * away, but switching scope routing mid-session would tear a player out of the
+   * vault they're playing — shared ⇄ per-user — under their feet. So the routing
+   * decision uses this boot snapshot and only changes on restart; the admin UI
+   * warns when the live setting has drifted from it.
+   */
+  private readonly bootAllowAnonymous: boolean;
 
-  constructor(private deps: { getConfig: () => Config }) {}
+  constructor(private deps: { getConfig: () => Config }) {
+    this.bootAllowAnonymous = deps.getConfig().auth.allowAnonymous;
+  }
 
   /** True when each signed-in user gets isolated data (hosted edition). */
   isolationEnabled(): boolean {
-    return this.deps.getConfig().auth.allowAnonymous === false;
+    return this.bootAllowAnonymous === false;
   }
 
   private keyAndRoot(req: FastifyRequest): { key: string; root: string } {

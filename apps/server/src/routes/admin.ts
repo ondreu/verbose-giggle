@@ -54,6 +54,12 @@ export interface AdminContext {
   checkpointDb?: () => void;
   /** Keep at most this many backups; older ones are pruned (#59c). 0 = keep all. */
   backupRetention?: number;
+  /**
+   * `allowAnonymous` as latched at boot (#59f). Data-isolation routing only
+   * changes on restart, so the panel warns when the live setting has drifted
+   * from this. Omitted = no warning (tests / self-hosted).
+   */
+  bootAllowAnonymous?: boolean;
 }
 
 function userRow(u: ReturnType<UserStore["list"]>[number]) {
@@ -166,6 +172,10 @@ export async function registerAdminRoutes(app: FastifyInstance, ctx: AdminContex
   function serverSettingsView(c: Config) {
     return {
       allowAnonymous: c.auth.allowAnonymous,
+      // True when the live value differs from the boot snapshot the data-isolation
+      // routing is still using (#59f): the toggle takes full effect on restart.
+      allowAnonymousPendingRestart:
+        ctx.bootAllowAnonymous !== undefined && ctx.bootAllowAnonymous !== c.auth.allowAnonymous,
       registrationEnabled: c.auth.registrationEnabled,
       requireVerifiedEmail: c.auth.requireVerifiedEmail,
       creditsEnabled: c.credits.enabled,

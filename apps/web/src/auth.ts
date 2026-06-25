@@ -140,6 +140,8 @@ export interface CreditPricing {
 }
 export interface ServerSettings {
   allowAnonymous: boolean;
+  /** True when the live value differs from the boot snapshot routing uses (#59f). */
+  allowAnonymousPendingRestart?: boolean;
   registrationEnabled: boolean;
   requireVerifiedEmail: boolean;
   creditsEnabled: boolean;
