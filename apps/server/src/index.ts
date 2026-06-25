@@ -18,6 +18,7 @@ import { loadOrCreateSecret } from "./auth/tokens.js";
 import { LogEmailSender, SmtpEmailSender, type EmailSender } from "./auth/email.js";
 import { AuthService } from "./auth/service.js";
 import { registerAuthGuard } from "./auth/middleware.js";
+import { RateLimiter } from "./auth/rate-limit.js";
 
 async function main(): Promise<void> {
   const startedAtMs = Date.now();
@@ -72,9 +73,38 @@ async function main(): Promise<void> {
     service: authService,
     allowAnonymous: () => configAccess.get().auth.allowAnonymous,
   });
+  // Brute-force throttles for the credential endpoints (#59b). A `max` of 0
+  // disables a limit; the limiter then never blocks. Pruned periodically so the
+  // keyed-by-IP map can't grow without bound.
+  const loginLimit = config.auth.rateLimit.login;
+  const registerLimit = config.auth.rateLimit.register;
+  const rateLimit =
+    loginLimit.max > 0 || registerLimit.max > 0
+      ? {
+          login: new RateLimiter({
+            max: loginLimit.max > 0 ? loginLimit.max : Infinity,
+            windowMs: loginLimit.windowMs,
+          }),
+          register: new RateLimiter({
+            max: registerLimit.max > 0 ? registerLimit.max : Infinity,
+            windowMs: registerLimit.windowMs,
+          }),
+        }
+      : undefined;
+  if (rateLimit) {
+    const pruneTimer = setInterval(
+      () => {
+        rateLimit.login.prune();
+        rateLimit.register.prune();
+      },
+      10 * 60 * 1000,
+    );
+    pruneTimer.unref();
+  }
   await registerAuthRoutes(app, {
     service: authService,
     cookieSecure: config.auth.publicUrl.startsWith("https://"),
+    rateLimit,
     flags: () => {
       const c = configAccess.get();
       return {

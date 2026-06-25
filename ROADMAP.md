@@ -238,8 +238,10 @@ kredity = bezpečnost přestává být „nice to have".
   jen session cookie (`SameSite=Lax`). Lax zastaví cross-site GET, ne cross-site
   `POST` z formuláře (např. `POST /api/admin/backups`). Přidat CSRF token nebo
   vyžadovat vlastní hlavičku (`X-Requested-With`) na state-changing `/api` routách.
-- **[ ] #59b — Rate-limit & brute-force.** Limit na `/api/auth/login` a
-  `/api/auth/register` (+ případně CAPTCHA). Dnes bez omezení.
+- **[~] #59b — Rate-limit & brute-force.** Hotovo: per-IP fixed-window limiter
+  (`apps/server/src/auth/rate-limit.ts`) na `/api/auth/login` a
+  `/api/auth/register`, konfigurovatelný přes `AUTH_*_RATE_*`; úspěšné přihlášení
+  vynuluje okno dané IP. Zbývá: CAPTCHA.
 - **[ ] #59c — Hardening záloh (#57b).** (1) Konzistence: zálohuje se živý SQLite
   soubor — před zipem `PRAGMA wal_checkpoint(TRUNCATE)` / `VACUUM INTO` pro čistý
   snapshot. (2) Paměť: `zipDir` staví celý archiv v `Buffer` — u velkého vaultu
