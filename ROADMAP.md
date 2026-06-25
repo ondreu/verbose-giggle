@@ -162,6 +162,18 @@ ne „nice to have".
   pohybů; anonym vidí vysvětlení) přes `GET /api/credits`. Ukazatel zůstatku
   v hlavičce (`CreditBadge`, jen hosted + přihlášený, polluje). Admin má
   per-uživatele tlačítko „kredity". Zbývá jen „koupit" (čeká na platby/Stripe).
+- **[ ] #56f — AI management & ceník per model / per akce.** Dnešní ceník je
+  **globální a tokenový** (LLM = prompt/completion za 1k), plochý za obrázek,
+  za 1k znaků TTS; dev panel (#57b) edituje tyto 4 knoflíky. Chybí:
+  (1) **per-model ceník** — appka už umí alternativní modely („Jiným modelem"),
+  ale všechny se účtují stejnou sazbou za token (Opus vs Haiku se liší ~10×).
+  (2) **Účtování generování kampaně** — `forgeCampaign` (`/api/campaigns/forge`)
+  běží **nemetrovaně**, dnes zdarma i přes vysokou spotřebu.
+  Návrh (preferovaný směr uživatele): **ceník per akce a per model** — tabulka
+  `model → kredity/zpráva`, plochá cena za obrázek a za generování kampaně.
+  Předvídatelné pro hráče; tokenové metrování zůstane pod tím jako cost-basis,
+  aby cena pokryla nejdražší model a nešlo se do ztráty. „AI management" záložka
+  v dev panelu: seznam modelů (primární + `altModels`) + jejich sazby.
 
 ### #57 — Dev / admin panel
 
@@ -209,10 +221,41 @@ ne „nice to have".
   server-config (admin #57) vs. per-user-config (#58); single-user self-hosted =
   obojí splývá.
 
+### #59 — Bezpečnost & hardening (dev panel / multi-tenant)
+
+Vyvstalo při stavbě dev panelu (#57b). Privilegovaná, mutující plocha + reálné
+kredity = bezpečnost přestává být „nice to have".
+
+- **[ ] #59a — CSRF.** Admin i ostatní mutace (`PUT/POST/DELETE`) se autentizují
+  jen session cookie (`SameSite=Lax`). Lax zastaví cross-site GET, ne cross-site
+  `POST` z formuláře (např. `POST /api/admin/backups`). Přidat CSRF token nebo
+  vyžadovat vlastní hlavičku (`X-Requested-With`) na state-changing `/api` routách.
+- **[ ] #59b — Rate-limit & brute-force.** Limit na `/api/auth/login` a
+  `/api/auth/register` (+ případně CAPTCHA). Dnes bez omezení.
+- **[ ] #59c — Hardening záloh (#57b).** (1) Konzistence: zálohuje se živý SQLite
+  soubor — před zipem `PRAGMA wal_checkpoint(TRUNCATE)` / `VACUUM INTO` pro čistý
+  snapshot. (2) Paměť: `zipDir` staví celý archiv v `Buffer` — u velkého vaultu
+  (mapy) hrozí nafouknutí RSS; streamovat. (3) Retence: zálohy rostou bez limitu
+  ve vault volume — „nech posledních N" + strop. (4) Hlídaný restore (upload →
+  validace → swap při příštím startu). (5) Záloha obsahuje hashe hesel — citlivá.
+- **[ ] #59d — Mazání otevřené kampaně.** `DELETE /api/admin/vaults/...` smaže
+  složku, ale neinvaliduje cachovaný `SessionManager` daného scope → další tah
+  může spadnout. Reopen/invalidace dotčeného scope.
+- **[ ] #59e — GDPR mazání dat.** Po izolaci (#55f-2) má každý uživatel
+  `<vault>/users/<id>/`; `deleteAccount` by měl tento podstrom smazat (+ export
+  dat, souhlas). Dnes maže jen řádek uživatele a session.
+- **[ ] #59f — Živý přepínač `allowAnonymous`.** Přepnutí za běhu mění routing
+  izolace dat uprostřed sezení (ostrá hrana). Buď varovat v UI, nebo udělat tento
+  jeden flag „až po restartu".
+- **[ ] #59g — Prohlížeč serverových logů.** Poslední otevřená položka #57b
+  (tail běhových logů nad rámec audit logu).
+- **[ ] #59h — Stránkování.** Seznamy users/usage/audit/vaults jsou bez limitu;
+  poroste-li ledger/audit, doplnit paginaci.
+
 ### Co snadno zapomeneme
 
-- **Bezpečnost:** rate-limit registrace/loginu (brute-force), CAPTCHA, CSRF
-  u cookie session, ochrana cizích kreditů, secret management.
+- **Bezpečnost:** viz **#59** — rate-limit, CAPTCHA, CSRF, ochrana cizích
+  kreditů, secret management.
 - **Email infra:** dnes nulová — SMTP nebo služba (Resend/SES) + setup docs.
 - **GDPR:** mazání účtu smaže i vault data; export; souhlas (české UI → EU).
 - **Migrace dat:** dnešní vault nemá majitele — přiřadit „adminovi" nebo nechat
