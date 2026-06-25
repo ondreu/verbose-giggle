@@ -1,7 +1,7 @@
 /** Runtime configuration from environment (§9.1, §14.2). */
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import type { Settings } from "./settings.js";
+import type { ModelPoolEntry, Settings } from "./settings.js";
 import type { SmtpConfig } from "./auth/email.js";
 import type { CreditPricing } from "./credits/metering.js";
 
@@ -111,6 +111,12 @@ export interface Config {
     enabled: boolean;
     pricing: CreditPricing;
   };
+  /**
+   * Operator-managed model pool (#56g): the selectable OpenRouter models with
+   * their per-message credit price and 1–5 star intelligence/price ratings.
+   * Empty by default; populated from the admin panel (vault settings.json).
+   */
+  modelPool: ModelPoolEntry[];
 }
 
 export function loadConfig(): Config {
@@ -218,6 +224,7 @@ export function loadConfig(): Config {
         perThousandCompletionTokens: Number(process.env.CREDITS_PER_1K_COMPLETION ?? 3),
       },
     },
+    modelPool: [],
   };
 }
 
@@ -282,11 +289,20 @@ export function applySettings(base: Config, s: Settings): Config {
     registrationEnabled: srv.registrationEnabled ?? base.auth.registrationEnabled,
     requireVerifiedEmail: srv.requireVerifiedEmail ?? base.auth.requireVerifiedEmail,
   };
+  // Model pool (#56g) is the authoritative per-model price source: its entries
+  // override any explicit perModelMessage map, so the admin edits prices in one
+  // place and billing (`creditsPerMessage`) keeps reading `perModelMessage`.
+  const modelPool = srv.modelPool ?? base.modelPool;
+  const perModelMessage = {
+    ...base.credits.pricing.perModelMessage,
+    ...(srv.pricing?.perModelMessage ?? {}),
+    ...Object.fromEntries(modelPool.map((m) => [m.model, m.perMessage])),
+  };
   const credits = {
     enabled: srv.creditsEnabled ?? base.credits.enabled,
     pricing: {
       perMessage: srv.pricing?.perMessage ?? base.credits.pricing.perMessage,
-      perModelMessage: srv.pricing?.perModelMessage ?? base.credits.pricing.perModelMessage,
+      perModelMessage,
       perCampaign: srv.pricing?.perCampaign ?? base.credits.pricing.perCampaign,
       perImage: srv.pricing?.perImage ?? base.credits.pricing.perImage,
       perThousandTtsChars:
@@ -306,5 +322,6 @@ export function applySettings(base: Config, s: Settings): Config {
     azureTts,
     auth,
     credits,
+    modelPool,
   };
 }

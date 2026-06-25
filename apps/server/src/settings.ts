@@ -16,6 +16,27 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 
+/**
+ * One selectable model in the operator-managed "model pool" (#56g). Every entry
+ * is routed through the same OpenRouter chat-completions URL — only the slug
+ * differs. `intelligence` / `price` are 1–5 "star" indicators shown to players
+ * in the model picker; `perMessage` is the credit charge per message for it.
+ */
+export interface ModelPoolEntry {
+  /** Player-facing display name. */
+  name: string;
+  /** OpenRouter model slug sent to the chat-completions endpoint. */
+  model: string;
+  /** Credits charged per message when this model runs (#56f). */
+  perMessage: number;
+  /** Intelligence rating, 1–5 stars. */
+  intelligence: number;
+  /** Price rating, 1–5 stars. */
+  price: number;
+  /** Free-text tooltip shown to the player on hover in the model picker. */
+  tooltip: string;
+}
+
 export interface Settings {
   llm?: {
     apiKey?: string;
@@ -62,6 +83,13 @@ export interface Settings {
     requireVerifiedEmail?: boolean;
     /** Charge metered token/image/TTS usage against user credits. */
     creditsEnabled?: boolean;
+    /**
+     * Selectable model pool (#56g): the models a player can pick / re-roll
+     * with, each with its OpenRouter slug, per-message credit price, and 1–5
+     * star intelligence/price indicators. Authoritative source for the
+     * per-model price table (folded into `pricing.perModelMessage`).
+     */
+    modelPool?: ModelPoolEntry[];
     /** Credit pricing (smallest unit). Missing fields fall back to env/defaults. */
     pricing?: {
       /** Per-action billing (#56f). */

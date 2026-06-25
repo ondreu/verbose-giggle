@@ -26,6 +26,7 @@ import {
   type AdminUser,
   type AuditEntry,
   type BackupInfo,
+  type ModelPoolEntry,
   type ServerSettings,
   type ServerSettingsPatch,
 } from "../auth";
@@ -331,6 +332,15 @@ function ServerTab({ onErr }: { onErr: ErrHandler }) {
       </section>
 
       <section className="flex flex-col gap-2">
+        <H2>Model pool</H2>
+        <p className="font-log text-xs text-ink/55">
+          Nabídka modelů pro hráče — vše přes OpenRouter chat-completions. Cena za zprávu se
+          promítne do účtování; inteligence a cena (★ 1–5) se ukazují hráči v přepínači modelů.
+        </p>
+        <ModelPoolEditor settings={s} onSave={(modelPool) => save({ modelPool })} />
+      </section>
+
+      <section className="flex flex-col gap-2">
         <H2>AI & ceník (per akce)</H2>
         <PricingEditor settings={s} onSave={(pricing) => save({ pricing })} />
       </section>
@@ -344,6 +354,141 @@ function ServerTab({ onErr }: { onErr: ErrHandler }) {
       </section>
 
       {saved && <p className="font-log text-sm text-gold">Uloženo. Nastavení přežije i restart.</p>}
+    </div>
+  );
+}
+
+/** Clickable 1–5 star rating input. */
+function StarRating({ value, onChange }: { value: number; onChange: (n: number) => void }) {
+  return (
+    <span className="inline-flex" role="radiogroup" aria-label="hodnocení">
+      {[1, 2, 3, 4, 5].map((n) => (
+        <button
+          key={n}
+          type="button"
+          role="radio"
+          aria-checked={n === value}
+          title={`${n}/5`}
+          onClick={() => onChange(n)}
+          className={`px-0.5 text-base leading-none ${n <= value ? "text-gold" : "text-ink/25"} hover:text-gold`}
+        >
+          {n <= value ? "★" : "☆"}
+        </button>
+      ))}
+    </span>
+  );
+}
+
+/**
+ * Operator-managed model pool editor (#56g): rows of { name, slug, credits/msg,
+ * intelligence ★, price ★ }. All models route through the OpenRouter
+ * chat-completions URL — only the slug differs.
+ */
+function ModelPoolEditor({
+  settings,
+  onSave,
+}: {
+  settings: ServerSettings;
+  onSave: (pool: ModelPoolEntry[]) => void;
+}) {
+  const [rows, setRows] = useState<ModelPoolEntry[]>(settings.modelPool);
+  useEffect(() => setRows(settings.modelPool), [settings]);
+
+  const update = (i: number, patch: Partial<ModelPoolEntry>) =>
+    setRows(rows.map((r, j) => (j === i ? { ...r, ...patch } : r)));
+  const remove = (i: number) => setRows(rows.filter((_, j) => j !== i));
+  const add = () =>
+    setRows([
+      ...rows,
+      { name: "", model: "", perMessage: settings.pricing.perMessage, intelligence: 3, price: 3, tooltip: "" },
+    ]);
+
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="overflow-x-auto">
+        <table className="w-full border-collapse text-sm">
+          <thead>
+            <tr className="border-b border-ink/20 text-left font-log text-xs uppercase text-ink/50">
+              <th className="py-1 pr-2">Jméno</th>
+              <th className="py-1 pr-2">Adresa modelu (OpenRouter)</th>
+              <th className="py-1 pr-2">Kr./zpráva</th>
+              <th className="py-1 pr-2">Inteligence</th>
+              <th className="py-1 pr-2">Cena</th>
+              <th className="py-1 pr-2">Tooltip</th>
+              <th className="py-1 pr-2"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r, i) => (
+              <tr key={i} className="border-b border-ink/10">
+                <td className="py-1 pr-2">
+                  <input
+                    value={r.name}
+                    placeholder="DeepSeek Flash"
+                    onChange={(e) => update(i, { name: e.target.value })}
+                    className="w-32 rounded border border-ink/25 bg-bg-crust px-2 py-1 text-ink"
+                  />
+                </td>
+                <td className="py-1 pr-2">
+                  <input
+                    value={r.model}
+                    placeholder="deepseek/deepseek-v4-flash"
+                    onChange={(e) => update(i, { model: e.target.value })}
+                    className="w-56 rounded border border-ink/25 bg-bg-crust px-2 py-1 font-log text-ink"
+                  />
+                </td>
+                <td className="py-1 pr-2">
+                  <input
+                    type="number"
+                    min={0}
+                    value={r.perMessage}
+                    onChange={(e) => update(i, { perMessage: Number(e.target.value) })}
+                    className="w-20 rounded border border-ink/25 bg-bg-crust px-2 py-1 text-right text-ink"
+                  />
+                </td>
+                <td className="py-1 pr-2">
+                  <StarRating value={r.intelligence} onChange={(n) => update(i, { intelligence: n })} />
+                </td>
+                <td className="py-1 pr-2">
+                  <StarRating value={r.price} onChange={(n) => update(i, { price: n })} />
+                </td>
+                <td className="py-1 pr-2">
+                  <input
+                    value={r.tooltip ?? ""}
+                    maxLength={280}
+                    placeholder="Rychlý a levný; ideální na průzkum."
+                    onChange={(e) => update(i, { tooltip: e.target.value })}
+                    className="w-56 rounded border border-ink/25 bg-bg-crust px-2 py-1 text-ink"
+                  />
+                </td>
+                <td className="py-1 pr-2">
+                  <button className="btn-link text-xs text-blood underline" onClick={() => remove(i)}>
+                    smazat
+                  </button>
+                </td>
+              </tr>
+            ))}
+            {rows.length === 0 && (
+              <tr>
+                <td colSpan={7} className="py-2 font-log text-sm italic text-ink/40">
+                  Žádné modely. Přidej první níže.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+      <div className="flex items-center gap-3">
+        <button className="btn-link text-sm underline" onClick={add}>
+          + přidat model
+        </button>
+        <button
+          className="btn-link text-sm underline"
+          onClick={() => onSave(rows.filter((r) => r.model.trim()))}
+        >
+          Uložit model pool
+        </button>
+      </div>
     </div>
   );
 }

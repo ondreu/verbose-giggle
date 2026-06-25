@@ -11,7 +11,7 @@ import type { SessionStore } from "../auth/sessions.js";
 import type { AuditStore } from "../auth/audit.js";
 import type { CreditStore } from "../credits/ledger.js";
 import type { Config } from "../config.js";
-import { saveSettings, type Settings } from "../settings.js";
+import { saveSettings, type ModelPoolEntry, type Settings } from "../settings.js";
 import {
   campaignDir,
   createBackup,
@@ -218,8 +218,13 @@ export async function registerAdminRoutes(app: FastifyInstance, ctx: AdminContex
       requireVerifiedEmail: c.auth.requireVerifiedEmail,
       creditsEnabled: c.credits.enabled,
       pricing: c.credits.pricing,
-      // Models the per-message price table covers: primary + re-roll alternates.
-      models: [c.llm.model, ...c.llm.altModels].filter((m, i, a) => m && a.indexOf(m) === i),
+      // Operator-managed selectable model pool (#56g): slug, per-message price,
+      // and 1–5 star intelligence/price ratings.
+      modelPool: c.modelPool,
+      // Models the per-message price table covers: primary + pool + re-roll alternates.
+      models: [c.llm.model, ...c.modelPool.map((m) => m.model), ...c.llm.altModels].filter(
+        (m, i, a) => m && a.indexOf(m) === i,
+      ),
       providers: {
         llm: {
           provider: c.llm.provider,
@@ -278,6 +283,35 @@ export async function registerAdminRoutes(app: FastifyInstance, ctx: AdminContex
           p.perModelMessage = map;
         }
         if (Object.keys(p).length > 0) srv.pricing = p;
+      }
+      // Model pool (#56g): a list of { name, model, perMessage, intelligence, price }.
+      // Stars are clamped to 1–5; the model slug is required and prices non-negative.
+      if (body.modelPool !== undefined) {
+        if (!Array.isArray(body.modelPool)) {
+          return reply.code(400).send({ error: "Neplatný model pool." });
+        }
+        const star = (v: unknown) => {
+          const n = Math.round(Number(v));
+          return Number.isFinite(n) ? Math.min(5, Math.max(1, n)) : 1;
+        };
+        const pool: ModelPoolEntry[] = [];
+        for (const raw of body.modelPool as Partial<ModelPoolEntry>[]) {
+          const model = String(raw?.model ?? "").trim();
+          if (!model) return reply.code(400).send({ error: "Každý model v poolu musí mít adresu." });
+          const perMessage = Number(raw?.perMessage);
+          if (!Number.isFinite(perMessage) || perMessage < 0) {
+            return reply.code(400).send({ error: "Cena modelu musí být nezáporné číslo." });
+          }
+          pool.push({
+            name: String(raw?.name ?? "").trim() || model,
+            model,
+            perMessage: Math.ceil(perMessage),
+            intelligence: star(raw?.intelligence),
+            price: star(raw?.price),
+            tooltip: String(raw?.tooltip ?? "").trim().slice(0, 280),
+          });
+        }
+        srv.modelPool = pool;
       }
       if (Object.keys(srv).length === 0) {
         return reply.code(400).send({ error: "Žádná změna." });

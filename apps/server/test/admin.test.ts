@@ -302,6 +302,50 @@ describe("admin dev panel (#57b)", () => {
     await app.close();
   });
 
+  it("persists a model pool and folds its prices into perModelMessage (#56g)", async () => {
+    const { app, adminSid, getConfig } = await setup();
+    const res = await app.inject({
+      method: "PUT",
+      url: "/api/admin/server-settings",
+      payload: {
+        modelPool: [
+          { name: "Flash", model: "deepseek/deepseek-v4-flash", perMessage: 20, intelligence: 1, price: 1, tooltip: "  Rychlý a levný  " },
+          // stars out of range get clamped to 1–5; perMessage rounds up.
+          { name: "", model: "anthropic/claude-sonnet-4.6", perMessage: 449.2, intelligence: 9, price: 0 },
+        ],
+      },
+      ...asAdmin(adminSid),
+    });
+    expect(res.statusCode).toBe(200);
+    const view = res.json();
+    expect(view.modelPool).toHaveLength(2);
+    expect(view.modelPool[0].tooltip).toBe("Rychlý a levný"); // trimmed
+    expect(view.modelPool[1].tooltip).toBe(""); // missing → empty
+    expect(view.modelPool[1].name).toBe("anthropic/claude-sonnet-4.6"); // falls back to slug
+    expect(view.modelPool[1].perMessage).toBe(450); // ceil
+    expect(view.modelPool[1].intelligence).toBe(5); // clamped
+    expect(view.modelPool[1].price).toBe(1); // clamped
+    // The pool drives the per-model billing table read by creditsPerMessage.
+    const pricing = getConfig().credits.pricing.perModelMessage;
+    expect(pricing["deepseek/deepseek-v4-flash"]).toBe(20);
+    expect(pricing["anthropic/claude-sonnet-4.6"]).toBe(450);
+    // The slugs also appear in the price-table model list.
+    expect(view.models).toContain("deepseek/deepseek-v4-flash");
+    await app.close();
+  });
+
+  it("rejects a model pool entry without a slug", async () => {
+    const { app, adminSid } = await setup();
+    const res = await app.inject({
+      method: "PUT",
+      url: "/api/admin/server-settings",
+      payload: { modelPool: [{ name: "x", model: "  ", perMessage: 10, intelligence: 3, price: 3 }] },
+      ...asAdmin(adminSid),
+    });
+    expect(res.statusCode).toBe(400);
+    await app.close();
+  });
+
   it("aggregates credit usage by reason and user", async () => {
     const { app, credits, member, admin, adminSid } = await setup();
     credits.grant(member.id, 1000, "admin-grant");

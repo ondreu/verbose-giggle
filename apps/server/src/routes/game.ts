@@ -980,7 +980,20 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
       factions: sess.manager.campaign.factions,
       npcs: sess.manager.campaign.npcs,
       worldEvents: sess.manager.campaign.worldEvents,
-      models: { current: config.llm.model, alts: stored.llm?.altModels ?? [] },
+      models: {
+        current: config.llm.model,
+        alts: stored.llm?.altModels ?? [],
+        // Operator-managed model pool (#56g): name + slug + per-message credit
+        // price + 1–5 star intelligence/price ratings, for the player picker.
+        pool: config.modelPool.map((m) => ({
+          name: m.name,
+          model: m.model,
+          perMessage: m.perMessage,
+          intelligence: m.intelligence,
+          price: m.price,
+          tooltip: m.tooltip ?? "",
+        })),
+      },
     };
   });
 
