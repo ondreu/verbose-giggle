@@ -102,7 +102,16 @@ Read by `apps/server/src/config.ts`. See [`.env.example`](.env.example) for the 
 
 ## Docker / NAS deployment
 
-CI builds and pushes a multi-stage image to `ghcr.io/ondreu/ai-dungeon-master:latest` on every push to `main`. On the NAS, use the provided Compose stack (app + Piper + Watchtower, plus an optional ingress):
+CI builds and pushes a multi-stage image to `ghcr.io/ondreu/ai-dungeon-master:latest` on every push to `main`. There are **two deployment editions**, both driven by the same image — they differ only in env / Compose file:
+
+| Edition | Compose file | Auth | Data | Metering |
+| --- | --- | --- | --- | --- |
+| **Self-hosted** (single-tenant) | `docker-compose.yml` (or `docker-compose.nas.yml` for NAS GUIs) | Anonymous OK (`AUTH_ALLOW_ANONYMOUS=true`) | One shared vault | Off |
+| **Commercial** (multi-tenant / hosted) | `docker-compose.commercial.yml` | Login required (`AUTH_ALLOW_ANONYMOUS=false`) | Per-user isolation under `<vault>/users/<id>/` | Credits on (#56) |
+
+### Self-hosted
+
+On the NAS, use the provided Compose stack (app + Piper + Watchtower, plus an optional ingress):
 
 ```bash
 cd docker
@@ -111,6 +120,18 @@ docker compose up -d                          # app only (LAN / Tailscale)
 docker compose --profile caddy up -d          # + Caddy public HTTPS
 docker compose --profile cloudflare up -d     # + Cloudflare Tunnel
 ```
+
+### Commercial (multi-tenant / hosted)
+
+The paid public edition turns on the full account + monetisation surface: required login, per-user data isolation (#55f-2), credit metering (#56), SMTP for email verification / password reset, and Turnstile CAPTCHA. Caddy public HTTPS is always on (a commercial deploy is public by definition).
+
+```bash
+cd docker
+cp ../.env.example .env        # fill in every [COMMERCIAL] item, then set your domain in Caddyfile
+docker compose -f docker-compose.commercial.yml up -d
+```
+
+Required in `.env` before first start: `LLM_API_KEY`, `ADMIN_EMAIL`, `AUTH_SECRET` (`openssl rand -base64 48`), `PUBLIC_URL`, the `SMTP_*` block, and `TURNSTILE_SITE_KEY` / `TURNSTILE_SECRET_KEY`. After boot, register with `ADMIN_EMAIL` to claim the admin role, then set per-model pricing and grant credits from `/admin`. See the `[COMMERCIAL]`-marked vars in [`.env.example`](.env.example) and the hardening checklist in [ROADMAP.md](ROADMAP.md) §59.
 
 - Mount your real content over `./vault`, `./maps`, `./srd`. Live session state is written inside each campaign's `state/` folder, so it persists with the vault.
 - **TLS / public access:** see [Ingress options](#ingress-options) below — Caddy, Tailscale, or Cloudflare Tunnel.

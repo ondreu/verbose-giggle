@@ -1,4 +1,10 @@
-# AI Dungeon Master — NAS deployment (spec §14.2)
+# AI Dungeon Master — SELF-HOSTED edition (single-tenant, spec §14.2)
+# =============================================================================
+# This is the self-hosted / home-lab stack: ONE shared vault, anonymous access
+# ("continue without login"), credits/metering OFF. Perfect for a single player
+# or group on a NAS / home server. For the paid multi-tenant deploy (login
+# required, per-user data isolation, credits, SMTP, CAPTCHA) use the sibling
+# file `docker-compose.commercial.yml` instead.
 #
 # Copy this file (and Caddyfile if you use it) to your NAS, create a `.env`
 # next to it (see /.env.example), then start with the ingress you want:
@@ -26,6 +32,11 @@ services:
       - LLM_BASE_URL=${LLM_BASE_URL:-https://api.mistral.ai/v1}     # Mistral or OpenRouter base URL
       - LLM_MODEL=${LLM_MODEL:-mistral-medium-3.5}
       - VAULT_PATH=/data/vault
+      # Self-hosted edition defaults: anonymous access ON, no metering. Flip
+      # both (and configure SMTP/Turnstile/PUBLIC_URL) in docker-compose.commercial.yml
+      # to run the multi-tenant paid edition instead.
+      - AUTH_ALLOW_ANONYMOUS=${AUTH_ALLOW_ANONYMOUS:-true}
+      - CREDITS_ENABLED=${CREDITS_ENABLED:-false}
       # TTS: Azure AI Speech is the expressive primary; Piper is the fallback.
       - AZURE_SPEECH_KEY=${AZURE_SPEECH_KEY:-}                       # set to enable Azure TTS
       - AZURE_SPEECH_REGION=${AZURE_SPEECH_REGION:-}                 # e.g. westeurope

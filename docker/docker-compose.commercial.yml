@@ -1,0 +1,147 @@
+# AI Dungeon Master — COMMERCIAL edition (multi-tenant / hosted, #55–58)
+# =============================================================================
+# Paid, public-facing deployment. Differs from the self-hosted stack
+# (docker-compose.yml) by turning on the full account + monetisation surface:
+#
+#   * AUTH_ALLOW_ANONYMOUS=false  → login REQUIRED, no "continue without login";
+#                                   every user gets isolated data under
+#                                   <vault>/users/<id>/ (#55f-2).
+#   * CREDITS_ENABLED=true        → LLM / image / TTS usage is metered against
+#                                   per-user credit balances; players hit HTTP
+#                                   402 at zero. Admins grant credits in /admin.
+#   * SMTP_*                       → real outbound mail for email verification
+#                                   and password reset (links use PUBLIC_URL).
+#   * TURNSTILE_*                  → Cloudflare Turnstile CAPTCHA on login/registration.
+#   * Caddy ingress is ALWAYS ON  → a commercial deploy is public, so public
+#                                   auto-HTTPS is the default (no --profile needed).
+#
+# Start it:
+#
+#   cd docker
+#   cp ../.env.example .env            # then fill in the [COMMERCIAL] items
+#   docker compose -f docker-compose.commercial.yml up -d
+#
+# REQUIRED in .env before first start (see /.env.example for the full list):
+#   LLM_API_KEY, ADMIN_EMAIL, AUTH_SECRET, PUBLIC_URL,
+#   SMTP_HOST + SMTP_USER + SMTP_PASS + SMTP_FROM,
+#   TURNSTILE_SITE_KEY + TURNSTILE_SECRET_KEY,
+#   and your domain in docker/Caddyfile.
+#
+# After first boot: register with ADMIN_EMAIL to claim the admin role, then
+# tune per-model pricing and grant credits from the /admin panel.
+#
+# Hardening reminders before going fully public: ROADMAP #59 (CSRF header,
+# rate limits, GDPR deletion). Keep ADMIN_EMAIL + AUTH_SECRET tightly held.
+
+services:
+  app:
+    image: ghcr.io/ondreu/ai-dungeon-master:latest
+    # Local build instead of pulling (build context is the repo root):
+    # build:
+    #   context: ..
+    #   dockerfile: docker/Dockerfile
+    restart: unless-stopped
+    environment:
+      # --- LLM (server-side key; users never bring their own in hosted mode) --
+      - LLM_API_KEY=${LLM_API_KEY}                                 # required
+      - LLM_BASE_URL=${LLM_BASE_URL:-https://api.mistral.ai/v1}
+      - LLM_MODEL=${LLM_MODEL:-mistral-medium-3.5}
+      - VAULT_PATH=/data/vault
+
+      # --- Accounts / multi-tenant (#55–58) -----------------------------------
+      - AUTH_ALLOW_ANONYMOUS=false                                 # login required
+      - AUTH_REGISTRATION=${AUTH_REGISTRATION:-true}               # self-service sign-up
+      - AUTH_REQUIRE_VERIFIED=${AUTH_REQUIRE_VERIFIED:-true}       # confirm email before login
+      - ADMIN_EMAIL=${ADMIN_EMAIL}                                 # required: your admin account
+      - AUTH_SECRET=${AUTH_SECRET}                                 # required: openssl rand -base64 48
+      - PUBLIC_URL=${PUBLIC_URL}                                   # required: real external URL for email links
+      - BACKUP_RETENTION=${BACKUP_RETENTION:-10}
+
+      # --- Anti-abuse: rate limits + Turnstile CAPTCHA (#59b) ------------------
+      - AUTH_LOGIN_RATE_MAX=${AUTH_LOGIN_RATE_MAX:-10}
+      - AUTH_LOGIN_RATE_WINDOW_MS=${AUTH_LOGIN_RATE_WINDOW_MS:-900000}
+      - AUTH_REGISTER_RATE_MAX=${AUTH_REGISTER_RATE_MAX:-5}
+      - AUTH_REGISTER_RATE_WINDOW_MS=${AUTH_REGISTER_RATE_WINDOW_MS:-3600000}
+      - TURNSTILE_SITE_KEY=${TURNSTILE_SITE_KEY:-}                 # both keys to enable CAPTCHA
+      - TURNSTILE_SECRET_KEY=${TURNSTILE_SECRET_KEY:-}
+
+      # --- Outbound email (required for verification + reset) ------------------
+      - SMTP_HOST=${SMTP_HOST}                                     # required for live email
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_SECURE=${SMTP_SECURE:-false}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASS=${SMTP_PASS:-}
+      - SMTP_FROM=${SMTP_FROM:-no-reply@localhost}
+
+      # --- Credits / metering (#56) — monetisation ----------------------------
+      - CREDITS_ENABLED=true
+      - CREDITS_PER_MESSAGE=${CREDITS_PER_MESSAGE:-10}
+      - CREDITS_PER_CAMPAIGN=${CREDITS_PER_CAMPAIGN:-200}
+      - CREDITS_PER_IMAGE=${CREDITS_PER_IMAGE:-50}
+      - CREDITS_PER_1K_TTS_CHARS=${CREDITS_PER_1K_TTS_CHARS:-2}
+      - CREDITS_PER_1K_PROMPT=${CREDITS_PER_1K_PROMPT:-1}
+      - CREDITS_PER_1K_COMPLETION=${CREDITS_PER_1K_COMPLETION:-3}
+
+      # --- TTS: Azure primary, Piper fallback ---------------------------------
+      - AZURE_SPEECH_KEY=${AZURE_SPEECH_KEY:-}
+      - AZURE_SPEECH_REGION=${AZURE_SPEECH_REGION:-}
+      - AZURE_TTS_VOICE=${AZURE_TTS_VOICE:-cs-CZ-AntoninNeural}
+      - AZURE_TTS_RATE=${AZURE_TTS_RATE:--6%}
+      - AZURE_TTS_PITCH=${AZURE_TTS_PITCH:--2%}
+      - PIPER_URL=http://piper:5000
+      # NOTE: BASIC_AUTH is intentionally NOT set here — the per-user account
+      # system is the access gate in hosted mode, not a single shared password.
+    volumes:
+      # Named volume holds the whole multi-tenant store: per-user vault subtrees
+      # AND the SQLite app db (<vault>/db/app.db: accounts, sessions, credits,
+      # audit log). Keep it on durable storage — it is your customer data.
+      - vault_data:/data/vault
+      - ./maps:/data/maps
+      - ./srd:/data/srd                    # optional: your own SRD JSON (else the bundled copy, #45a)
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+    depends_on:
+      - piper
+    # Not published to the host; reached via Caddy on the internal network.
+    expose:
+      - "3000"
+
+  piper:
+    # Pre-built image published by CI — no local build needed.
+    image: ghcr.io/ondreu/piper-http:latest
+    restart: unless-stopped
+    environment:
+      - PIPER_VOICE=/voices/cs_CZ-jirka-medium.onnx   # mount the matching .onnx + .onnx.json
+    volumes:
+      - ./piper-voices:/voices
+    expose:
+      - "5000"
+
+  # Public auto-HTTPS. A commercial deploy is public by definition, so Caddy is
+  # a normal service here (NOT behind a --profile). Set your domain in
+  # docker/Caddyfile. Prefer Cloudflare Tunnel? Drop this service and add the
+  # cloudflared sidecar from docker-compose.yml instead.
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app
+
+  watchtower:
+    image: containrrr/watchtower
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: --interval 3600 --label-enable    # only update labeled containers
+
+volumes:
+  vault_data:   # customer data: per-user vaults + SQLite app db; survives image updates
+  caddy_data:
+  caddy_config:
