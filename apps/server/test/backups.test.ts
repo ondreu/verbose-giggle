@@ -3,7 +3,14 @@ import os from "node:os";
 import path from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 import { zipDirToFile, unzipInto } from "../src/vault/zip.js";
-import { backupsDir, pruneBackups, listBackups } from "../src/admin/ops.js";
+import {
+  backupsDir,
+  pruneBackups,
+  listBackups,
+  stageRestore,
+  applyPendingRestore,
+  RestoreValidationError,
+} from "../src/admin/ops.js";
 
 const tmpDirs: string[] = [];
 afterAll(async () => {
@@ -68,5 +75,64 @@ describe("pruneBackups (#59c retention)", () => {
     await fs.mkdir(dir, { recursive: true });
     await fs.writeFile(path.join(dir, "vault-1.zip"), "x");
     expect(await pruneBackups(vault, 0)).toEqual([]);
+  });
+});
+
+describe("guarded restore (#59c)", () => {
+  /** A minimal vault with a DB file and one campaign; returns its path. */
+  async function vaultWith(dbContent: string): Promise<string> {
+    const vault = await tmp("adm-restore-");
+    await fs.mkdir(path.join(vault, "db"), { recursive: true });
+    await fs.writeFile(path.join(vault, "db", "app.db"), dbContent);
+    await fs.mkdir(path.join(vault, "campaigns", "c"), { recursive: true });
+    await fs.writeFile(path.join(vault, "campaigns", "c", "x.txt"), "hello");
+    return vault;
+  }
+
+  it("stages a valid backup and swaps it in at next start", async () => {
+    const vault = await vaultWith("v1");
+    // Keep an existing backup around to prove backups/ survives a restore.
+    await fs.mkdir(backupsDir(vault), { recursive: true });
+    await fs.writeFile(path.join(backupsDir(vault), "keep.zip"), "earlier");
+
+    const zipPath = path.join(await tmp("adm-restore-zip-"), "b.zip");
+    await zipDirToFile(vault, zipPath, (rel) => rel === "backups" || rel.startsWith("backups/"));
+    const zip = await fs.readFile(zipPath);
+
+    // Mutate the live vault: new DB, campaign deleted.
+    await fs.writeFile(path.join(vault, "db", "app.db"), "v2-MUTATED");
+    await fs.rm(path.join(vault, "campaigns"), { recursive: true, force: true });
+
+    const staged = await stageRestore(vault, zip);
+    expect(staged.entries).toBeGreaterThan(0);
+
+    const applied = await applyPendingRestore(vault);
+    expect(applied).toBe(true);
+
+    expect(await fs.readFile(path.join(vault, "db", "app.db"), "utf8")).toBe("v1");
+    expect(await fs.readFile(path.join(vault, "campaigns", "c", "x.txt"), "utf8")).toBe("hello");
+    // Pre-existing backups are untouched, staging + marker are cleaned up.
+    expect(await fs.readFile(path.join(backupsDir(vault), "keep.zip"), "utf8")).toBe("earlier");
+    await expect(fs.stat(path.join(vault, ".restore-pending.zip"))).rejects.toThrow();
+    await expect(fs.stat(path.join(vault, ".restore-staging"))).rejects.toThrow();
+  });
+
+  it("rejects an archive that isn't a vault backup", async () => {
+    const vault = await tmp("adm-restore-bad-");
+    const zipPath = path.join(await tmp("adm-restore-badzip-"), "b.zip");
+    // A valid zip, but with no db/app.db.
+    const src = await tmp("adm-restore-src-");
+    await fs.writeFile(path.join(src, "note.txt"), "not a vault");
+    await zipDirToFile(src, zipPath);
+    const zip = await fs.readFile(zipPath);
+
+    await expect(stageRestore(vault, zip)).rejects.toBeInstanceOf(RestoreValidationError);
+    await expect(stageRestore(vault, Buffer.from("garbage"))).rejects.toBeInstanceOf(RestoreValidationError);
+  });
+
+  it("applyPendingRestore is a no-op with nothing staged", async () => {
+    const vault = await tmp("adm-restore-none-");
+    await fs.mkdir(vault, { recursive: true });
+    expect(await applyPendingRestore(vault)).toBe(false);
   });
 });

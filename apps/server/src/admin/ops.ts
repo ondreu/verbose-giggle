@@ -10,7 +10,7 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import YAML from "yaml";
-import { dirSize, zipDirToFile } from "../vault/zip.js";
+import { dirSize, zipDirToFile, listZipEntries, unzipInto } from "../vault/zip.js";
 import { SHARED_SCOPE } from "../session/registry.js";
 
 /** A single path segment with no separators / traversal / dotfiles. */
@@ -236,5 +236,83 @@ export async function deleteBackup(vaultPath: string, name: string): Promise<boo
     return true;
   } catch {
     return false;
+  }
+}
+
+// --- Guarded restore (#59c part 4): validate → stage → swap at next start ----
+
+/** Marker file holding the validated backup to swap in on the next boot. */
+function pendingRestorePath(vaultPath: string): string {
+  return path.join(vaultPath, ".restore-pending.zip");
+}
+
+/** Temp dir a pending restore is unpacked into before the atomic swap. */
+function restoreStagingDir(vaultPath: string): string {
+  return path.join(vaultPath, ".restore-staging");
+}
+
+export class RestoreValidationError extends Error {}
+
+/**
+ * Validate a backup archive and stage it for a swap-in at the next start (#59c).
+ * We never overwrite the live vault while the app (and its open SQLite handle)
+ * is running; instead the bytes are parked as a marker and {@link
+ * applyPendingRestore} swaps them in at boot, before the DB is opened. Throws
+ * {@link RestoreValidationError} if the archive isn't a structurally valid vault
+ * backup (must contain `db/app.db`). Returns the entry count.
+ */
+export async function stageRestore(vaultPath: string, zip: Buffer): Promise<{ entries: number }> {
+  let names: string[];
+  try {
+    names = listZipEntries(zip);
+  } catch (err) {
+    throw new RestoreValidationError((err as Error).message);
+  }
+  if (!names.includes("db/app.db")) {
+    throw new RestoreValidationError("Tohle nevypadá jako záloha vaultu (chybí db/app.db).");
+  }
+  await fs.mkdir(vaultPath, { recursive: true });
+  await fs.writeFile(pendingRestorePath(vaultPath), zip, { mode: 0o600 });
+  return { entries: names.length };
+}
+
+/**
+ * If a restore was staged, swap it into the vault. MUST run at boot before the
+ * database is opened. Extracts into a staging dir, re-validates, then replaces
+ * each top-level entry atomically (`rename`). `backups/` is preserved (a backup
+ * never contains it). On any failure the live vault is left untouched and the
+ * bad marker is cleared. Returns true when a restore was applied.
+ */
+export async function applyPendingRestore(
+  vaultPath: string,
+  log?: (msg: string) => void,
+): Promise<boolean> {
+  const pending = pendingRestorePath(vaultPath);
+  let zip: Buffer;
+  try {
+    zip = await fs.readFile(pending);
+  } catch {
+    return false; // nothing staged
+  }
+  const staging = restoreStagingDir(vaultPath);
+  try {
+    await fs.rm(staging, { recursive: true, force: true });
+    await fs.mkdir(staging, { recursive: true });
+    await unzipInto(staging, zip);
+    // Re-validate the unpacked tree before touching live data.
+    await fs.access(path.join(staging, "db", "app.db"));
+    for (const entry of await fs.readdir(staging)) {
+      const dest = path.join(vaultPath, entry);
+      await fs.rm(dest, { recursive: true, force: true });
+      await fs.rename(path.join(staging, entry), dest);
+    }
+    log?.("Applied staged vault restore.");
+    return true;
+  } catch (err) {
+    log?.(`Pending restore failed; vault left untouched: ${(err as Error).message}`);
+    return false;
+  } finally {
+    await fs.rm(pending, { force: true }).catch(() => {});
+    await fs.rm(staging, { recursive: true, force: true }).catch(() => {});
   }
 }

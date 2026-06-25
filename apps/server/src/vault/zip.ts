@@ -260,6 +260,36 @@ function sanitizeEntry(name: string): string | null {
   return parts.join("/");
 }
 
+/** Locate the End Of Central Directory record, scanning back from the tail. */
+function findEocd(zip: Buffer): number {
+  for (let i = zip.length - 22; i >= 0; i--) {
+    if (zip.readUInt32LE(i) === 0x06054b50) return i;
+  }
+  return -1;
+}
+
+/**
+ * List the file entry names in a ZIP via its central directory, without
+ * extracting. Used to validate an uploaded backup (#59c) before staging it.
+ * Throws on a structurally invalid archive.
+ */
+export function listZipEntries(zip: Buffer): string[] {
+  const eocd = findEocd(zip);
+  if (eocd < 0) throw new Error("Neplatný ZIP soubor (chybí EOCD).");
+  const count = zip.readUInt16LE(eocd + 10);
+  let p = zip.readUInt32LE(eocd + 16);
+  const names: string[] = [];
+  for (let n = 0; n < count; n++) {
+    if (zip.readUInt32LE(p) !== 0x02014b50) throw new Error("Poškozený ZIP (central dir).");
+    const nameLen = zip.readUInt16LE(p + 28);
+    const extraLen = zip.readUInt16LE(p + 30);
+    const commentLen = zip.readUInt16LE(p + 32);
+    names.push(zip.toString("utf8", p + 46, p + 46 + nameLen));
+    p += 46 + nameLen + extraLen + commentLen;
+  }
+  return names;
+}
+
 /**
  * Extract a ZIP archive into `destDir` (#worlds upload). Reads via the central
  * directory so it tolerates archives written by other tools, and supports both
@@ -268,14 +298,7 @@ function sanitizeEntry(name: string): string | null {
  * the number of files written.
  */
 export async function unzipInto(destDir: string, zip: Buffer): Promise<number> {
-  // Find the End Of Central Directory record (scan back from the tail).
-  let eocd = -1;
-  for (let i = zip.length - 22; i >= 0; i--) {
-    if (zip.readUInt32LE(i) === 0x06054b50) {
-      eocd = i;
-      break;
-    }
-  }
+  const eocd = findEocd(zip);
   if (eocd < 0) throw new Error("Neplatný ZIP soubor (chybí EOCD).");
 
   const count = zip.readUInt16LE(eocd + 10);

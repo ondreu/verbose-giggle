@@ -19,6 +19,7 @@ import { LogEmailSender, SmtpEmailSender, type EmailSender } from "./auth/email.
 import { AuthService } from "./auth/service.js";
 import { registerAuthGuard, registerCsrfGuard } from "./auth/middleware.js";
 import { RateLimiter } from "./auth/rate-limit.js";
+import { applyPendingRestore } from "./admin/ops.js";
 
 async function main(): Promise<void> {
   const startedAtMs = Date.now();
@@ -51,6 +52,12 @@ async function main(): Promise<void> {
         reply.header("WWW-Authenticate", 'Basic realm="adm"').code(401).send("Unauthorized");
       }
     });
+  }
+
+  // A staged restore (#59c) is swapped in here, before anything opens the DB or
+  // reads vault data, so the SQLite handle below sees the restored file.
+  if (await applyPendingRestore(config.vaultPath, (msg) => app.log.warn(msg))) {
+    app.log.info("Vault restored from a staged backup at startup.");
   }
 
   // Accounts (#55): app DB + auth service. File-first SQLite in the vault.

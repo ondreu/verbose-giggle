@@ -20,6 +20,8 @@ import {
   listAllCampaigns,
   listBackups,
   backupPath,
+  stageRestore,
+  RestoreValidationError,
 } from "../admin/ops.js";
 import { zipDir } from "../vault/zip.js";
 import { promises as fs } from "node:fs";
@@ -66,6 +68,17 @@ function userRow(u: ReturnType<UserStore["list"]>[number]) {
 }
 
 export async function registerAdminRoutes(app: FastifyInstance, ctx: AdminContext): Promise<void> {
+  // Accept a raw backup archive on the restore-upload route (#59c). Fastify only
+  // parses JSON/urlencoded out of the box; hand zip bytes through untouched. A
+  // generous cap keeps a hostile upload from exhausting memory.
+  if (!app.hasContentTypeParser("application/zip")) {
+    app.addContentTypeParser(
+      "application/zip",
+      { parseAs: "buffer", bodyLimit: 512 * 1024 * 1024 },
+      (_req, body, done) => done(null, body),
+    );
+  }
+
   app.get("/api/admin/users", async () => ({
     users: ctx.users.list().map((u) => ({ ...userRow(u), credits: ctx.credits.balance(u.id) })),
   }));
@@ -332,5 +345,45 @@ export async function registerAdminRoutes(app: FastifyInstance, ctx: AdminContex
     if (!ok) return reply.code(404).send({ error: "Záloha nenalezena." });
     ctx.audit.record(req.user!.id, "backup.delete", null, req.params.name);
     return reply.send({ ok: true });
+  });
+
+  // --- Guarded restore (#59c): validate now, swap in at the next restart ------
+  // Stage a restore from an already-stored backup, by name.
+  app.post<{ Params: { name: string } }>(
+    "/api/admin/backups/:name/restore",
+    async (req, reply) => {
+      const p = backupPath(ctx.vaultPath, req.params.name);
+      if (!p) return reply.code(400).send({ error: "Neplatný název zálohy." });
+      let zip: Buffer;
+      try {
+        zip = await fs.readFile(p);
+      } catch {
+        return reply.code(404).send({ error: "Záloha nenalezena." });
+      }
+      try {
+        const info = await stageRestore(ctx.vaultPath, zip);
+        ctx.audit.record(req.user!.id, "vault.restore.stage", null, req.params.name);
+        return reply.send({ ok: true, ...info, appliesAtRestart: true });
+      } catch (err) {
+        if (err instanceof RestoreValidationError) return reply.code(400).send({ error: err.message });
+        throw err;
+      }
+    },
+  );
+
+  // Stage a restore from an uploaded backup archive (raw application/zip body).
+  app.post("/api/admin/restore", async (req, reply) => {
+    const zip = req.body as Buffer;
+    if (!Buffer.isBuffer(zip) || zip.length === 0) {
+      return reply.code(400).send({ error: "Chybí nahraná záloha." });
+    }
+    try {
+      const info = await stageRestore(ctx.vaultPath, zip);
+      ctx.audit.record(req.user!.id, "vault.restore.upload", null, `${info.entries} souborů`);
+      return reply.send({ ok: true, ...info, appliesAtRestart: true });
+    } catch (err) {
+      if (err instanceof RestoreValidationError) return reply.code(400).send({ error: err.message });
+      throw err;
+    }
   });
 }

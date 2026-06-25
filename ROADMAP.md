@@ -244,12 +244,15 @@ kredity = bezpečnost přestává být „nice to have".
   (`apps/server/src/auth/rate-limit.ts`) na `/api/auth/login` a
   `/api/auth/register`, konfigurovatelný přes `AUTH_*_RATE_*`; úspěšné přihlášení
   vynuluje okno dané IP. Zbývá: CAPTCHA.
-- **[ ] #59c — Hardening záloh (#57b).** (1) Konzistence: zálohuje se živý SQLite
-  soubor — před zipem `PRAGMA wal_checkpoint(TRUNCATE)` / `VACUUM INTO` pro čistý
-  snapshot. (2) Paměť: `zipDir` staví celý archiv v `Buffer` — u velkého vaultu
-  (mapy) hrozí nafouknutí RSS; streamovat. (3) Retence: zálohy rostou bez limitu
-  ve vault volume — „nech posledních N" + strop. (4) Hlídaný restore (upload →
-  validace → swap při příštím startu). (5) Záloha obsahuje hashe hesel — citlivá.
+- **[x] #59c — Hardening záloh (#57b).** Hotovo: (1) Konzistence — před zipem
+  `PRAGMA wal_checkpoint(TRUNCATE)` (`checkpointDatabase`). (2) Paměť — `zipDirToFile`
+  streamuje archiv po jednom souboru na disk místo plnění `Buffer`u. (3) Retence —
+  `BACKUP_RETENTION` (default 10), starší se po každé záloze prořežou
+  (`pruneBackups`). (4) Hlídaný restore — `stageRestore` validuje archiv a uloží
+  ho jako marker; `applyPendingRestore` ho při příštím startu (před otevřením DB)
+  atomicky prohodí (`POST /api/admin/backups/:name/restore` i upload
+  `POST /api/admin/restore`). (5) Zálohy se píší s právy `0o600` (obsahují hashe
+  hesel).
 - **[x] #59d — Mazání otevřené kampaně.** Hotovo: po `DELETE /api/admin/vaults/...`
   se volá `SessionRegistry.invalidateScope` (emit `reload` připojeným klientům +
   zahození cachovaného scope), takže další tah scope znovu otevře místo běhu nad

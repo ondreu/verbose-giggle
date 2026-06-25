@@ -361,4 +361,25 @@ describe("admin dev panel (#57b)", () => {
     expect(res.statusCode).toBe(404);
     await app.close();
   });
+
+  it("stages a restore from a stored backup (#59c)", async () => {
+    const { app, adminSid, vaultPath } = await setup();
+    // Tests use an in-memory DB, so write a db/app.db file the backup must carry
+    // for restore validation to accept the archive as a real vault backup.
+    await fs.mkdir(path.join(vaultPath, "db"), { recursive: true });
+    await fs.writeFile(path.join(vaultPath, "db", "app.db"), "fake-sqlite");
+    const create = await app.inject({ method: "POST", url: "/api/admin/backups", ...asAdmin(adminSid) });
+    const name = create.json().name;
+
+    const restore = await app.inject({
+      method: "POST",
+      url: `/api/admin/backups/${name}/restore`,
+      ...asAdmin(adminSid),
+    });
+    expect(restore.statusCode).toBe(200);
+    expect(restore.json().appliesAtRestart).toBe(true);
+    // The marker is staged for the next boot to pick up.
+    await expect(fs.stat(path.join(vaultPath, ".restore-pending.zip"))).resolves.toBeTruthy();
+    await app.close();
+  });
 });
