@@ -28,6 +28,7 @@ import {
   type ServerSettings,
   type ServerSettingsPatch,
 } from "../auth";
+import { ProviderSettings } from "./ProviderSettings";
 
 /**
  * Admin / dev panel (#57d, #57b), reached at /admin. Gated server-side: the
@@ -276,16 +277,12 @@ function ServerTab({ onErr }: { onErr: ErrHandler }) {
         <PricingEditor settings={s} onSave={(pricing) => save({ pricing })} />
       </section>
 
-      <section className="flex flex-col gap-1">
-        <H2>Poskytovatelé (jen pro čtení)</H2>
-        <p className="font-log text-xs text-ink/50">Klíče a modely se nastavují v Nastavení aplikace.</p>
-        <dl className="grid grid-cols-2 gap-x-6 gap-y-1 font-log text-sm text-ink/70 sm:grid-cols-3">
-          <Row k="LLM" v={`${s.providers.llm.provider} · ${s.providers.llm.model}`} />
-          <Row k="LLM klíč" v={s.providers.llm.hasKey ? "nastaven" : "—"} />
-          <Row k="Obrázky" v={s.providers.image.enabled ? s.providers.image.model ?? "zap." : "vyp."} />
-          <Row k="TTS" v={s.providers.tts.engine} />
-          <Row k="SRD" v={s.providers.srdPath} />
-        </dl>
+      <section className="flex flex-col gap-2">
+        <H2>Poskytovatelé (AI, obrázky, TTS, SRD)</H2>
+        <p className="font-log text-xs text-ink/50">
+          Klíče a modely se ukládají do vaultu (settings.json), ne do .env — přežijí restart i nasazení.
+        </p>
+        <ProviderSettings />
       </section>
 
       {saved && <p className="font-log text-sm text-gold">Uloženo. Nastavení přežije i restart.</p>}
