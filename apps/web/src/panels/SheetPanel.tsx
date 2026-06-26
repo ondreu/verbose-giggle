@@ -53,9 +53,12 @@ export function SheetPanel() {
   const imageLoading = useGame((s) => s.imageLoading);
   const [levelUpOpen, setLevelUpOpen] = useState(false);
   const [openCond, setOpenCond] = useState<string | null>(null);
-  // Level + range for the known spells: level splits cantrips (ember tone, #3),
-  // range_ft lets the map highlight the cells a spell can reach when aiming (#2).
-  const [spellMeta, setSpellMeta] = useState<Record<string, { level?: number; range_ft?: number }>>({});
+  // Level + range + casting time for the known spells: level splits cantrips
+  // (ember tone, #3), range_ft lets the map highlight a spell's reach (#2), and
+  // casting_time tells whether a spell costs an action or a bonus action (#7).
+  const [spellMeta, setSpellMeta] = useState<
+    Record<string, { level?: number; range_ft?: number; casting_time?: string }>
+  >({});
 
   // Cast a spell after the player picks a target (#8 + #38).
   const castSpellAt = async (spell: string) => {
@@ -82,7 +85,10 @@ export function SheetPanel() {
       try {
         const res = await fetch(`/api/srd/spells?ids=${encodeURIComponent(ids.join(","))}`);
         if (!res.ok) return;
-        const data = (await res.json()) as Record<string, { level?: number; range_ft?: number }>;
+        const data = (await res.json()) as Record<
+          string,
+          { level?: number; range_ft?: number; casting_time?: string }
+        >;
         if (cancelled) return;
         setSpellMeta(data);
       } catch {
@@ -138,6 +144,23 @@ export function SheetPanel() {
   };
   /** Level-0 spell → its own ember "Triky" group (#3). Unknown levels list as spells. */
   const isCantrip = (id: string) => spellMeta[id]?.level === 0;
+
+  // Action-economy gating (#7): once it's this character's combat turn and the
+  // engine's budget says the action (or bonus action) is spent, grey out the
+  // options that need it — leaving only what the remaining budget can still pay
+  // for. Outside combat / on someone else's turn there's no budget to gate on,
+  // so everything stays enabled (the engine remains the final arbiter).
+  const combat = session?.combat;
+  const myCombatTurn = !!combat && combat.order[combat.turn_index]?.actor === actor.id && !viewingOther;
+  const budget = myCombatTurn ? combat?.budget : undefined;
+  const actionSpent = budget ? !budget.action : false;
+  const bonusSpent = budget ? !budget.bonus : false;
+  /** A spell whose casting time is a bonus action costs the bonus action, not the action. */
+  const spellIsBonus = (id: string) => /bonus/i.test(spellMeta[id]?.casting_time ?? "");
+  /** Can the character still pay for this spell this turn? */
+  const spellSpent = (id: string) => (spellIsBonus(id) ? bonusSpent : actionSpent);
+  /** Weapon attacks and standard actions all cost the action. */
+  const actionDisabled = disabled || actionSpent;
 
   const equipped = inventory.filter((i) => i.equipped && isWeaponId(i.id));
 
@@ -340,6 +363,14 @@ export function SheetPanel() {
               — náhled cizí postavy, akce patří jejímu tahu
             </span>
           )}
+          {/* Remaining action-economy budget on this character's turn (#7). */}
+          {budget && (
+            <span className="ml-auto flex items-center gap-1.5 font-log text-[10px] normal-case tracking-normal">
+              <span className={budget.action ? "text-ink/70" : "text-ink/30 line-through"}>akce</span>
+              <span className={budget.bonus ? "text-ink/70" : "text-ink/30 line-through"}>bonus</span>
+              <span className="text-ink/55">{budget.movement} ft</span>
+            </span>
+          )}
         </div>
 
         {/* Attacks (#43c: armor filtered out by isWeaponId) */}
@@ -347,7 +378,7 @@ export function SheetPanel() {
           <Tip content={<p className="font-body text-sm leading-snug text-text">Útok libovolnou vybavenou zbraní. DM určí hod na útok a poškození.</p>}>
             <ActionChip
               label="Útok zbraní"
-              disabled={disabled}
+              disabled={actionDisabled}
               onClick={() => void aim("Cíl útoku", (c) => `Zaútočím vybranou zbraní${c}.`, false)}
             />
           </Tip>
@@ -357,31 +388,31 @@ export function SheetPanel() {
             <Tip key={i.id} content={<p className="font-body text-sm leading-snug text-text">Útok zbraní {wpn}.</p>}>
               <ActionChip
                 label={wpn}
-                disabled={disabled}
+                disabled={actionDisabled}
                 onClick={() => void aim(`Cíl pro ${wpn}`, (c) => `Zaútočím zbraní ${wpn} (${i.id})${c}.`, false)}
               />
             </Tip>
           );
           })}
           <Tip content={<p className="font-body text-sm leading-snug text-text">Úder pěstí nebo kolenem. Zásah: 1 + mod. Síly drtivého poškození.</p>}>
-            <ActionChip label="Beze zbraně" disabled={disabled}
+            <ActionChip label="Beze zbraně" disabled={actionDisabled}
               onClick={() => void aim("Cíl útoku beze zbraně", (c) => `Zaútočím beze zbraně (unarmed strike)${c}.`, false)} />
           </Tip>
           <Tip content={<p className="font-body text-sm leading-snug text-text">Shove — sraž nebo odtlač protivníka na 5 stop. Protichůdný hod: Atletika vs. Atletika / Akrobacie.</p>}>
-            <ActionChip label="Strčení" disabled={disabled}
+            <ActionChip label="Strčení" disabled={actionDisabled}
               onClick={() => void aim("Cíl strčení", (c) => `Použiju speciální útok Strčení (Shove)${c} — pokus o sražení nebo odtlačení.`, false)} />
           </Tip>
           <Tip content={<p className="font-body text-sm leading-snug text-text">Grapple — zachyť protivníka; jeho rychlost klesne na 0. Protichůdný hod: Atletika vs. Atletika / Akrobacie.</p>}>
-            <ActionChip label="Chvat" disabled={disabled}
+            <ActionChip label="Chvat" disabled={actionDisabled}
               onClick={() => void aim("Cíl chvatu", (c) => `Pokusím se o Chvat (Grapple)${c}.`, false)} />
           </Tip>
         </ActionGroup>
 
-        {/* Standard actions */}
+        {/* Standard actions — Dash/Dodge/Disengage/Help/Hide/Search all cost the action (#7). */}
         <ActionGroup label="Obecné akce" icon="d20">
           {STANDARD_ACTIONS.map((a) => (
             <Tip key={a.label} content={<p className="font-body text-sm leading-snug text-text">{a.tip}</p>}>
-              <ActionChip label={a.label} disabled={disabled} onClick={() => act(a.text)} />
+              <ActionChip label={a.label} disabled={actionDisabled} onClick={() => act(a.text)} />
             </Tip>
           ))}
         </ActionGroup>
@@ -395,7 +426,7 @@ export function SheetPanel() {
                 <ActionChip
                   label={prettySpell(spell)}
                   cantrip
-                  disabled={disabled}
+                  disabled={disabled || spellSpent(spell)}
                   onClick={() => void aim(`Cíl pro ${prettySpell(spell)}`, (c) => `Sešlu trik ${prettySpell(spell)} (${spell})${c}.`, true, spellMeta[spell]?.range_ft)}
                 />
               </SpellCard>
@@ -411,7 +442,7 @@ export function SheetPanel() {
                 <ActionChip
                   label={prettySpell(spell)}
                   accent
-                  disabled={disabled}
+                  disabled={disabled || spellSpent(spell)}
                   onClick={() => void aim(`Cíl pro ${prettySpell(spell)}`, (c) => `Sešlu kouzlo ${prettySpell(spell)} (${spell})${c}.`, true, spellMeta[spell]?.range_ft)}
                 />
               </SpellCard>
