@@ -60,6 +60,14 @@ export function applyDamage(
     result: { hp_before: hpBefore, hp_after: target.hp.current, resisted: mult === 0.5, dropped },
   });
 
+  // Enemies and bystanders die outright at 0 HP and leave the board (#6): a
+  // monster corpse shouldn't linger as a clickable token cluttering the map.
+  // Player characters and allied companions instead fall unconscious and stay
+  // on the field for death saves / revival (handled above).
+  if (dropped && (target.faction === "hostile" || target.faction === "neutral")) {
+    markDead(state, target);
+  }
+
   // Concentration check on taking damage (§8.1). Dropping to 0 HP breaks it
   // outright; otherwise a CON save vs DC = max(10, ⌊damage/2⌋).
   if (target.concentration) {
@@ -228,7 +236,9 @@ export function attack(
         const step = approachStep(state, { actor: args.attacker, target: args.target, reachFt: maxRangeFt });
         const hint = step ? ` — nejdřív se přesuň na (${step.to.x},${step.to.y}), pak vystřel` : "";
         const detail = `${attacker.name} je mimo dostřel — vzdálenost ${distFt} ft přesahuje dosah zbraně ${maxRangeFt} ft${hint}`;
-        log(state, { kind: "attack", actor: args.attacker, target: args.target, detail, tool: "attack" });
+        // Not logged (#8.2): the grid-coordinate hint guides the model but must
+        // never reach the player-facing chat as a roll card — the DM narrates
+        // "closes the distance, then fires" in prose instead.
         return { to_hit: 0, hit: false, crit: false, detail, noop: true };
       }
     } else {
@@ -244,7 +254,8 @@ export function attack(
           ? ` — přesuň se nejdřív na (${step.to.x},${step.to.y})${step.inReach ? " a zaútoč" : " (blíž, ale ještě ne na dosah)"}`
           : "";
         const detail = `${attacker.name} je příliš daleko od ${target.name} pro útok nablízko — vzdálenost ${distFt} ft, dosah ${reachFt} ft${hint}`;
-        log(state, { kind: "attack", actor: args.attacker, target: args.target, detail, tool: "attack" });
+        // Not logged (#8.2): same as the ranged case — the coordinate hint is for
+        // the model only; the chat stays immersive (no "move to (2,0)" cards).
         return { to_hit: 0, hit: false, crit: false, detail, noop: true };
       }
     }

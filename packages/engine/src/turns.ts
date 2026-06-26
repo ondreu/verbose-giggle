@@ -9,9 +9,13 @@ function freshBudget(speed: number): CombatState["budget"] {
 /**
  * Ensure every participant has a grid position so the tactical map always
  * renders tokens — even when combat is started ad hoc by the DM (no authored
- * encounter, no positions). Friendly factions line up on the left edge, hostile
- * and neutral on the right; both stack down rows, then step inward. Actors that
- * already have a position (authored spawns / party_start) are left untouched.
+ * encounter, no positions). Rather than dumping the two sides into opposite
+ * corners (#5 — far apart and visually marooned), place them as two facing
+ * lines straddling the board centre: friendly just left of centre, hostile just
+ * right, both vertically centred. The default gap is a couple of cells so melee
+ * is one step away, not a board-length march. Columns step further out only when
+ * a side has more combatants than fit in one column. Actors that already have a
+ * position (authored spawns / party_start) are left untouched.
  */
 function autoPlaceParticipants(
   state: GameState,
@@ -23,25 +27,46 @@ function autoPlaceParticipants(
     const p = state.actors[id]?.position;
     if (p) taken.add(`${p.x},${p.y}`);
   }
-  const cellFor = (side: "left" | "right", idx: number) => {
-    const inward = Math.floor(idx / grid.h);
-    const x = side === "left" ? Math.min(inward, grid.w - 1) : Math.max(grid.w - 1 - inward, 0);
-    return { x, y: idx % grid.h };
+  const midX = Math.floor(grid.w / 2);
+  // The two front lines sit one cell either side of centre (≈10 ft apart on a
+  // 5 ft grid), clamped so a tiny board still places both sides on the map.
+  const frontFor = (side: "left" | "right") =>
+    side === "left" ? Math.max(0, midX - 1) : Math.min(grid.w - 1, midX + 1);
+  const clampX = (x: number) => Math.max(0, Math.min(grid.w - 1, x));
+
+  const place = (ids: string[], side: "left" | "right") => {
+    if (ids.length === 0) return;
+    const front = frontFor(side);
+    const step = side === "left" ? -1 : 1; // extra ranks fall back behind the line
+    // Vertically centre the column so combat starts mid-board, not at the top.
+    const startRow = Math.max(0, Math.floor((grid.h - Math.min(ids.length, grid.h)) / 2));
+    ids.forEach((id, idx) => {
+      const a = state.actors[id];
+      if (!a) return;
+      const col = Math.floor(idx / grid.h);
+      const x = clampX(front + step * col);
+      let y = (startRow + (idx % grid.h)) % grid.h;
+      let cell = { x, y };
+      // Walk down rows to find a free cell, bounded so this always terminates.
+      for (let guard = 0; taken.has(`${cell.x},${cell.y}`) && guard < grid.w * grid.h; guard++) {
+        y = (y + 1) % grid.h;
+        cell = { x, y };
+      }
+      a.position = cell;
+      taken.add(`${cell.x},${cell.y}`);
+    });
   };
-  let leftIdx = 0;
-  let rightIdx = 0;
+
+  const left: string[] = [];
+  const right: string[] = [];
   for (const id of participants) {
     const a = state.actors[id];
     if (!a || a.position) continue;
     const friendly = a.faction === "party" || a.faction === "ally";
-    let cell = cellFor(friendly ? "left" : "right", friendly ? leftIdx++ : rightIdx++);
-    // Skip occupied cells, bounded by the grid size so this always terminates.
-    for (let guard = 0; taken.has(`${cell.x},${cell.y}`) && guard < grid.w * grid.h; guard++) {
-      cell = cellFor(friendly ? "left" : "right", friendly ? leftIdx++ : rightIdx++);
-    }
-    a.position = cell;
-    taken.add(`${cell.x},${cell.y}`);
+    (friendly ? left : right).push(id);
   }
+  place(left, "left");
+  place(right, "right");
 }
 
 export interface StartCombatResult {

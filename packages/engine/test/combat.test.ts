@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyDamage, attack, checkCampaignEnd, deathSave, heal } from "../src/index.js";
+import { applyDamage, attack, checkCampaignEnd, deathSave, heal, startCombat } from "../src/index.js";
 import { makeActor, makeState } from "./helpers.js";
 
 describe("apply_damage", () => {
@@ -28,6 +28,35 @@ describe("apply_damage", () => {
     expect(applyDamage(makeState([res]), { target: "t", amount: 10, type: "fire" }).hp_after).toBe(95);
     expect(applyDamage(makeState([vul]), { target: "t", amount: 10, type: "fire" }).hp_after).toBe(80);
     expect(applyDamage(makeState([imm]), { target: "t", amount: 10, type: "fire" }).hp_after).toBe(100);
+  });
+});
+
+describe("death clears the board (#6)", () => {
+  it("removes a slain hostile from the map and initiative order", () => {
+    const hero = makeActor({ id: "h", name: "H", faction: "party" });
+    const gob = makeActor({ id: "g", name: "G", faction: "hostile", hp: { max: 7, current: 7, temp: 0 } });
+    const state = makeState([hero, gob], "enemy-death");
+    startCombat(state, { participants: ["h", "g"], grid: { w: 10, h: 10, cell_ft: 5 } });
+
+    applyDamage(state, { target: "g", amount: 99, type: "fire" });
+
+    expect(gob.dead).toBe(true);
+    const c = state.session.combat!;
+    expect(c.tokens.g).toBeUndefined();
+    expect(c.order.some((o) => o.actor === "g")).toBe(false);
+  });
+
+  it("leaves a downed party member on the board (death saves, not removed)", () => {
+    const hero = makeActor({ id: "h", name: "H", faction: "party", hp: { max: 8, current: 8, temp: 0 } });
+    const gob = makeActor({ id: "g", name: "G", faction: "hostile" });
+    const state = makeState([hero, gob], "pc-down");
+    startCombat(state, { participants: ["h", "g"], grid: { w: 10, h: 10, cell_ft: 5 } });
+
+    applyDamage(state, { target: "h", amount: 99 });
+
+    expect(hero.dead).toBeFalsy();
+    expect(state.session.combat!.tokens.h).toBeDefined();
+    expect(hero.conditions.some((c) => c.name === "unconscious")).toBe(true);
   });
 });
 
