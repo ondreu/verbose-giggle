@@ -53,9 +53,9 @@ export function SheetPanel() {
   const imageLoading = useGame((s) => s.imageLoading);
   const [levelUpOpen, setLevelUpOpen] = useState(false);
   const [openCond, setOpenCond] = useState<string | null>(null);
-  // Which known spells are cantrips (level 0), so they get the ember tone and a
-  // "trik" verb, visually split from slotted spells like the actions list (#3).
-  const [cantripIds, setCantripIds] = useState<Set<string>>(new Set());
+  // Level + range for the known spells: level splits cantrips (ember tone, #3),
+  // range_ft lets the map highlight the cells a spell can reach when aiming (#2).
+  const [spellMeta, setSpellMeta] = useState<Record<string, { level?: number; range_ft?: number }>>({});
 
   // Cast a spell after the player picks a target (#8 + #38).
   const castSpellAt = async (spell: string) => {
@@ -82,9 +82,9 @@ export function SheetPanel() {
       try {
         const res = await fetch(`/api/srd/spells?ids=${encodeURIComponent(ids.join(","))}`);
         if (!res.ok) return;
-        const data = (await res.json()) as Record<string, { level?: number }>;
+        const data = (await res.json()) as Record<string, { level?: number; range_ft?: number }>;
         if (cancelled) return;
-        setCantripIds(new Set(ids.filter((id) => data[id]?.level === 0)));
+        setSpellMeta(data);
       } catch {
         /* leave unsplit — chips still render under "Kouzla" */
       }
@@ -128,12 +128,16 @@ export function SheetPanel() {
 
   // Action helpers for the consolidated action hub (#43).
   const act = (text: string) => { if (!disabled) void sendAction(text); };
-  const aim = async (title: string, build: (clause: string) => string, allowNone = true) => {
+  // `range` (ft) makes the map highlight the cells within reach from the caster (#2).
+  const aim = async (title: string, build: (clause: string) => string, allowNone = true, range?: number) => {
     if (disabled) return;
-    const t = await requestTarget(title, allowNone);
+    const origin = session?.combat?.tokens?.[actor.id];
+    const t = await requestTarget(title, allowNone, range != null ? { range, origin } : undefined);
     if (t === "cancelled") return;
     void sendAction(build(targetClause(t)));
   };
+  /** Level-0 spell → its own ember "Triky" group (#3). Unknown levels list as spells. */
+  const isCantrip = (id: string) => spellMeta[id]?.level === 0;
 
   const equipped = inventory.filter((i) => i.equipped && isWeaponId(i.id));
 
@@ -384,15 +388,15 @@ export function SheetPanel() {
 
         {/* Cantrips — split out with the ember tone, distinct from slotted
             spells (#3). Verb is "Sešlu trik" so the engine reads them as cantrips. */}
-        {actor.spells_known.some((s) => cantripIds.has(s)) && (
+        {actor.spells_known.some(isCantrip) && (
           <ActionGroup label="Triky (cantripy)" icon="flame">
-            {actor.spells_known.filter((s) => cantripIds.has(s)).map((spell) => (
+            {actor.spells_known.filter(isCantrip).map((spell) => (
               <SpellCard key={spell} id={spell}>
                 <ActionChip
                   label={prettySpell(spell)}
                   cantrip
                   disabled={disabled}
-                  onClick={() => void aim(`Cíl pro ${prettySpell(spell)}`, (c) => `Sešlu trik ${prettySpell(spell)} (${spell})${c}.`)}
+                  onClick={() => void aim(`Cíl pro ${prettySpell(spell)}`, (c) => `Sešlu trik ${prettySpell(spell)} (${spell})${c}.`, true, spellMeta[spell]?.range_ft)}
                 />
               </SpellCard>
             ))}
@@ -400,15 +404,15 @@ export function SheetPanel() {
         )}
 
         {/* Slotted spells — shown once here; "Známá kouzla" above removed (#43b + #42a). */}
-        {actor.spells_known.some((s) => !cantripIds.has(s)) && (
+        {actor.spells_known.some((s) => !isCantrip(s)) && (
           <ActionGroup label="Kouzla" icon="flame">
-            {actor.spells_known.filter((s) => !cantripIds.has(s)).map((spell) => (
+            {actor.spells_known.filter((s) => !isCantrip(s)).map((spell) => (
               <SpellCard key={spell} id={spell}>
                 <ActionChip
                   label={prettySpell(spell)}
                   accent
                   disabled={disabled}
-                  onClick={() => void aim(`Cíl pro ${prettySpell(spell)}`, (c) => `Sešlu kouzlo ${prettySpell(spell)} (${spell})${c}.`)}
+                  onClick={() => void aim(`Cíl pro ${prettySpell(spell)}`, (c) => `Sešlu kouzlo ${prettySpell(spell)} (${spell})${c}.`, true, spellMeta[spell]?.range_ft)}
                 />
               </SpellCard>
             ))}
