@@ -236,15 +236,25 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
   }
 
   /**
-   * The OpenRouter slug this scope's user picked from the operator pool (#56g),
-   * or undefined to use the global default. Confined to current pool members so
-   * a stale saved slug (model removed from the pool) safely falls back.
+   * The effective model for this scope — used for *every* LLM call in the
+   * scope (player turns AND system beats: intro/recap/arrival/AI turns), so the
+   * whole experience runs on the model the player chose (#56g). Resolution:
+   *   1. the player's pick from the pool (if still a pool member),
+   *   2. else the first pooled model (sensible default, keeps everything on a
+   *      pool model rather than a hardcoded provider default),
+   *   3. else undefined → falls back to the global `config.llm.model` (env),
+   *      which is normally empty now (pool is the source of truth).
    */
-  async function resolveSelectedModel(sess: UserSession): Promise<string | undefined> {
+  async function resolveScopeModel(sess: UserSession): Promise<string | undefined> {
     const scoped = await loadSettings(sess.root);
     const wanted = scoped.selectedModel?.trim();
-    if (!wanted) return undefined;
-    return config.modelPool.some((m) => m.model === wanted) ? wanted : undefined;
+    if (wanted && config.modelPool.some((m) => m.model === wanted)) return wanted;
+    return config.modelPool[0]?.model;
+  }
+
+  /** Build a narrator for this scope, defaulting to the scope's chosen model. */
+  async function llmForScope(sess: UserSession): Promise<Llm> {
+    return makeLlm(sess.manager, await resolveScopeModel(sess));
   }
 
   /** Masked view of the effective settings — never leaks secret values. */
@@ -635,7 +645,7 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
   /** Build a campaign with the AI from a player brief, then switch to it. */
   app.post<{ Body: ForgeInput & { select?: boolean } }>("/api/campaigns/forge", async (req, reply) => {
     const sess = await registry.resolve(req);
-    const llm = makeLlm(sess.manager);
+    const llm = await llmForScope(sess);
     try {
       enforceCredits(req);
       const { folder, usedLlm } = await forgeCampaign(sess.root, llm, req.body as ForgeInput);
@@ -656,7 +666,7 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
   /** Streaming SSE variant — emits progress events for each generation phase (#46b). */
   app.post<{ Body: ForgeInput & { select?: boolean } }>("/api/campaigns/forge/stream", async (req, reply) => {
     const sess = await registry.resolve(req);
-    const llm = makeLlm(sess.manager);
+    const llm = await llmForScope(sess);
     reply.raw.writeHead(200, {
       "Content-Type": "text/event-stream",
       "Cache-Control": "no-cache",
@@ -1032,7 +1042,7 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
   /** Instantiate an authored encounter into live combat, then auto-resolve AI. */
   app.post<{ Params: { id: string } }>("/api/encounter/:id", async (req, reply) => {
     const sess = await registry.resolve(req);
-    const llm = makeLlm(sess.manager);
+    const llm = await llmForScope(sess);
     const gs = sess.manager.buildGameState();
     const before = sess.manager.session.log.length;
     const res = await startEncounter(sess.manager, gs, req.params.id);
@@ -1080,7 +1090,7 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
       session already has any chat history, so reloads never re-trigger it. */
   app.post("/api/intro", async (req, reply) => {
     const sess = await registry.resolve(req);
-    const llm = makeLlm(sess.manager);
+    const llm = await llmForScope(sess);
     const hasHistory = sess.manager.session.chat.some(
       (m) => m.role === "user" || m.role === "assistant",
     );
@@ -1099,7 +1109,7 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
   /** Generate a "previously on…" recap of the story so far (§6.6). */
   app.post("/api/recap", async (req, reply) => {
     const sess = await registry.resolve(req);
-    const llm = makeLlm(sess.manager);
+    const llm = await llmForScope(sess);
     try {
       return await meteredTurn(req, "llm-recap", llm, (l) =>
         runRecap({ manager: sess.manager, llm: l, bus: sess.bus }),
@@ -1133,9 +1143,9 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
   /** Player free-text action → the LLM/engine turn loop. */
   app.post<{ Body: { input: string; as?: string } }>("/api/action", async (req, reply) => {
     const sess = await registry.resolve(req);
-    // Drive the turn with the player's chosen pool model (#56g) when set, so
-    // billing also keys off that model's per-message price.
-    const selectedModel = await resolveSelectedModel(sess);
+    // Drive the turn with the scope's chosen pool model (#56g), so billing also
+    // keys off that model's per-message price.
+    const selectedModel = await resolveScopeModel(sess);
     const llm = makeLlm(sess.manager, selectedModel);
     const input = (req.body?.input ?? "").trim();
     if (!input) return reply.code(400).send({ error: "empty input" });
@@ -1189,7 +1199,7 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
       // Build the narrator AFTER the rewind so the mock introspects the
       // rewound manager, not the stale one. With no explicit "Jiným modelem"
       // pick, default to the player's chosen pool model (#56g).
-      const override = req.body?.model?.trim() || (await resolveSelectedModel(sess));
+      const override = req.body?.model?.trim() || (await resolveScopeModel(sess));
       const model = override || config.llm.model;
       const turnLlm = makeLlm(sess.manager, override || undefined);
       const { narration } = await meteredTurn(
@@ -1211,7 +1221,7 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
   /** Direct engine command (UI buttons: move token, cast spell, etc.) — no LLM. */
   app.post<{ Body: { tool: string; args: unknown } }>("/api/command", async (req, reply) => {
     const sess = await registry.resolve(req);
-    const llm = makeLlm(sess.manager);
+    const llm = await llmForScope(sess);
     const { tool, args } = req.body ?? { tool: "", args: {} };
     if (!tool) return reply.code(400).send({ error: "missing tool" });
 

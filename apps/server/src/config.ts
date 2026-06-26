@@ -178,9 +178,13 @@ export function loadConfig(): Config {
     // local dev with no SRD_PATH falls back to the bundled folder.
     srdPath: process.env.SRD_PATH ?? bundledSrdDir,
     llm: {
-      baseUrl: process.env.LLM_BASE_URL ?? "https://api.mistral.ai/v1",
+      // Everything runs through OpenRouter's single chat-completions endpoint;
+      // the per-turn model comes from the operator model pool (#56g). The model
+      // here is only a last-resort fallback for an empty pool — leave it unset
+      // by default rather than pinning a specific provider's model.
+      baseUrl: process.env.LLM_BASE_URL ?? "https://openrouter.ai/api/v1",
       apiKey: llmApiKey,
-      model: process.env.LLM_MODEL ?? "mistral-medium-3.5",
+      model: process.env.LLM_MODEL ?? "",
       provider: process.env.LLM_PROVIDER === "mock" ? "mock" : "auto",
       altModels: (process.env.LLM_ALT_MODELS ?? "")
         .split(",")
