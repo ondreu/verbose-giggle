@@ -146,12 +146,17 @@ interface GameStore {
   encounters: Record<string, Encounter>;
   narration: NarrationLine[];
   /** True while the DM is producing narration (tokens are streaming in), false
-   *  otherwise. We deliberately do NOT surface the in-flight text: a tool-call
-   *  round's preamble is discarded, so showing it would mean rewriting or
-   *  blanking visible prose mid-turn. Instead the UI shows a neutral "is
-   *  weaving the story…" indicator until the authoritative narration commits to
-   *  `narration` (#32). */
+   *  otherwise. We deliberately do NOT surface the in-flight text as prose: a
+   *  tool-call round's preamble is discarded, so showing it inline would mean
+   *  rewriting or blanking visible prose mid-turn. Instead the UI shows a
+   *  neutral "is weaving the story…" indicator until the authoritative narration
+   *  commits to `narration` (#32). */
   dmWriting: boolean;
+  /** The raw live token stream for the current turn, kept for an opt-in
+   *  expandable diagnostic view under the writing indicator (transparency: see
+   *  what the model is emitting, including discarded tool-round preamble). Reset
+   *  per turn; never rendered as committed prose. */
+  streamingRaw: string;
   ttsEnabled: boolean;
   ttsProvider: TtsProvider;
   /** True while narration audio is actively playing (drives the stop button). */
@@ -281,6 +286,7 @@ export const useGame = create<GameStore>((set, get) => ({
   encounters: {},
   narration: [],
   dmWriting: false,
+  streamingRaw: "",
   ttsEnabled: initialPrefs.ttsEnabled,
   ttsProvider: initialPrefs.ttsProvider,
   speaking: false,
@@ -336,6 +342,7 @@ export const useGame = create<GameStore>((set, get) => ({
       // cards reappear when reopening the campaign, not only during the live
       // stream (they were previously only in session.log, never re-rendered).
       dmWriting: false,
+      streamingRaw: "",
       narration: buildNarration(data.session, () => lineSeq++),
     });
   },
@@ -344,26 +351,30 @@ export const useGame = create<GameStore>((set, get) => ({
     const source = new EventSource("/api/events");
     source.addEventListener("ready", () => set({ connected: true }));
     // Tokens of the DM's answer are streaming in (#32). We don't render the
-    // in-flight text — a tool-call round's preamble gets discarded, so showing
-    // it would blank or rewrite visible prose mid-turn. Just flag that the DM is
-    // composing; the UI shows a neutral indicator until the final narration
-    // commits.
-    source.addEventListener("narration_delta", () => {
-      if (!get().dmWriting) set({ dmWriting: true });
+    // in-flight text as prose — a tool-call round's preamble gets discarded, so
+    // showing it inline would blank or rewrite the chat mid-turn. We flag that
+    // the DM is composing (neutral indicator) and accumulate the raw tokens into
+    // an opt-in expandable diagnostic view.
+    source.addEventListener("narration_delta", (e) => {
+      const { text } = JSON.parse((e as MessageEvent).data) as { text: string };
+      set((s) => ({ dmWriting: true, streamingRaw: s.streamingRaw + text }));
     });
     // The streamed text was a tool-call round's preamble, not the final answer.
-    // Since we never showed it, there is nothing to retract — the DM is still
-    // composing, so keep the indicator up and wait for the next round.
+    // Nothing visible to retract — keep the indicator up — but mark the boundary
+    // in the diagnostic stream so the discarded segment is legible.
     source.addEventListener("narration_discard", () => {
-      /* intentionally no-op: nothing visible to discard (#32). */
+      set((s) => ({
+        streamingRaw: s.streamingRaw + "\n— ⟨zahozeno: model volá nástroj⟩ —\n",
+      }));
     });
     source.addEventListener("narration", (e) => {
       const { text } = JSON.parse((e as MessageEvent).data);
       // Commit the authoritative final text as a real DM line and drop the
-      // "is writing…" indicator.
+      // "is writing…" indicator + its diagnostic buffer.
       set((s) => ({
         narration: [...s.narration, { id: lineSeq++, role: "dm", text }],
         dmWriting: false,
+        streamingRaw: "",
       }));
       if (get().ttsEnabled) {
         void speak(text, get().ttsProvider, () => set({ speaking: false }));
@@ -402,6 +413,7 @@ export const useGame = create<GameStore>((set, get) => ({
         aiActing: activeIsHuman ? null : get().aiActing,
         viewedPlayer: state.combat ? get().viewedPlayer : null,
         dmWriting: false,
+        streamingRaw: "",
       });
     });
     source.addEventListener("thinking", (e) => {
@@ -414,7 +426,7 @@ export const useGame = create<GameStore>((set, get) => ({
     });
     // The campaign was hot-swapped or rolled back server-side: re-pull everything.
     source.addEventListener("reload", () => {
-      set({ narration: [], dmWriting: false });
+      set({ narration: [], dmWriting: false, streamingRaw: "" });
       void get().hydrate();
       void get().listCampaigns();
       void get().listSnapshots();

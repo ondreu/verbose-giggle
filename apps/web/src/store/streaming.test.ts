@@ -65,6 +65,10 @@ describe("DM chat streaming (no blink, no rewrite, rolls stay)", () => {
     const mid = useGame.getState();
     expect(mid.dmWriting).toBe(true);
     expect(mid.narration.filter((l) => l.role === "roll")).toHaveLength(2);
+    // The raw diagnostic buffer captured both preambles with a discard marker.
+    expect(mid.streamingRaw).toContain("Podívám se…");
+    expect(mid.streamingRaw).toContain("Ještě hodím…");
+    expect(mid.streamingRaw).toContain("zahozeno");
 
     // Final round commits the narration and lowers the indicator.
     es.fire("narration_delta", { text: "Za uvolněnou deskou " });
@@ -74,6 +78,8 @@ describe("DM chat streaming (no blink, no rewrite, rolls stay)", () => {
     unsub();
 
     expect(final.dmWriting).toBe(false);
+    // The diagnostic buffer is reset once the turn's narration commits.
+    expect(final.streamingRaw).toBe("");
 
     // Committed transcript only ever grew — no line ever disappeared.
     for (let i = 1; i < committedLengths.length; i++) {
@@ -98,5 +104,6 @@ describe("DM chat streaming (no blink, no rewrite, rolls stay)", () => {
     // indicator must not linger.
     es.fire("state", { state: { combat: null, log: [], chat: [] } });
     expect(useGame.getState().dmWriting).toBe(false);
+    expect(useGame.getState().streamingRaw).toBe("");
   });
 });
