@@ -90,6 +90,52 @@ describe("SessionManager + example vault", () => {
     expect(gs2.actors.elara?.spell_slots["1"]?.used).toBe(1);
   });
 
+  it("persists inventory equip/unequip into the session overlay across rebuilds (#9-inv)", async () => {
+    const mgr = await SessionManager.open(await freshCampaign());
+    const gs = mgr.buildGameState();
+    // Thorin starts with his longsword equipped; unequip it.
+    expect(gs.actors.thorin?.inventory.find((i) => i.id === "longsword")?.equipped).toBe(true);
+
+    const res = await mgr.applyTool(gs, "equip_item", {
+      actor: "thorin",
+      item: "longsword",
+      equipped: false,
+    });
+    expect(res.ok).toBe(true);
+    // The toggle is captured into the overlay, not just the in-memory actor.
+    expect(mgr.session.actors.thorin?.inventory?.find((i) => i.id === "longsword")?.equipped).toBe(false);
+
+    // A fresh GameState (base sheet + overlay) keeps it unequipped — before the
+    // fix the overlay dropped inventory and the bag reset to the sheet on reload,
+    // so "odložit/vybavit" appeared to do nothing.
+    const gs2 = mgr.buildGameState();
+    expect(gs2.actors.thorin?.inventory.find((i) => i.id === "longsword")?.equipped).toBe(false);
+  });
+
+  it("writes the session up as a chronicle chapter — the book of the adventure (#5)", async () => {
+    const { runChronicle } = await import("../src/session/loop.js");
+    const { appendChronicle, chroniclePath } = await import("../src/vault/campaign.js");
+    const mgr = await SessionManager.open(await freshCampaign());
+    mgr.session.chat.push({ role: "user", content: "Prozkoumáme starou kryptu." });
+    mgr.session.chat.push({ role: "assistant", content: "Sestoupili jste do chladné tmy." });
+
+    const llm = {
+      async chat() {
+        return { content: "Družina sestoupila do staré krypty a čelila tamním stínům.", toolCalls: [] };
+      },
+    } as unknown as LlmClient;
+
+    const { chapter } = await runChronicle({ manager: mgr, llm });
+    expect(chapter).toContain("krypty");
+
+    // The chapter is appended to the chronicle, which opens with a title page.
+    await appendChronicle(mgr.campaign, { heading: "Den 1 — Krypta", body: chapter });
+    const text = await fs.readFile(chroniclePath(mgr.campaign), "utf8");
+    expect(text).toContain("# Kronika");
+    expect(text).toContain("## Den 1 — Krypta");
+    expect(text).toContain("krypty");
+  });
+
   it("dispatches a deterministic engine command and records the dice log", async () => {
     const mgr = await SessionManager.open(await freshCampaign());
     const gs = mgr.buildGameState();

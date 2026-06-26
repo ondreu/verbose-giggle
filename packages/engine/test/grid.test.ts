@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { aoe, approachStep, attack, cellsOnLine, coverBetween, distanceFt, hexDistanceFt, hexNeighbors, move, reachableCells, startCombat } from "../src/index.js";
+import { aoe, approachStep, attack, cellsOnLine, coverBetween, dispatch, distanceFt, hexDistanceFt, hexNeighbors, move, reachableCells, startCombat } from "../src/index.js";
 import { makeActor, makeState } from "./helpers.js";
 
 describe("approachStep (AI move-then-attack)", () => {
@@ -87,6 +87,20 @@ describe("hex grid (#6b)", () => {
     const state = makeState([a]);
     state.variant.gridShape = "hex"; // campaign default
     startCombat(state, { participants: ["a"] });
+    expect(state.session.combat?.grid.shape).toBe("hex");
+  });
+
+  it("start_combat tool can't override the campaign grid shape (#6b/hex)", () => {
+    const a = makeActor({ id: "a", name: "Mover", position: { x: 0, y: 0 } });
+    const state = makeState([a]);
+    state.variant.gridShape = "hex"; // campaign default is hex
+    // A stray `shape: "square"` from the model is stripped by the tool schema,
+    // so the campaign default wins and the board stays hex.
+    const res = dispatch(state, "start_combat", {
+      participants: ["a"],
+      grid: { w: 10, h: 10, cell_ft: 5, shape: "square" },
+    });
+    expect(res.ok).toBe(true);
     expect(state.session.combat?.grid.shape).toBe("hex");
   });
 

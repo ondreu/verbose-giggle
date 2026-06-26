@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { SpellSlotTier } from "./actor.js";
+import { InventoryEntry, SpellSlotTier } from "./actor.js";
 import { ActiveCondition, Position, Slug } from "./primitives.js";
 import { QuestRuntime } from "./quest.js";
 import { FactionResource, FactionRuntime } from "./faction.js";
@@ -44,6 +44,10 @@ export const ActorOverlay = z.object({
   /** Live spell-slot usage so cast slots persist across turns/reloads and reach
    *  the UI — without this overlay each rebuild reset slots to the sheet (#9). */
   spell_slots: z.record(z.string(), SpellSlotTier).optional(),
+  /** Live inventory so equip/unequip and loot changes persist across turns and
+   *  reloads and reach the UI — without this overlay each rebuild reset the bag
+   *  to the sheet, so toggling "vybavit" appeared to do nothing (#9-inv). */
+  inventory: z.array(InventoryEntry).optional(),
   /** Persisted death flag so a fallen hero stays dead across reloads (#23). */
   dead: z.boolean().optional(),
 });

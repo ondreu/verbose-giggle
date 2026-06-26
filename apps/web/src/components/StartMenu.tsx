@@ -141,9 +141,19 @@ function CampaignsSection({ onPlay }: { onPlay: () => void }) {
           <button className="btn-ghost text-sm" onClick={onPlay}>
             <Icon name="scroll" size={14} /> Nová postava
           </button>
-          <button className="btn-gold px-5 py-2.5 text-sm" onClick={() => setView("play")}>
+          <button
+            className="btn-gold px-5 py-2.5 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={active != null && active.party === 0}
+            title={active != null && active.party === 0 ? "Nejdřív vytvoř postavu — bez ní nelze hrát." : undefined}
+            onClick={() => setView("play")}
+          >
             Hrát
           </button>
+          {active != null && active.party === 0 && (
+            <p className="w-full font-log text-xs text-gold/80">
+              Kampaň zatím nemá žádnou postavu. Vytvoř postavu tlačítkem <strong>Nová postava</strong>, než začneš hrát.
+            </p>
+          )}
         </section>
       )}
       {mapMsg && <p className="-mt-3 px-1 font-log text-xs text-subtext0">{mapMsg}</p>}
@@ -167,7 +177,12 @@ function CampaignsSection({ onPlay }: { onPlay: () => void }) {
                 </div>
               </div>
               {c.active ? (
-                <button className="btn-gold px-3 py-1.5 text-[12px]" onClick={() => setView("play")}>
+                <button
+                  className="btn-gold px-3 py-1.5 text-[12px] disabled:cursor-not-allowed disabled:opacity-50"
+                  disabled={c.party === 0}
+                  title={c.party === 0 ? "Nejdřív vytvoř postavu — bez ní nelze hrát." : undefined}
+                  onClick={() => setView("play")}
+                >
                   Hrát
                 </button>
               ) : (

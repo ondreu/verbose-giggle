@@ -11,6 +11,7 @@ import { EmberField } from "./components/EmberField";
 import { LoginScreen } from "./components/LoginScreen";
 import { AdminPage } from "./components/AdminPage";
 import { CreditBadge } from "./components/CreditBadge";
+import { SessionEnd } from "./components/SessionEnd";
 import { ReferenceModal } from "./panels/ReferenceModal";
 import { fetchAuthConfig, fetchCurrentUser, type AuthConfig } from "./auth";
 
@@ -145,6 +146,7 @@ export default function App() {
           <Icon name="document" size={14} />
           Pravidla
         </button>
+        <SessionEnd />
         <button
           className="text-subtext0 transition-colors hover:text-gold"
           title="Nastavení"

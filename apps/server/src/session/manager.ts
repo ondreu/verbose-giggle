@@ -85,6 +85,7 @@ export class SessionManager {
       if (overlay?.conditions) resolved.conditions = clone(overlay.conditions);
       if (overlay?.concentration !== undefined) resolved.concentration = clone(overlay.concentration);
       if (overlay?.spell_slots) resolved.spell_slots = clone(overlay.spell_slots);
+      if (overlay?.inventory) resolved.inventory = clone(overlay.inventory);
       if (overlay?.dead !== undefined) resolved.dead = overlay.dead;
       actors[id] = resolved;
     }
@@ -175,6 +176,7 @@ export class SessionManager {
         conditions: actor.conditions,
         concentration: actor.concentration,
         spell_slots: actor.spell_slots,
+        inventory: actor.inventory,
         dead: actor.dead,
       };
     }

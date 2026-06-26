@@ -28,7 +28,11 @@ export function InventoryPanel() {
   // Follow the party tab strip selection (#47): viewed member, else active player.
   const viewedPlayer = useGame((s) => s.viewedPlayer);
   const actorId = viewedPlayer ?? session?.active_player ?? null;
-  const actor = actorId ? actors[actorId] : null;
+  const base = actorId ? actors[actorId] : null;
+  // Live inventory (equip/loot) lives in the session overlay and arrives via the
+  // `state` SSE event; fall back to the base sheet before the first change (#9).
+  const overlayInv = actorId ? session?.actors[actorId]?.inventory : undefined;
+  const actor = base ? { ...base, inventory: overlayInv ?? base.inventory } : null;
 
   const [resolved, setResolved] = useState<Record<string, ResolvedItem>>({});
   const ids = (actor?.inventory ?? []).map((i) => i.id).join(",");
