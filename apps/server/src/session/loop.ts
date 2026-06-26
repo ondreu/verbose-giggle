@@ -215,11 +215,11 @@ export async function runTurn(opts: {
     ...recent,
     { role: "user", content: input },
   ];
-  manager.session.chat.push({ role: "user", content: input });
+  manager.session.chat.push({ role: "user", content: input, t: new Date().toISOString() });
 
   const narration = await executeToolLoop({ manager, llm, bus, gs, messages });
   if (narration) {
-    manager.session.chat.push({ role: "assistant", content: narration });
+    manager.session.chat.push({ role: "assistant", content: narration, t: new Date().toISOString() });
     bus.emit({ type: "narration", text: narration });
     await manager.log(`\n**DM:** ${narration}`);
   }
@@ -255,7 +255,7 @@ export async function runIntro(opts: {
   // duplicate it.
   const intro = await executeToolLoop({ manager, llm, bus, gs, messages, stream: false });
   if (intro) {
-    manager.session.chat.push({ role: "assistant", content: intro });
+    manager.session.chat.push({ role: "assistant", content: intro, t: new Date().toISOString() });
     await manager.log(`\n**DM (úvod):** ${intro}`);
   }
   await manager.checkpoint(gs);
@@ -282,7 +282,7 @@ export async function runArrival(opts: {
   ];
   const narration = await executeToolLoop({ manager, llm, bus, gs, messages });
   if (narration) {
-    manager.session.chat.push({ role: "assistant", content: narration });
+    manager.session.chat.push({ role: "assistant", content: narration, t: new Date().toISOString() });
     bus.emit({ type: "narration", text: narration });
     await manager.log(`\n**DM (příjezd):** ${narration}`);
   }
@@ -359,7 +359,7 @@ async function runAiTurn(opts: {
 
   const narration = await executeToolLoop({ manager, llm, bus, gs, messages });
   if (narration) {
-    manager.session.chat.push({ role: "assistant", content: narration });
+    manager.session.chat.push({ role: "assistant", content: narration, t: new Date().toISOString() });
     bus.emit({ type: "narration", text: narration });
     await manager.log(`\n**DM (${actor.name}):** ${narration}`);
   }
