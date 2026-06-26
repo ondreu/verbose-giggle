@@ -533,6 +533,42 @@ Full historical write-ups are in git history.
 - **[x] #54** — Per-message Regenerovat / Jiným modelem. `POST /api/regenerate`,
   `llm.altModels`.
 
+## Combat feedback (2026-06-26 playtest)
+
+Batch of combat-UX fixes from a live playtest of the solo encounter flow.
+
+- **[x] #c1** — DM "thinking" persists per message (incl. across reload): the raw
+  token stream is attached to the assistant chat message (`ChatMessage.thinking`)
+  and shown in a collapsible *přemýšlení PJ* section. `loop.ts`, `session.ts`,
+  `store.ts`, `ChatPanel.tsx`.
+- **[x] #c2** — Cantrips split from slotted spells (distinct *Triky* group + tone).
+  `ActionsPanel.tsx`.
+- **[x] #c3** — Turn changes + fight start/end surfaced in chat as dividers;
+  `next_turn` log states the turn end + who's next. `turns.ts`, `store.ts`,
+  `ChatPanel.tsx`.
+- **[x] #c4** — Spell targeting highlights in-range cells on the map (square+hex).
+  `TacticalGrid.tsx`, `store.ts`.
+- **[x] #c5** — Combat battlefield is DM-authored to match the encounter: the DM
+  draws the map via `start_combat` — `grid` (size w×h, scale, square/hex shape)
+  and `terrain` (walls/difficult/hazard/cover) — and places every token. Exposed
+  `grid`/`terrain` in the tool's parameter schema (they validated but weren't
+  advertised to the model) and made positioning mandatory in the prompt; engine
+  auto-place is only a degenerate fallback. `tools.ts`, `llm/prompt.ts`.
+- **[x] #c6** — Slain enemies leave the board (die at 0 HP); PCs/companions stay
+  downed for death saves. `combat.ts`.
+- **[x] #c7** — Player can't move a creature whose turn it isn't (map-move gated to
+  the human-controlled active actor). `TacticalGrid.tsx`.
+- **[x] #c8** — Engine rules on action validity, not the DM in prose; opening
+  attack resolves before initiative; no out-of-range coord hints leak to chat; no
+  turn-end "leftover budget" nagging. `combat.ts`, `llm/prompt.ts`.
+- **[ ] #c9 — DM prompt refactor / control (follow-up).** The #c8 behaviours are
+  prompt-driven, so they rely on the model obeying instructions. Track a refactor
+  to make DM combat behaviour more *controlled* and ideally engine-enforced rather
+  than prompt-enforced: e.g. drive turn flow from explicit UI/engine state instead
+  of the model deciding, structurally prevent prose action-economy gatekeeping,
+  and add regression coverage for the prompt rules (prompt is large — audit + slim
+  + test). Prereq for trusting combat narration without manual oversight.
+
 ---
 
 ## Deliverables the user can provide

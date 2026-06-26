@@ -57,9 +57,15 @@ async function executeToolLoop(opts: {
   messages: ChatMsg[];
   /** Stream the final answer token-by-token to the client (#32). Default true. */
   stream?: boolean;
-}): Promise<string> {
+}): Promise<{ narration: string; thinking: string }> {
   const { manager, llm, bus, gs, messages, stream = true } = opts;
   const specs = toolSpecs();
+
+  // Accumulate the raw token stream across every round (incl. discarded
+  // tool-round preamble) so it can be persisted with the turn for the
+  // per-message "thinking" view, surviving a reload (#1). Mirrors the marker the
+  // client inserts on a discard so the persisted text matches the live stream.
+  let thinking = "";
 
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
     // Stream content tokens as they arrive. We don't yet know whether this
@@ -69,6 +75,7 @@ async function executeToolLoop(opts: {
     const onDelta = stream
       ? (delta: string) => {
           streamed = true;
+          thinking += delta;
           bus.emit({ type: "narration_delta", text: delta });
         }
       : undefined;
@@ -76,7 +83,10 @@ async function executeToolLoop(opts: {
 
     if (resp.toolCalls.length > 0) {
       // The streamed text (if any) was preamble, not the final answer: drop it.
-      if (streamed) bus.emit({ type: "narration_discard" });
+      if (streamed) {
+        thinking += "\n— ⟨zahozeno: model volá nástroj⟩ —\n";
+        bus.emit({ type: "narration_discard" });
+      }
       messages.push({
         role: "assistant",
         content: resp.content,
@@ -104,9 +114,9 @@ async function executeToolLoop(opts: {
       continue;
     }
 
-    return resp.content ?? "";
+    return { narration: resp.content ?? "", thinking: thinking.trim() };
   }
-  return "";
+  return { narration: "", thinking: thinking.trim() };
 }
 
 /** Lists of opposing / friendly faction members alive in the scene. */
@@ -217,9 +227,9 @@ export async function runTurn(opts: {
   ];
   manager.session.chat.push({ role: "user", content: input, t: new Date().toISOString() });
 
-  const narration = await executeToolLoop({ manager, llm, bus, gs, messages });
+  const { narration, thinking } = await executeToolLoop({ manager, llm, bus, gs, messages });
   if (narration) {
-    manager.session.chat.push({ role: "assistant", content: narration, t: new Date().toISOString() });
+    manager.session.chat.push({ role: "assistant", content: narration, t: new Date().toISOString(), thinking: thinking || undefined });
     bus.emit({ type: "narration", text: narration });
     await manager.log(`\n**DM:** ${narration}`);
   }
@@ -253,7 +263,7 @@ export async function runIntro(opts: {
   // No streaming: the intro is returned over HTTP and appended by the client
   // directly (avoiding an SSE race on first load), so streamed deltas would
   // duplicate it.
-  const intro = await executeToolLoop({ manager, llm, bus, gs, messages, stream: false });
+  const { narration: intro } = await executeToolLoop({ manager, llm, bus, gs, messages, stream: false });
   if (intro) {
     manager.session.chat.push({ role: "assistant", content: intro, t: new Date().toISOString() });
     await manager.log(`\n**DM (úvod):** ${intro}`);
@@ -280,9 +290,9 @@ export async function runArrival(opts: {
     { role: "system", content: sceneSnapshot(manager.session, gs.actors, sceneConnections(manager), availableQuests(manager), sceneWorld(manager), sceneOpts(manager)) },
     { role: "user", content: ARRIVAL_BEAT },
   ];
-  const narration = await executeToolLoop({ manager, llm, bus, gs, messages });
+  const { narration, thinking } = await executeToolLoop({ manager, llm, bus, gs, messages });
   if (narration) {
-    manager.session.chat.push({ role: "assistant", content: narration, t: new Date().toISOString() });
+    manager.session.chat.push({ role: "assistant", content: narration, t: new Date().toISOString(), thinking: thinking || undefined });
     bus.emit({ type: "narration", text: narration });
     await manager.log(`\n**DM (příjezd):** ${narration}`);
   }
@@ -357,9 +367,9 @@ async function runAiTurn(opts: {
     { role: "user", content: aiTurnInstruction(actor, ranges, allies, movementFt) },
   ];
 
-  const narration = await executeToolLoop({ manager, llm, bus, gs, messages });
+  const { narration, thinking } = await executeToolLoop({ manager, llm, bus, gs, messages });
   if (narration) {
-    manager.session.chat.push({ role: "assistant", content: narration, t: new Date().toISOString() });
+    manager.session.chat.push({ role: "assistant", content: narration, t: new Date().toISOString(), thinking: thinking || undefined });
     bus.emit({ type: "narration", text: narration });
     await manager.log(`\n**DM (${actor.name}):** ${narration}`);
   }

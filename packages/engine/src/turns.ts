@@ -130,6 +130,10 @@ export interface NextTurnResult {
 export function nextTurn(state: GameState): NextTurnResult {
   const c = state.session.combat;
   if (!c) throw new Error("No active combat");
+  // Remember who just finished so the log can state the turn end explicitly
+  // (surfaced in chat as a divider, #3) — not only who is up next.
+  const prevId = c.order[c.turn_index]?.actor;
+  const prevName = prevId ? getActor(state, prevId).name : null;
   c.turn_index += 1;
   if (c.turn_index >= c.order.length) {
     c.turn_index = 0;
@@ -150,7 +154,9 @@ export function nextTurn(state: GameState): NextTurnResult {
   log(state, {
     kind: "turn",
     actor: active,
-    detail: `Kolo ${c.round} — na tahu ${actor.name}`,
+    detail: prevName
+      ? `Tah ${prevName} končí — na tahu ${actor.name} (kolo ${c.round})`
+      : `Na tahu ${actor.name} (kolo ${c.round})`,
     tool: "next_turn",
   });
   return { active_actor: active, round: c.round };

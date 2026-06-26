@@ -25,6 +25,10 @@ export const ChatMessage = z.object({
    *  with sessions written before timestamps; used to interleave persisted dice
    *  rolls (session.log) back into the chat on reload in the right order. */
   t: z.string().optional(),
+  /** Assistant messages only: the DM's raw token stream for the turn (its
+   *  deliberation, incl. discarded tool-round preamble). Persisted so the
+   *  per-message "thinking" view survives a page reload (#1). */
+  thinking: z.string().optional(),
 });
 export type ChatMessage = z.infer<typeof ChatMessage>;
 

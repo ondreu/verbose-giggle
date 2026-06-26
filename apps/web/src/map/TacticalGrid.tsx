@@ -32,6 +32,42 @@ const FACTION_FILL: Record<string, string> = {
   neutral: "var(--bone)",
 };
 
+type Cell = { x: number; y: number };
+
+// odd-r (pointy-top) offset → cube coords, for hex distance.
+function oddRToCube(col: number, row: number): { x: number; y: number; z: number } {
+  const x = col - (row - (row & 1)) / 2;
+  const z = row;
+  return { x, y: -x - z, z };
+}
+function hexDistanceCells(a: Cell, b: Cell): number {
+  const ac = oddRToCube(a.x, a.y);
+  const bc = oddRToCube(b.x, b.y);
+  return (Math.abs(ac.x - bc.x) + Math.abs(ac.y - bc.y) + Math.abs(ac.z - bc.z)) / 2;
+}
+
+/**
+ * Cells within `rangeFt` of `origin`, as a `${x},${y}` set — a client-side
+ * visual aid for spell/attack targeting (#4). The engine stays authoritative on
+ * the real cast; this just shows the player which cells are in reach. Square
+ * grids use Chebyshev distance (5e "every diagonal is 5 ft"); hex uses true hex
+ * distance.
+ */
+function cellsInRange(origin: Cell, rangeFt: number, cellFt: number, w: number, h: number, hex: boolean): Set<string> {
+  const out = new Set<string>();
+  if (!cellFt || rangeFt <= 0) return out;
+  const maxCells = Math.floor(rangeFt / cellFt);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const d = hex
+        ? hexDistanceCells(origin, { x, y })
+        : Math.max(Math.abs(x - origin.x), Math.abs(y - origin.y));
+      if (d <= maxCells) out.add(`${x},${y}`);
+    }
+  }
+  return out;
+}
+
 export function TacticalGrid({ embedded = false }: { embedded?: boolean }) {
   const session = useGame((s) => s.session);
   const actors = useGame((s) => s.actors);
@@ -80,6 +116,16 @@ export function TacticalGrid({ embedded = false }: { embedded?: boolean }) {
   const { w, h } = combat.grid;
   const hex = combat.grid.shape === "hex";
   const activeId = combat.order[combat.turn_index]?.actor;
+  // Only the human controlling the active character may move a token by clicking
+  // the map. On an AI/enemy turn the board is read-only for movement, so the
+  // player can't drag the creature whose turn it is (#7).
+  const canMoveActive = activeId ? actors[activeId]?.controller === "human" : false;
+  // While picking a spell/attack target, highlight the cells within its range
+  // from the caster (#4). Empty set when no range was supplied with the request.
+  const rangeCells =
+    targetRequest?.range != null && targetRequest.origin
+      ? cellsInRange(targetRequest.origin, targetRequest.range, combat.grid.cell_ft, w, h, hex)
+      : new Set<string>();
   // Authored battle-map backdrop for this encounter, if any (§10). Served
   // path-confined via /api/asset; a missing file simply renders nothing.
   const battleMap = combat.encounter
@@ -138,7 +184,8 @@ export function TacticalGrid({ embedded = false }: { embedded?: boolean }) {
       }
       return;
     }
-    if (activeId) void sendCommand("move", { actor: activeId, to: { x, y } });
+    // Movement clicks only act on the player's own turn (#7).
+    if (activeId && canMoveActive) void sendCommand("move", { actor: activeId, to: { x, y } });
   };
 
   const body = (
@@ -238,6 +285,7 @@ export function TacticalGrid({ embedded = false }: { embedded?: boolean }) {
             combat={combat}
             actors={actors}
             reachable={reachable}
+            rangeCells={rangeCells}
             aoeCells={aoeCells}
             activeId={activeId}
             zoom={zoom}
@@ -375,6 +423,23 @@ export function TacticalGrid({ embedded = false }: { embedded?: boolean }) {
             />
           ))}
 
+          {/* Cells within range of the spell/attack being targeted (#4) */}
+          {[...rangeCells].map((key) => {
+            const [cx, cy] = key.split(",").map(Number);
+            return (
+              <rect
+                key={`rng${key}`}
+                x={cx! * CELL}
+                y={cy! * CELL}
+                width={CELL}
+                height={CELL}
+                fill="var(--gold)"
+                opacity={0.14}
+                pointerEvents="none"
+              />
+            );
+          })}
+
           {/* AoE coverage (engine-computed) */}
           {aoeCells.map((c) => (
             <rect
@@ -493,6 +558,7 @@ function HexBoard({
   combat,
   actors,
   reachable,
+  rangeCells,
   aoeCells,
   activeId,
   zoom,
@@ -502,6 +568,7 @@ function HexBoard({
   combat: CombatState;
   actors: Record<string, Actor>;
   reachable: { x: number; y: number }[];
+  rangeCells: Set<string>;
   aoeCells: { x: number; y: number }[];
   activeId?: string;
   zoom: number;
@@ -546,6 +613,13 @@ function HexBoard({
         .map(({ x, y }) => {
           const { cx, cy } = hexCenter(x, y);
           return <polygon key={`r${x}-${y}`} points={hexPoints(cx, cy, HSIZE - 2)} fill="var(--arcane)" opacity={0.14} pointerEvents="none" />;
+        })}
+      {/* Cells within range of the spell/attack being targeted (#4) */}
+      {cells
+        .filter((c) => rangeCells.has(`${c.x},${c.y}`))
+        .map(({ x, y }) => {
+          const { cx, cy } = hexCenter(x, y);
+          return <polygon key={`rng${x}-${y}`} points={hexPoints(cx, cy)} fill="var(--gold)" opacity={0.14} pointerEvents="none" />;
         })}
       {/* AoE coverage */}
       {cells

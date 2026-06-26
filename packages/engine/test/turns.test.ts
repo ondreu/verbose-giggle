@@ -1,6 +1,22 @@
 import { describe, expect, it } from "vitest";
-import { startCombat } from "../src/index.js";
+import { nextTurn, startCombat } from "../src/index.js";
 import { makeActor, makeState } from "./helpers.js";
+
+describe("nextTurn turn-end visibility (#3)", () => {
+  it("logs the turn that ended and who is up next", () => {
+    const a = makeActor({ id: "a", name: "Asa", faction: "party", abilities: { str: 10, dex: 18, con: 10, int: 10, wis: 10, cha: 10 } } as never);
+    const g = makeActor({ id: "g", name: "Goblin", faction: "hostile", abilities: { str: 10, dex: 8, con: 10, int: 10, wis: 10, cha: 10 } } as never);
+    const state = makeState([a, g], "turn-end");
+    const { order } = startCombat(state, { participants: ["a", "g"], grid: { w: 10, h: 10, cell_ft: 5 } });
+    const firstName = state.actors[order[0]!.actor]!.name;
+    const secondName = state.actors[order[1]!.actor]!.name;
+    // Advancing ends the first actor's turn and names the next one.
+    nextTurn(state);
+    const turnLog = state.session.log.filter((l) => l.kind === "turn").at(-1)!;
+    expect(turnLog.detail).toContain(`Tah ${firstName} končí`);
+    expect(turnLog.detail).toContain(`na tahu ${secondName}`);
+  });
+});
 
 describe("startCombat token placement", () => {
   it("auto-places every participant when no positions are given", () => {
