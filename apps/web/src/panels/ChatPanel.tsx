@@ -7,7 +7,7 @@ import { QuestLogModal } from "./QuestLogModal";
 
 export function ChatPanel() {
   const narration = useGame((s) => s.narration);
-  const streamingText = useGame((s) => s.streamingText);
+  const dmWriting = useGame((s) => s.dmWriting);
   const busy = useGame((s) => s.busy);
   const thinking = useGame((s) => s.thinking);
   const aiActing = useGame((s) => s.aiActing);
@@ -37,16 +37,15 @@ export function ChatPanel() {
   const [diaryOpen, setDiaryOpen] = useState(false);
   const [questsOpen, setQuestsOpen] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
-  // Follow streaming text: the transient bubble grows without changing the
-  // committed array length, so key the scroll on its length too (#32).
-  const lastLen = streamingText?.length ?? narration[narration.length - 1]?.text.length ?? 0;
+  // Follow the last committed line as it grows (#32).
+  const lastLen = narration[narration.length - 1]?.text.length ?? 0;
   // The most recent DM line carries the always-visible action rail; older DM
   // lines reveal it on hover (#47).
   const lastDmId = [...narration].reverse().find((l) => l.role === "dm")?.id ?? null;
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [narration.length, lastLen, thinking, aiActing, streamingText]);
+  }, [narration.length, lastLen, thinking, aiActing, dmWriting]);
 
   const submit = () => {
     const text = input.trim();
@@ -136,16 +135,14 @@ export function ChatPanel() {
             />
           );
         })}
-        {/* The DM's answer streaming in live (#32): a transient bubble that is
-            replaced by a committed DM line once finalized, or quietly cleared if
-            the round turned out to be a tool call. */}
-        {streamingText && (
-          <div className="mb-4 flex items-start gap-2">
-            <div className="min-w-0 flex-1 font-body text-[1.12rem] font-medium leading-relaxed text-text">
-              <Markdown text={streamingText} />
-              <span className="ml-0.5 inline-block h-[1.1em] w-[2px] translate-y-[2px] animate-pulse bg-gold align-middle" />
-            </div>
-          </div>
+        {/* The DM is composing narration (#32). We don't show the in-flight
+            tokens — preamble from tool-call rounds gets discarded — so a neutral
+            indicator stands in until the finished narration commits as a line. */}
+        {dmWriting && (
+          <p className="mb-2 flex items-center gap-1.5 font-display text-sm tracking-wide text-gold">
+            <Icon name="scroll" size={14} className="animate-pulse" />
+            Pán jeskyně spřádá příběh…
+          </p>
         )}
         {aiActing && (
           <p className="mb-2 flex items-center gap-1.5 font-display text-sm tracking-wide text-arcane">

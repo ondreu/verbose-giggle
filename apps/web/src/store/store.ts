@@ -145,11 +145,13 @@ interface GameStore {
   locations: Record<string, Location>;
   encounters: Record<string, Encounter>;
   narration: NarrationLine[];
-  /** The DM's answer currently streaming in token-by-token (#32), or null when
-   *  no stream is in flight. Rendered as a transient "is writing…" bubble below
-   *  the committed transcript and only committed to `narration` once finalized,
-   *  so a tool-call round's discarded preamble never blinks the chat history. */
-  streamingText: string | null;
+  /** True while the DM is producing narration (tokens are streaming in), false
+   *  otherwise. We deliberately do NOT surface the in-flight text: a tool-call
+   *  round's preamble is discarded, so showing it would mean rewriting or
+   *  blanking visible prose mid-turn. Instead the UI shows a neutral "is
+   *  weaving the story…" indicator until the authoritative narration commits to
+   *  `narration` (#32). */
+  dmWriting: boolean;
   ttsEnabled: boolean;
   ttsProvider: TtsProvider;
   /** True while narration audio is actively playing (drives the stop button). */
@@ -278,7 +280,7 @@ export const useGame = create<GameStore>((set, get) => ({
   locations: {},
   encounters: {},
   narration: [],
-  streamingText: null,
+  dmWriting: false,
   ttsEnabled: initialPrefs.ttsEnabled,
   ttsProvider: initialPrefs.ttsProvider,
   speaking: false,
@@ -333,7 +335,7 @@ export const useGame = create<GameStore>((set, get) => ({
       // Rebuild from chat + persisted dice rolls so skill checks and other roll
       // cards reappear when reopening the campaign, not only during the live
       // stream (they were previously only in session.log, never re-rendered).
-      streamingText: null,
+      dmWriting: false,
       narration: buildNarration(data.session, () => lineSeq++),
     });
   },
@@ -341,27 +343,27 @@ export const useGame = create<GameStore>((set, get) => ({
   connect: () => {
     const source = new EventSource("/api/events");
     source.addEventListener("ready", () => set({ connected: true }));
-    // A streamed chunk of the DM's answer (#32): accumulate into the transient
-    // streaming buffer (a separate "is writing…" bubble), NOT a committed chat
-    // line — so a tool-call round whose preamble gets discarded never blinks the
-    // visible history.
-    source.addEventListener("narration_delta", (e) => {
-      const { text } = JSON.parse((e as MessageEvent).data) as { text: string };
-      set((s) => ({ streamingText: (s.streamingText ?? "") + text }));
+    // Tokens of the DM's answer are streaming in (#32). We don't render the
+    // in-flight text — a tool-call round's preamble gets discarded, so showing
+    // it would blank or rewrite visible prose mid-turn. Just flag that the DM is
+    // composing; the UI shows a neutral indicator until the final narration
+    // commits.
+    source.addEventListener("narration_delta", () => {
+      if (!get().dmWriting) set({ dmWriting: true });
     });
-    // The partial stream was a tool-call round's preamble, not the final answer:
-    // clear the buffer. Nothing was ever committed, so the transcript is steady
-    // — the user just sees the live bubble reset while the engine works (#32).
+    // The streamed text was a tool-call round's preamble, not the final answer.
+    // Since we never showed it, there is nothing to retract — the DM is still
+    // composing, so keep the indicator up and wait for the next round.
     source.addEventListener("narration_discard", () => {
-      set({ streamingText: null });
+      /* intentionally no-op: nothing visible to discard (#32). */
     });
     source.addEventListener("narration", (e) => {
       const { text } = JSON.parse((e as MessageEvent).data);
       // Commit the authoritative final text as a real DM line and drop the
-      // transient buffer.
+      // "is writing…" indicator.
       set((s) => ({
         narration: [...s.narration, { id: lineSeq++, role: "dm", text }],
-        streamingText: null,
+        dmWriting: false,
       }));
       if (get().ttsEnabled) {
         void speak(text, get().ttsProvider, () => set({ speaking: false }));
@@ -391,11 +393,15 @@ export const useGame = create<GameStore>((set, get) => ({
       const activeIsHuman = active ? get().actors[active]?.controller === "human" : true;
       // The view-only party selection only applies during combat; out of combat
       // the rail follows the active (hotseat) player (#47).
+      // A `state` event marks the end of a turn (the final `narration` already
+      // fired before it), so a still-set writing flag means the turn produced no
+      // narration (tool-only) — clear it so the indicator can't linger.
       set({
         session: state,
         thinking: null,
         aiActing: activeIsHuman ? null : get().aiActing,
         viewedPlayer: state.combat ? get().viewedPlayer : null,
+        dmWriting: false,
       });
     });
     source.addEventListener("thinking", (e) => {
@@ -408,7 +414,7 @@ export const useGame = create<GameStore>((set, get) => ({
     });
     // The campaign was hot-swapped or rolled back server-side: re-pull everything.
     source.addEventListener("reload", () => {
-      set({ narration: [], streamingText: null });
+      set({ narration: [], dmWriting: false });
       void get().hydrate();
       void get().listCampaigns();
       void get().listSnapshots();
