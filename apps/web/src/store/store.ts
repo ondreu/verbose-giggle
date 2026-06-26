@@ -235,6 +235,8 @@ interface GameStore {
   startEncounter: (id: string) => Promise<void>;
   fetchReachable: (actor: string) => Promise<void>;
   recap: () => Promise<void>;
+  /** End the session: write a chronicle chapter and start clean (#5). */
+  endSession: () => Promise<{ ok: boolean; chapter?: string; error?: string }>;
   /** Fetch the DM's opening scene for a fresh campaign (#31), once. */
   intro: () => Promise<void>;
   undoTurn: () => Promise<void>;
@@ -552,6 +554,24 @@ export const useGame = create<GameStore>((set, get) => ({
     set({ busy: true });
     try {
       await fetch("/api/recap", { method: "POST" });
+    } finally {
+      set({ busy: false });
+    }
+  },
+
+  // End the session → chronicle chapter + clean start (#5). The server emits a
+  // `reload`, which re-hydrates the (now empty) transcript; we return the
+  // generated chapter so the UI can show what was written to the book.
+  endSession: async () => {
+    if (get().busy) return { ok: false, error: "Probíhá jiná akce." };
+    set({ busy: true });
+    try {
+      const res = await fetch("/api/session/end", { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) return { ok: false, error: data?.error ?? `Chyba ${res.status}` };
+      return { ok: true, chapter: typeof data?.chapter === "string" ? data.chapter : "" };
+    } catch {
+      return { ok: false, error: "Spojení se serverem selhalo." };
     } finally {
       set({ busy: false });
     }

@@ -8,7 +8,8 @@ import type { CreditStore } from "../credits/ledger.js";
 import { MockLlmClient } from "../llm/mock.js";
 import { ImageClient, buildMapPrompt, buildPrompt, type ImageSubject } from "../llm/image.js";
 import { synthesizeAzure } from "../tts/azure.js";
-import { resolveAiTurns, runArrival, runIntro, runRecap, runTurn } from "../session/loop.js";
+import { resolveAiTurns, runArrival, runChronicle, runIntro, runRecap, runTurn } from "../session/loop.js";
+import { appendChronicle } from "../vault/campaign.js";
 import { startEncounter } from "../session/encounter.js";
 import type { SessionManager } from "../session/manager.js";
 import { SessionRegistry, type UserSession } from "../session/registry.js";
@@ -1117,6 +1118,61 @@ export async function registerGameRoutes(app: FastifyInstance, ctx: GameContext)
     } catch (err) {
       if (err instanceof InsufficientCreditsError) return reply.code(402).send({ error: err.message });
       return reply.code(500).send({ error: err instanceof Error ? err.message : String(err) });
+    }
+  });
+
+  /**
+   * End the current session (#5): write it up as a prose chapter of the campaign
+   * chronicle ("book of the adventure"), then start a clean session — the live
+   * transcript and dice log are cleared while durable character/world state is
+   * kept, so the next session opens fresh with a recap. Refuses mid-combat.
+   */
+  app.post("/api/session/end", async (req, reply) => {
+    const sess = await registry.resolve(req);
+    if (sess.manager.session.combat) {
+      return reply.code(409).send({ error: "Nejdřív dokonči probíhající boj, pak sezení uzavři." });
+    }
+    const hasPlay = sess.manager.session.chat.some((m) => m.role === "user" || m.role === "assistant");
+    if (!hasPlay) {
+      return reply.code(400).send({ error: "Sezení je prázdné — není co zapsat do kroniky." });
+    }
+    const llm = await llmForScope(sess);
+    try {
+      const { chapter } = await meteredTurn(
+        req,
+        "llm-chronicle",
+        llm,
+        (l) => runChronicle({ manager: sess.manager, llm: l }),
+        { enforce: false },
+      );
+      if (chapter.trim()) {
+        const now = new Date();
+        const s = sess.manager.session;
+        const heading = `${now.toLocaleDateString("cs-CZ")} — ${s.current_location} (den ${s.time.day})`;
+        await appendChronicle(sess.manager.campaign, { heading, body: chapter });
+      }
+      // Fresh session: clear the live transcript + dice log; durable actor/world
+      // state stays in the overlay and notes. Persist, then re-hydrate clients.
+      sess.manager.session.chat = [];
+      sess.manager.session.log = [];
+      await sess.manager.persist();
+      sess.bus.emit({ type: "reload", reason: "session-ended" });
+      return { chapter };
+    } catch (err) {
+      if (err instanceof InsufficientCreditsError) return reply.code(402).send({ error: err.message });
+      return reply.code(500).send({ error: err instanceof Error ? err.message : String(err) });
+    }
+  });
+
+  /** The full campaign chronicle so far — the assembled book of the adventure (#5). */
+  app.get("/api/chronicle", async (req) => {
+    const sess = await registry.resolve(req);
+    const file = path.join(sess.manager.campaign.dir, "state", "chronicle.md");
+    try {
+      const text = await fs.readFile(file, "utf8");
+      return { exists: true, text };
+    } catch {
+      return { exists: false, text: "" };
     }
   });
 

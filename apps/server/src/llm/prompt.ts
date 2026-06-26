@@ -299,6 +299,18 @@ ve stylu „V minulém díle…". Pouze převyprávěj příběh — nehraj žá
 nevolej nástroje, neuváděj čísla hodů. Zachyť, kde se družina nachází, co se
 přihodilo a co je v sázce.`;
 
+/** Turns a finished session into one chapter of the campaign's book (#5). */
+export const CHRONICLE_PROMPT = `Jsi kronikář družiny. Z přepisu odehraného sezení napiš JEDNU
+kapitolu kroniky — souvislé, čtivé vyprávění v ČEŠTINĚ, v MINULÉM čase a třetí
+osobě (jako kniha dobrodružství, ne zápis z hraní). Zachyť oblouk sezení: kde
+začalo, co družina prožila, koho potkala, jak dopadly střety a klíčová
+rozhodnutí, a v jakém stavu a na jakém místě to skončilo. Jmenuj postavy
+družiny i důležitá NPC.
+
+PRAVIDLA: Piš jen prózu — žádné odrážky, nadpisy, mechaniky, čísla hodů, HP ani
+souřadnice. Nevymýšlej události, které se nestaly; drž se přepisu. Rozsah 3–6
+odstavců. Začni rovnou vyprávěním, bez úvodních frází typu „V této kapitole".`;
+
 /** Travel options out of the current location (id + authored duration). */
 export interface SceneConnection {
   to: string;

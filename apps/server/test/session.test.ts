@@ -112,6 +112,30 @@ describe("SessionManager + example vault", () => {
     expect(gs2.actors.thorin?.inventory.find((i) => i.id === "longsword")?.equipped).toBe(false);
   });
 
+  it("writes the session up as a chronicle chapter — the book of the adventure (#5)", async () => {
+    const { runChronicle } = await import("../src/session/loop.js");
+    const { appendChronicle, chroniclePath } = await import("../src/vault/campaign.js");
+    const mgr = await SessionManager.open(await freshCampaign());
+    mgr.session.chat.push({ role: "user", content: "Prozkoumáme starou kryptu." });
+    mgr.session.chat.push({ role: "assistant", content: "Sestoupili jste do chladné tmy." });
+
+    const llm = {
+      async chat() {
+        return { content: "Družina sestoupila do staré krypty a čelila tamním stínům.", toolCalls: [] };
+      },
+    } as unknown as LlmClient;
+
+    const { chapter } = await runChronicle({ manager: mgr, llm });
+    expect(chapter).toContain("krypty");
+
+    // The chapter is appended to the chronicle, which opens with a title page.
+    await appendChronicle(mgr.campaign, { heading: "Den 1 — Krypta", body: chapter });
+    const text = await fs.readFile(chroniclePath(mgr.campaign), "utf8");
+    expect(text).toContain("# Kronika");
+    expect(text).toContain("## Den 1 — Krypta");
+    expect(text).toContain("krypty");
+  });
+
   it("dispatches a deterministic engine command and records the dice log", async () => {
     const mgr = await SessionManager.open(await freshCampaign());
     const gs = mgr.buildGameState();

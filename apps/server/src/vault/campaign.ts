@@ -243,3 +243,29 @@ export async function appendSessionLog(c: LoadedCampaign, line: string): Promise
   await fs.mkdir(path.dirname(file), { recursive: true });
   await fs.appendFile(file, `${line}\n`, "utf8");
 }
+
+/** Path to the campaign's growing chronicle — the "book of the adventure" (#5). */
+export function chroniclePath(c: LoadedCampaign): string {
+  return path.join(c.dir, "state", "chronicle.md");
+}
+
+/**
+ * Append a finished session as a new chapter of the campaign chronicle (#5).
+ * Each call adds one dated chapter, so the file accumulates into a readable
+ * book of everything the party has lived through.
+ */
+export async function appendChronicle(
+  c: LoadedCampaign,
+  chapter: { heading: string; body: string },
+): Promise<void> {
+  const file = chroniclePath(c);
+  await fs.mkdir(path.dirname(file), { recursive: true });
+  let prefix = "";
+  try {
+    await fs.access(file);
+  } catch {
+    // First chapter: open the book with a title page.
+    prefix = `# Kronika — ${c.config.name}\n\n`;
+  }
+  await fs.appendFile(file, `${prefix}## ${chapter.heading}\n\n${chapter.body.trim()}\n\n`, "utf8");
+}

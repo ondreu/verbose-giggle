@@ -1,6 +1,6 @@
 import { approachStep, gridDistanceFt, toolSpecs, type GameState } from "@adm/engine";
 import type { Llm, ChatMsg } from "../llm/client.js";
-import { aiTurnInstruction, ARRIVAL_BEAT, CAMPAIGN_START, CAMPAIGN_START_SANDBOX, type EnemyRange, RECAP_PROMPT, sceneSnapshot, type SceneConnection, type SceneQuest, type SceneWorld, SYSTEM_PROMPT, turnControlNote } from "../llm/prompt.js";
+import { aiTurnInstruction, ARRIVAL_BEAT, CAMPAIGN_START, CAMPAIGN_START_SANDBOX, CHRONICLE_PROMPT, type EnemyRange, RECAP_PROMPT, sceneSnapshot, type SceneConnection, type SceneQuest, type SceneWorld, SYSTEM_PROMPT, turnControlNote } from "../llm/prompt.js";
 import type { EventBus } from "./events.js";
 import type { SessionManager } from "./manager.js";
 
@@ -343,6 +343,43 @@ export async function runRecap(opts: {
     await manager.log(`\n_Shrnutí:_ ${recap}`);
   }
   return { recap };
+}
+
+/**
+ * Turn the just-played session into one prose chapter of the campaign chronicle
+ * (#5). Pure narration over the whole session transcript + key logged events; no
+ * tools, no state mutation. The caller persists the chapter and clears the
+ * session for a fresh start.
+ */
+export async function runChronicle(opts: {
+  manager: SessionManager;
+  llm: Llm;
+}): Promise<{ chapter: string }> {
+  const { manager, llm } = opts;
+  const transcript = manager.session.chat
+    .filter((m) => m.role === "user" || m.role === "assistant")
+    .map((m) => `${m.role === "assistant" ? "DM" : "Hráč"}: ${m.content}`)
+    .join("\n");
+  const events = manager.session.log
+    .filter((l) => ["combat", "attack", "travel", "death-save", "quest", "initiative"].includes(l.kind))
+    .map((l) => `- ${l.detail}`)
+    .join("\n");
+  const partyNames = Object.values(manager.campaign.actors)
+    .filter((a) => a.faction === "party")
+    .map((a) => a.name)
+    .join(", ");
+
+  const messages: ChatMsg[] = [
+    { role: "system", content: CHRONICLE_PROMPT },
+    {
+      role: "user",
+      content:
+        `Družina: ${partyNames || "—"}. Místo na konci sezení: ${manager.session.current_location}.\n\n` +
+        `Klíčové události:\n${events || "—"}\n\nPřepis sezení:\n${transcript || "(prázdné sezení)"}`,
+    },
+  ];
+  const resp = await llm.chat(messages, []);
+  return { chapter: resp.content ?? "" };
 }
 
 /** Run a single AI-controlled actor's turn through the engine tools (§8.3). */
