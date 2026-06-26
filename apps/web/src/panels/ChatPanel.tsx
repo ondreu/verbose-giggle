@@ -7,7 +7,8 @@ import { QuestLogModal } from "./QuestLogModal";
 
 export function ChatPanel() {
   const narration = useGame((s) => s.narration);
-  const streamingText = useGame((s) => s.streamingText);
+  const dmWriting = useGame((s) => s.dmWriting);
+  const streamingRaw = useGame((s) => s.streamingRaw);
   const busy = useGame((s) => s.busy);
   const thinking = useGame((s) => s.thinking);
   const aiActing = useGame((s) => s.aiActing);
@@ -36,17 +37,19 @@ export function ChatPanel() {
   const [input, setInput] = useState("");
   const [diaryOpen, setDiaryOpen] = useState(false);
   const [questsOpen, setQuestsOpen] = useState(false);
+  // Opt-in peek at the raw live token stream under the writing indicator
+  // (transparency / diagnostics). Remembered across turns within the session.
+  const [streamOpen, setStreamOpen] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
-  // Follow streaming text: the transient bubble grows without changing the
-  // committed array length, so key the scroll on its length too (#32).
-  const lastLen = streamingText?.length ?? narration[narration.length - 1]?.text.length ?? 0;
+  // Follow the last committed line as it grows (#32).
+  const lastLen = narration[narration.length - 1]?.text.length ?? 0;
   // The most recent DM line carries the always-visible action rail; older DM
   // lines reveal it on hover (#47).
   const lastDmId = [...narration].reverse().find((l) => l.role === "dm")?.id ?? null;
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [narration.length, lastLen, thinking, aiActing, streamingText]);
+  }, [narration.length, lastLen, thinking, aiActing, dmWriting]);
 
   const submit = () => {
     const text = input.trim();
@@ -136,15 +139,28 @@ export function ChatPanel() {
             />
           );
         })}
-        {/* The DM's answer streaming in live (#32): a transient bubble that is
-            replaced by a committed DM line once finalized, or quietly cleared if
-            the round turned out to be a tool call. */}
-        {streamingText && (
-          <div className="mb-4 flex items-start gap-2">
-            <div className="min-w-0 flex-1 font-body text-[1.12rem] font-medium leading-relaxed text-text">
-              <Markdown text={streamingText} />
-              <span className="ml-0.5 inline-block h-[1.1em] w-[2px] translate-y-[2px] animate-pulse bg-gold align-middle" />
-            </div>
+        {/* The DM is composing narration (#32). We don't show the in-flight
+            tokens as prose — preamble from tool-call rounds gets discarded — so
+            a neutral indicator stands in until the finished narration commits as
+            a line. The indicator is expandable to reveal the raw live stream for
+            transparency / diagnostics. */}
+        {dmWriting && (
+          <div className="mb-2">
+            <button
+              className="flex items-center gap-1.5 font-display text-sm tracking-wide text-gold hover:text-bone"
+              onClick={() => setStreamOpen((o) => !o)}
+              aria-expanded={streamOpen}
+              title={streamOpen ? "Skrýt živý přepis" : "Zobrazit živý přepis (diagnostika)"}
+            >
+              <Icon name="scroll" size={14} className="animate-pulse" />
+              Pán jeskyně spřádá příběh…
+              <span className="font-log text-[10px] text-subtext0">{streamOpen ? "▾" : "▸"}</span>
+            </button>
+            {streamOpen && (
+              <pre className="mt-1.5 max-h-48 overflow-y-auto whitespace-pre-wrap rounded-sm border border-surface1 bg-bg-crust px-2.5 py-2 font-log text-[11px] leading-snug text-subtext0">
+                {streamingRaw.trim() || "(zatím žádné tokeny…)"}
+              </pre>
+            )}
           </div>
         )}
         {aiActing && (
