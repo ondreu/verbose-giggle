@@ -240,7 +240,9 @@ export function loadConfig(): Config {
 
 /** The default image model for a base URL when the user hasn't picked one. */
 function defaultImageModel(baseUrl: string): string {
-  return baseUrl.includes("mistral.ai") ? "mistral-medium-2505" : "dall-e-3";
+  if (baseUrl.includes("mistral.ai")) return "mistral-medium-2505";
+  if (baseUrl.includes("openrouter.ai")) return "google/gemini-2.5-flash-image";
+  return "dall-e-3";
 }
 
 /**

@@ -141,15 +141,62 @@ class MistralImageClient {
 }
 
 // ---------------------------------------------------------------------------
+// OpenRouter client — OpenRouter has NO OpenAI-style /images/generations
+// endpoint. Image models (e.g. google/gemini-2.5-flash-image) generate through
+// the regular chat-completions endpoint with modalities:["image","text"]; the
+// image comes back as a data URL in message.images[].image_url.url.
+// ---------------------------------------------------------------------------
+interface OpenRouterChatResponse {
+  choices?: Array<{
+    message?: {
+      content?: string;
+      images?: Array<{ type?: string; image_url?: { url?: string } }>;
+    };
+  }>;
+}
+
+class OpenRouterImageClient {
+  constructor(private cfg: NonNullable<Config["image"]>) {}
+
+  async generate(prompt: string): Promise<ImageResult> {
+    // Tolerate a base URL the user pasted with a trailing /images (or slash):
+    // OpenRouter wants /chat/completions off the API root, not an images path.
+    const root = this.cfg.baseUrl.replace(/\/+$/, "").replace(/\/images$/, "");
+    const res = await fetch(`${root}/chat/completions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${this.cfg.apiKey}`,
+      },
+      body: JSON.stringify({
+        model: this.cfg.model,
+        messages: [{ role: "user", content: prompt }],
+        modalities: ["image", "text"],
+      }),
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => res.statusText);
+      throw new Error(`Image API ${res.status}: ${text}`);
+    }
+    const body = (await res.json()) as OpenRouterChatResponse;
+    const url = body.choices?.[0]?.message?.images?.find((i) => i.image_url?.url)?.image_url?.url;
+    if (!url) throw new Error("OpenRouter nevrátil žádný obrázek (modalita image?)");
+    return { url, prompt };
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Factory — picks the right client based on base URL
 // ---------------------------------------------------------------------------
 export class ImageClient {
-  private inner: OpenAIImageClient | MistralImageClient;
+  private inner: OpenAIImageClient | MistralImageClient | OpenRouterImageClient;
 
   constructor(cfg: NonNullable<Config["image"]>) {
     this.inner = cfg.baseUrl.includes("mistral.ai")
       ? new MistralImageClient(cfg)
-      : new OpenAIImageClient(cfg);
+      : cfg.baseUrl.includes("openrouter.ai")
+        ? new OpenRouterImageClient(cfg)
+        : new OpenAIImageClient(cfg);
   }
 
   generate(prompt: string): Promise<ImageResult> {
