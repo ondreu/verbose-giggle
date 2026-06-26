@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { csCondition, csConditionDesc, csAbility, csAbilityAbbr, csClass, csFeat, csLineage, csSkill, csSpellName, csItemName, type AbilityKey } from "@adm/schemas";
 import { useGame } from "../store/store";
 import { Icon } from "../components/Icon";
@@ -53,6 +53,9 @@ export function SheetPanel() {
   const imageLoading = useGame((s) => s.imageLoading);
   const [levelUpOpen, setLevelUpOpen] = useState(false);
   const [openCond, setOpenCond] = useState<string | null>(null);
+  // Which known spells are cantrips (level 0), so they get the ember tone and a
+  // "trik" verb, visually split from slotted spells like the actions list (#3).
+  const [cantripIds, setCantripIds] = useState<Set<string>>(new Set());
 
   // Cast a spell after the player picks a target (#8 + #38).
   const castSpellAt = async (spell: string) => {
@@ -66,6 +69,28 @@ export function SheetPanel() {
   const activePlayer = session?.active_player ?? null;
   const activeId = viewedPlayer ?? activePlayer;
   const actor = activeId ? actors[activeId] : null;
+
+  // Fetch spell levels for the known spells so cantrips can be split off (#3).
+  // Best-effort: if the dataset isn't mounted, every spell stays in the slotted
+  // group (no false cantrips). Runs before the early return to keep hook order.
+  const knownKey = actor?.spells_known.join(",") ?? "";
+  useEffect(() => {
+    const ids = knownKey ? knownKey.split(",") : [];
+    if (ids.length === 0) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch(`/api/srd/spells?ids=${encodeURIComponent(ids.join(","))}`);
+        if (!res.ok) return;
+        const data = (await res.json()) as Record<string, { level?: number }>;
+        if (cancelled) return;
+        setCantripIds(new Set(ids.filter((id) => data[id]?.level === 0)));
+      } catch {
+        /* leave unsplit — chips still render under "Kouzla" */
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [knownKey]);
 
   if (!actor) {
     return (
@@ -81,6 +106,8 @@ export function SheetPanel() {
   // Live spell-slot usage lives in the session overlay; fall back to the sheet
   // when no slots have been spent yet this session (#9).
   const spellSlots = session?.actors[actor.id]?.spell_slots ?? actor.spell_slots;
+  // Live inventory (equip/loot) from the overlay, else the base sheet (#9).
+  const inventory = session?.actors[actor.id]?.inventory ?? actor.inventory;
   const hpPct = Math.max(0, Math.min(100, (overlayHp / actor.hp.max) * 100));
   const downed = overlayHp <= 0;
   const ds = actor.death_saves ?? { success: 0, fail: 0 };
@@ -108,7 +135,7 @@ export function SheetPanel() {
     void sendAction(build(targetClause(t)));
   };
 
-  const equipped = actor.inventory.filter((i) => i.equipped && isWeaponId(i.id));
+  const equipped = inventory.filter((i) => i.equipped && isWeaponId(i.id));
 
   return (
     <section className="parchment flex flex-col p-4 font-body">
@@ -355,10 +382,27 @@ export function SheetPanel() {
           ))}
         </ActionGroup>
 
-        {/* Spells — shown once here; "Známá kouzla" above removed (#43b + #42a). */}
-        {actor.spells_known.length > 0 && (
+        {/* Cantrips — split out with the ember tone, distinct from slotted
+            spells (#3). Verb is "Sešlu trik" so the engine reads them as cantrips. */}
+        {actor.spells_known.some((s) => cantripIds.has(s)) && (
+          <ActionGroup label="Triky (cantripy)" icon="flame">
+            {actor.spells_known.filter((s) => cantripIds.has(s)).map((spell) => (
+              <SpellCard key={spell} id={spell}>
+                <ActionChip
+                  label={prettySpell(spell)}
+                  cantrip
+                  disabled={disabled}
+                  onClick={() => void aim(`Cíl pro ${prettySpell(spell)}`, (c) => `Sešlu trik ${prettySpell(spell)} (${spell})${c}.`)}
+                />
+              </SpellCard>
+            ))}
+          </ActionGroup>
+        )}
+
+        {/* Slotted spells — shown once here; "Známá kouzla" above removed (#43b + #42a). */}
+        {actor.spells_known.some((s) => !cantripIds.has(s)) && (
           <ActionGroup label="Kouzla" icon="flame">
-            {actor.spells_known.map((spell) => (
+            {actor.spells_known.filter((s) => !cantripIds.has(s)).map((spell) => (
               <SpellCard key={spell} id={spell}>
                 <ActionChip
                   label={prettySpell(spell)}
@@ -440,11 +484,13 @@ function ActionGroup({ label, icon, children }: { label: string; icon: string; c
 }
 
 /** Clickable action chip for the consolidated action hub (#43a). */
-function ActionChip({ label, onClick, disabled, accent, title }: {
+function ActionChip({ label, onClick, disabled, accent, cantrip, title }: {
   label: string;
   onClick: () => void;
   disabled?: boolean;
   accent?: boolean;
+  /** Cantrip tone (ember) — visually distinct from slotted spells (#3). */
+  cantrip?: boolean;
   title?: string;
 }) {
   return (
@@ -453,9 +499,11 @@ function ActionChip({ label, onClick, disabled, accent, title }: {
       disabled={disabled}
       title={title}
       className={`rounded-sm border px-2 py-0.5 font-body text-sm transition-colors disabled:opacity-40 ${
-        accent
-          ? "border-arcane/50 bg-arcane/10 text-arcane hover:bg-arcane/20"
-          : "border-ink/25 bg-ink/5 text-ink/75 hover:border-ink/50 hover:text-ink"
+        cantrip
+          ? "border-ember/50 bg-ember/10 text-ember hover:bg-ember/20"
+          : accent
+            ? "border-arcane/50 bg-arcane/10 text-arcane hover:bg-arcane/20"
+            : "border-ink/25 bg-ink/5 text-ink/75 hover:border-ink/50 hover:text-ink"
       }`}
     >
       {label}

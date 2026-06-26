@@ -90,6 +90,28 @@ describe("SessionManager + example vault", () => {
     expect(gs2.actors.elara?.spell_slots["1"]?.used).toBe(1);
   });
 
+  it("persists inventory equip/unequip into the session overlay across rebuilds (#9-inv)", async () => {
+    const mgr = await SessionManager.open(await freshCampaign());
+    const gs = mgr.buildGameState();
+    // Thorin starts with his longsword equipped; unequip it.
+    expect(gs.actors.thorin?.inventory.find((i) => i.id === "longsword")?.equipped).toBe(true);
+
+    const res = await mgr.applyTool(gs, "equip_item", {
+      actor: "thorin",
+      item: "longsword",
+      equipped: false,
+    });
+    expect(res.ok).toBe(true);
+    // The toggle is captured into the overlay, not just the in-memory actor.
+    expect(mgr.session.actors.thorin?.inventory?.find((i) => i.id === "longsword")?.equipped).toBe(false);
+
+    // A fresh GameState (base sheet + overlay) keeps it unequipped — before the
+    // fix the overlay dropped inventory and the bag reset to the sheet on reload,
+    // so "odložit/vybavit" appeared to do nothing.
+    const gs2 = mgr.buildGameState();
+    expect(gs2.actors.thorin?.inventory.find((i) => i.id === "longsword")?.equipped).toBe(false);
+  });
+
   it("dispatches a deterministic engine command and records the dice log", async () => {
     const mgr = await SessionManager.open(await freshCampaign());
     const gs = mgr.buildGameState();
