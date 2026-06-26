@@ -548,9 +548,12 @@ Batch of combat-UX fixes from a live playtest of the solo encounter flow.
   `ChatPanel.tsx`.
 - **[x] #c4** — Spell targeting highlights in-range cells on the map (square+hex).
   `TacticalGrid.tsx`, `store.ts`.
-- **[x] #c5** — Combat positioning is DM-authored to match the encounter; prompt
-  makes `positions` mandatory (engine auto-place is only a degenerate fallback).
-  `llm/prompt.ts`.
+- **[x] #c5** — Combat battlefield is DM-authored to match the encounter: the DM
+  draws the map via `start_combat` — `grid` (size w×h, scale, square/hex shape)
+  and `terrain` (walls/difficult/hazard/cover) — and places every token. Exposed
+  `grid`/`terrain` in the tool's parameter schema (they validated but weren't
+  advertised to the model) and made positioning mandatory in the prompt; engine
+  auto-place is only a degenerate fallback. `tools.ts`, `llm/prompt.ts`.
 - **[x] #c6** — Slain enemies leave the board (die at 0 HP); PCs/companions stay
   downed for death saves. `combat.ts`.
 - **[x] #c7** — Player can't move a creature whose turn it isn't (map-move gated to

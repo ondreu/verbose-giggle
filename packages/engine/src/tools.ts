@@ -352,7 +352,9 @@ export const TOOLS: ToolDef[] = [
   def({
     name: "start_combat",
     description:
-      "Roll initiative and begin combat. " +
+      "Roll initiative and begin combat. You draw the battlefield to match the scene: " +
+      "size the `grid` (w×h) to the space and pick its `shape` (square/hex); use `terrain` " +
+      "to draw walls (room outline, pillars), difficult/hazard ground, and cover. " +
       "ALWAYS provide positions for every participant — place them to match the narrative " +
       "(melee ambush ≈ 1 cell apart, dungeon room ≈ 4–6 cells, open field ≈ 8+ cells). " +
       "Friendly party starts on the left side (low x); hostiles on the right (higher x). " +
@@ -382,6 +384,22 @@ export const TOOLS: ToolDef[] = [
       properties: {
         encounter: { type: "string" },
         participants: { type: "array", items: { type: "string" } },
+        grid: {
+          type: "object",
+          description:
+            "Battlefield size and shape — draw it to match the narrated space. " +
+            "w×h cells (cramped antechamber ≈ 6×6, corridor ≈ 12×4, room ≈ 10×10, " +
+            "hall/cavern ≈ 16×12+); cell_ft is the scale (usually 5). shape is the " +
+            "tessellation (square or hex). Size the grid to the place — don't put a " +
+            "small room on a huge board.",
+          properties: {
+            w: { type: "integer" },
+            h: { type: "integer" },
+            cell_ft: { type: "integer" },
+            shape: { type: "string", enum: ["square", "hex"] },
+          },
+          required: ["w", "h", "cell_ft"],
+        },
         positions: {
           type: "object",
           description:
@@ -392,6 +410,26 @@ export const TOOLS: ToolDef[] = [
             type: "object",
             properties: { x: { type: "integer" }, y: { type: "integer" } },
             required: ["x", "y"],
+          },
+        },
+        terrain: {
+          type: "array",
+          description:
+            "Draw the room's shape and obstacles: cells with a kind. 'wall' blocks " +
+            "movement and line of sight (outline the room, pillars, rubble); " +
+            "'difficult'/'hazard' cost double movement; 'cover-half'/'cover-three-quarter' " +
+            "grant +2/+5 AC behind them.",
+          items: {
+            type: "object",
+            properties: {
+              x: { type: "integer" },
+              y: { type: "integer" },
+              kind: {
+                type: "string",
+                enum: ["wall", "difficult", "hazard", "cover-half", "cover-three-quarter"],
+              },
+            },
+            required: ["x", "y", "kind"],
           },
         },
       },
