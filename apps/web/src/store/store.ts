@@ -35,7 +35,7 @@ const DIVIDER_KINDS = new Set(["turn", "combat"]);
  */
 export function buildNarration(
   session:
-    | { chat?: { role: string; content: string; t?: string }[]; log?: LogEntry[] }
+    | { chat?: { role: string; content: string; t?: string; thinking?: string }[]; log?: LogEntry[] }
     | null
     | undefined,
   nextId: () => number,
@@ -51,19 +51,21 @@ export function buildNarration(
         role: (m.role === "assistant" ? "dm" : "player") as NarrationLine["role"],
         text: m.content,
         kind: undefined as string | undefined,
+        // Persisted DM deliberation, so the "thinking" view survives reload (#1).
+        thinking: m.role === "assistant" ? m.thinking : undefined,
       };
     });
   const rolls = (session.log ?? [])
     .filter((l) => ROLL_KINDS.has(l.kind))
-    .map((l) => ({ t: l.t, role: "roll" as NarrationLine["role"], text: l.detail, kind: l.kind }));
+    .map((l) => ({ t: l.t, role: "roll" as NarrationLine["role"], text: l.detail, kind: l.kind, thinking: undefined as string | undefined }));
   const dividers = (session.log ?? [])
     .filter((l) => DIVIDER_KINDS.has(l.kind))
-    .map((l) => ({ t: l.t, role: "divider" as NarrationLine["role"], text: l.detail, kind: l.kind }));
+    .map((l) => ({ t: l.t, role: "divider" as NarrationLine["role"], text: l.detail, kind: l.kind, thinking: undefined as string | undefined }));
   // Stable sort (ES2019+) keeps same-timestamp items in source order, so chat
   // stays ahead of rolls recorded in the same instant.
   return [...chat, ...rolls, ...dividers]
     .sort((a, b) => (a.t < b.t ? -1 : a.t > b.t ? 1 : 0))
-    .map((c) => ({ id: nextId(), role: c.role, text: c.text, kind: c.kind }));
+    .map((c) => ({ id: nextId(), role: c.role, text: c.text, kind: c.kind, thinking: c.thinking }));
 }
 
 interface Cell {

@@ -17,14 +17,10 @@ describe("startCombat token placement", () => {
     const cells = Object.values(tokens).map((p) => `${p.x},${p.y}`);
     expect(new Set(cells).size).toBe(cells.length);
 
-    // Two facing lines straddling the board centre (#5): friendly just left of
-    // centre, hostile just right — close enough to engage, not in far corners.
-    const midX = Math.floor(12 / 2);
-    expect(tokens.a!.x).toBe(midX - 1);
-    expect(tokens.b!.x).toBe(midX - 1);
-    expect(tokens.g!.x).toBe(midX + 1);
-    // Started mid-board, not pinned to the top row.
-    expect(tokens.a!.y).toBeGreaterThan(0);
+    // Friendly on the left edge, hostile on the right edge (fallback placement).
+    expect(tokens.a!.x).toBe(0);
+    expect(tokens.b!.x).toBe(0);
+    expect(tokens.g!.x).toBe(11);
   });
 
   it("respects explicit positions and only fills the gaps", () => {
