@@ -1,8 +1,40 @@
+import { useEffect, useState } from "react";
 import { csSkill } from "@adm/schemas";
 import { useGame } from "../store/store";
 import { Icon } from "../components/Icon";
 import { SpellCard } from "../components/InfoCard";
 import { targetClause } from "./SheetPanel";
+
+/** Minimal spell metadata the actions list needs: level (0 = cantrip) so trips
+ *  and slotted spells can be split (#2), and range so the map can highlight the
+ *  cells the spell can reach when picking a target (#4). */
+interface SpellMeta {
+  level: number;
+  range_ft?: number;
+}
+
+/** Batch-fetch level + range for an actor's known spells (cached per id). */
+const spellMetaCache: Record<string, SpellMeta> = {};
+async function fetchSpellMeta(ids: string[]): Promise<Record<string, SpellMeta>> {
+  const missing = ids.filter((id) => !(id in spellMetaCache));
+  if (missing.length > 0) {
+    try {
+      const res = await fetch(`/api/srd/spells?ids=${encodeURIComponent(missing.join(","))}`);
+      if (res.ok) {
+        const data = (await res.json()) as Record<string, { level?: number; range_ft?: number }>;
+        for (const id of missing) {
+          const hit = data[id];
+          // Unknown ids (dataset not mounted) default to level 1 so they list as
+          // spells rather than being mis-sorted into cantrips.
+          spellMetaCache[id] = { level: hit?.level ?? 1, range_ft: hit?.range_ft };
+        }
+      }
+    } catch {
+      /* best-effort; chips still render, just unsplit */
+    }
+  }
+  return Object.fromEntries(ids.map((id) => [id, spellMetaCache[id] ?? { level: 1 }]));
+}
 
 /** Prettify an id ("fire-bolt" / "longsword") into a readable label. */
 const pretty = (id: string) => id.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -43,6 +75,22 @@ export function ActionsPanel() {
   const activeId = session?.active_player ?? null;
   const actor = activeId ? actors[activeId] : null;
 
+  // Level/range for the known spells, so cantrips split off from slotted spells
+  // (#2) and the map can show a spell's reach when targeting (#4).
+  const [spellMeta, setSpellMeta] = useState<Record<string, SpellMeta>>({});
+  const knownKey = actor?.spells_known.join(",") ?? "";
+  useEffect(() => {
+    const ids = knownKey ? knownKey.split(",") : [];
+    if (ids.length === 0) return setSpellMeta({});
+    let live = true;
+    void fetchSpellMeta(ids).then((m) => {
+      if (live) setSpellMeta(m);
+    });
+    return () => {
+      live = false;
+    };
+  }, [knownKey]);
+
   if (!actor) {
     return (
       <section className="panel p-3">
@@ -66,13 +114,25 @@ export function ActionsPanel() {
   const act = (text: string) => {
     if (!disabled) void sendAction(text);
   };
-  /** Ask the player for a target, then send the built action with it (#38). */
-  const aim = async (title: string, build: (clause: string) => string, allowNone = true) => {
+  /** Ask the player for a target, then send the built action with it (#38).
+   *  `range` (ft) makes the map highlight cells within reach from the caster (#4). */
+  const aim = async (
+    title: string,
+    build: (clause: string) => string,
+    allowNone = true,
+    range?: number,
+  ) => {
     if (disabled) return;
-    const t = await requestTarget(title, allowNone);
+    const origin = session?.combat?.tokens?.[actor.id];
+    const t = await requestTarget(title, allowNone, range != null ? { range, origin } : undefined);
     if (t === "cancelled") return;
     void sendAction(build(targetClause(t)));
   };
+
+  // Split known spells into cantrips (level 0) and slotted spells (#2). Spells
+  // whose metadata hasn't loaded yet fall in with the slotted list.
+  const cantrips = actor.spells_known.filter((s) => spellMeta[s]?.level === 0);
+  const leveled = actor.spells_known.filter((s) => spellMeta[s]?.level !== 0);
 
   return (
     <section className="panel flex flex-col">
@@ -120,16 +180,46 @@ export function ActionsPanel() {
           ))}
         </Group>
 
-        {/* Spells (#42a hover cards) */}
-        {actor.spells_known.length > 0 && (
+        {/* Cantrips — split out from slotted spells with their own tone (#2). */}
+        {cantrips.length > 0 && (
+          <Group label="Triky (cantripy)" icon="flame">
+            {cantrips.map((spell) => (
+              <SpellCard key={spell} id={spell}>
+                <Chip
+                  label={pretty(spell)}
+                  cantrip
+                  disabled={disabled}
+                  onClick={() =>
+                    void aim(
+                      `Cíl pro ${pretty(spell)}`,
+                      (c) => `Sešlu trik ${pretty(spell)} (${spell})${c}.`,
+                      true,
+                      spellMeta[spell]?.range_ft,
+                    )
+                  }
+                />
+              </SpellCard>
+            ))}
+          </Group>
+        )}
+
+        {/* Slotted spells (#42a hover cards) */}
+        {leveled.length > 0 && (
           <Group label="Kouzla" icon="flame">
-            {actor.spells_known.map((spell) => (
+            {leveled.map((spell) => (
               <SpellCard key={spell} id={spell}>
                 <Chip
                   label={pretty(spell)}
                   accent
                   disabled={disabled}
-                  onClick={() => void aim(`Cíl pro ${pretty(spell)}`, (c) => `Sešlu kouzlo ${pretty(spell)} (${spell})${c}.`)}
+                  onClick={() =>
+                    void aim(
+                      `Cíl pro ${pretty(spell)}`,
+                      (c) => `Sešlu kouzlo ${pretty(spell)} (${spell})${c}.`,
+                      true,
+                      spellMeta[spell]?.range_ft,
+                    )
+                  }
                 />
               </SpellCard>
             ))}
@@ -184,24 +274,29 @@ function Chip({
   onClick,
   disabled,
   accent,
+  cantrip,
   title,
 }: {
   label: string;
   onClick: () => void;
   disabled?: boolean;
+  /** Slotted-spell tone (arcane). */
   accent?: boolean;
+  /** Cantrip tone (ember) — visually distinct from slotted spells (#2). */
+  cantrip?: boolean;
   title?: string;
 }) {
+  const tone = cantrip
+    ? "border-ember/50 bg-ember/10 text-ember hover:bg-ember/20"
+    : accent
+      ? "border-arcane/50 bg-arcane/10 text-arcane hover:bg-arcane/20"
+      : "border-surface2 bg-bg-mantle/40 text-subtext1 hover:border-gold/50 hover:text-gold";
   return (
     <button
       onClick={onClick}
       disabled={disabled}
       title={title}
-      className={`rounded-sm border px-2 py-1 font-body text-[13px] transition-colors disabled:opacity-40 ${
-        accent
-          ? "border-arcane/50 bg-arcane/10 text-arcane hover:bg-arcane/20"
-          : "border-surface2 bg-bg-mantle/40 text-subtext1 hover:border-gold/50 hover:text-gold"
-      }`}
+      className={`rounded-sm border px-2 py-1 font-body text-[13px] transition-colors disabled:opacity-40 ${tone}`}
     >
       {label}
     </button>

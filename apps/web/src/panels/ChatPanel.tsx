@@ -121,11 +121,13 @@ export function ChatPanel() {
         )}
         {narration.map((line) => {
           if (line.role === "roll") return <RollLine key={line.id} kind={line.kind} text={line.text} />;
+          if (line.role === "divider") return <TurnDivider key={line.id} kind={line.kind} text={line.text} />;
           if (line.role === "player") return <PlayerMessage key={line.id} actor={line.actor} text={line.text} />;
           return (
             <DmMessage
               key={line.id}
               text={line.text}
+              thinking={line.thinking}
               isLast={line.id === lastDmId}
               busy={busy}
               imageLoading={imageLoading}
@@ -276,6 +278,7 @@ function PlayerMessage({ actor, text }: { actor?: string; text: string }) {
 /** A DM narration block with its always-visible action menu (#47 "AI zpráva"). */
 function DmMessage({
   text,
+  thinking,
   isLast,
   busy,
   imageLoading,
@@ -288,6 +291,8 @@ function DmMessage({
   currentModel,
 }: {
   text: string;
+  /** Raw DM token stream for this turn (#1); shown in a collapsible section. */
+  thinking?: string;
   isLast: boolean;
   busy: boolean;
   imageLoading: boolean;
@@ -305,6 +310,7 @@ function DmMessage({
 }) {
   const [open, setOpen] = useState(false);
   const [swapOpen, setSwapOpen] = useState(false);
+  const [thinkOpen, setThinkOpen] = useState(false);
   const close = () => {
     setOpen(false);
     setSwapOpen(false);
@@ -319,6 +325,27 @@ function DmMessage({
     <div className="mb-4 flex items-start gap-2">
       <div className="min-w-0 flex-1 font-body text-[1.12rem] font-medium leading-relaxed text-text">
         <Markdown text={text} />
+        {/* The DM's deliberation for this turn — kept per message so it persists
+            instead of being overwritten next turn (#1). Collapsed by default. */}
+        {thinking && (
+          <div className="mt-1.5">
+            <button
+              className="flex items-center gap-1 font-log text-[10px] uppercase tracking-wider text-subtext0 hover:text-gold"
+              onClick={() => setThinkOpen((o) => !o)}
+              aria-expanded={thinkOpen}
+              title={thinkOpen ? "Skrýt přemýšlení PJ" : "Zobrazit přemýšlení PJ"}
+            >
+              <Icon name="scroll" size={11} />
+              přemýšlení PJ
+              <span className="text-[9px]">{thinkOpen ? "▾" : "▸"}</span>
+            </button>
+            {thinkOpen && (
+              <pre className="mt-1 max-h-56 overflow-y-auto whitespace-pre-wrap rounded-sm border border-surface1 bg-bg-crust px-2.5 py-2 font-log text-[11px] leading-snug text-subtext0">
+                {thinking}
+              </pre>
+            )}
+          </div>
+        )}
       </div>
       {/* One always-visible menu button opens an attached popover of actions. */}
       <div className="relative shrink-0">
@@ -458,6 +485,22 @@ function emphasize(text: string) {
       {text.slice(0, i)}
       <span className="font-display font-semibold">{text.slice(i)}</span>
     </>
+  );
+}
+
+/** A quiet inline divider marking a turn change or fight start/end (#3), so the
+ *  end of a turn is visible in the chat and not only in the dice log. */
+function TurnDivider({ kind, text }: { kind?: string; text: string }) {
+  const icon = kind === "combat" ? "skull" : "d20";
+  return (
+    <div className="my-3 flex items-center gap-2 text-subtext0">
+      <span className="h-px flex-1 bg-surface1" />
+      <span className="flex items-center gap-1.5 font-log text-[11px] uppercase tracking-wider">
+        <Icon name={icon} size={12} />
+        {text}
+      </span>
+      <span className="h-px flex-1 bg-surface1" />
+    </div>
   );
 }
 

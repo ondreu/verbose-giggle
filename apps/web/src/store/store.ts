@@ -3,18 +3,26 @@ import type { Actor, Campaign, Encounter, Location, LogEntry, SessionState } fro
 
 interface NarrationLine {
   id: number;
-  role: "dm" | "player" | "roll";
+  role: "dm" | "player" | "roll" | "divider";
   text: string;
   /** Display name of the acting character (player lines only); falls back in UI. */
   actor?: string;
   /** Log kind for roll lines (attack/check/save/…), used for styling. */
   kind?: string;
+  /** Raw DM token stream captured for this turn (DM lines), kept so the player
+   *  can expand the DM's deliberation per message — persistent, not overwritten
+   *  by the next turn (#1). */
+  thinking?: string;
 }
 
 /** Dice-bearing log kinds surfaced inline in the chat as animated roll cards. */
 const ROLL_KINDS = new Set([
   "roll", "check", "save", "attack", "damage", "spell", "death-save", "initiative",
 ]);
+
+/** Combat-flow log kinds surfaced inline as a quiet divider (turn changes, fight
+ *  start/end) so ending a turn is visible in the chat, not only in the log (#3). */
+const DIVIDER_KINDS = new Set(["turn", "combat"]);
 
 /**
  * Rebuild the chat transcript on reload from the persisted session: the
@@ -48,9 +56,12 @@ export function buildNarration(
   const rolls = (session.log ?? [])
     .filter((l) => ROLL_KINDS.has(l.kind))
     .map((l) => ({ t: l.t, role: "roll" as NarrationLine["role"], text: l.detail, kind: l.kind }));
+  const dividers = (session.log ?? [])
+    .filter((l) => DIVIDER_KINDS.has(l.kind))
+    .map((l) => ({ t: l.t, role: "divider" as NarrationLine["role"], text: l.detail, kind: l.kind }));
   // Stable sort (ES2019+) keeps same-timestamp items in source order, so chat
   // stays ahead of rolls recorded in the same instant.
-  return [...chat, ...rolls]
+  return [...chat, ...rolls, ...dividers]
     .sort((a, b) => (a.t < b.t ? -1 : a.t > b.t ? 1 : 0))
     .map((c) => ({ id: nextId(), role: c.role, text: c.text, kind: c.kind }));
 }
@@ -168,8 +179,10 @@ interface GameStore {
   imageError: string | null;
   campaigns: CampaignInfo[];
   snapshots: SnapshotMeta[];
-  /** Active target request (drives the global TargetPicker + map click-to-target). */
-  targetRequest: { title: string; allowNone: boolean } | null;
+  /** Active target request (drives the global TargetPicker + map click-to-target).
+   *  `range`/`origin` (optional) let the map highlight the cells within reach of
+   *  the pending spell/attack from the caster's cell (#4). */
+  targetRequest: { title: string; allowNone: boolean; range?: number; origin?: Cell } | null;
   /** Party tab the rail is currently showing (#47). Out of combat this tracks the
    *  active player; in combat it can point at another member for view-only
    *  inspection without changing whose turn it is. `null` = follow active_player. */
@@ -197,8 +210,13 @@ interface GameStore {
   setViewedPlayer: (id: string | null) => void;
   /** Toggle whether out-of-combat actions are spoken as the whole party (#47). */
   setPartyVoice: (v: boolean) => void;
-  /** Ask the player to choose a target (list / free-text / map click). */
-  requestTarget: (title: string, allowNone?: boolean) => Promise<TargetResult>;
+  /** Ask the player to choose a target (list / free-text / map click). `opts.range`
+   *  + `opts.origin` make the map highlight cells within reach of the action (#4). */
+  requestTarget: (
+    title: string,
+    allowNone?: boolean,
+    opts?: { range?: number; origin?: Cell },
+  ) => Promise<TargetResult>;
   /** Fulfil the active target request (called by the picker or a map click). */
   resolveTarget: (result: TargetResult) => void;
   hydrate: () => Promise<void>;
@@ -308,12 +326,12 @@ export const useGame = create<GameStore>((set, get) => ({
 
   setPartyVoice: (v) => set({ partyVoice: v }),
 
-  requestTarget: (title, allowNone = true) =>
+  requestTarget: (title, allowNone = true, opts) =>
     new Promise<TargetResult>((resolve) => {
       // A new request supersedes any previous one (cancel the old).
       targetResolver?.("cancelled");
       targetResolver = resolve;
-      set({ targetRequest: { title, allowNone } });
+      set({ targetRequest: { title, allowNone, range: opts?.range, origin: opts?.origin } });
     }),
 
   resolveTarget: (result) => {
@@ -370,9 +388,15 @@ export const useGame = create<GameStore>((set, get) => ({
     source.addEventListener("narration", (e) => {
       const { text } = JSON.parse((e as MessageEvent).data);
       // Commit the authoritative final text as a real DM line and drop the
-      // "is writing…" indicator + its diagnostic buffer.
+      // "is writing…" indicator + its diagnostic buffer. The raw token stream
+      // (the DM's deliberation, incl. discarded tool-round preamble) is attached
+      // to THIS line so it persists per message instead of being overwritten by
+      // the next turn (#1) — the player can expand it under the message.
       set((s) => ({
-        narration: [...s.narration, { id: lineSeq++, role: "dm", text }],
+        narration: [
+          ...s.narration,
+          { id: lineSeq++, role: "dm", text, thinking: s.streamingRaw.trim() || undefined },
+        ],
         dmWriting: false,
         streamingRaw: "",
       }));
@@ -392,6 +416,13 @@ export const useGame = create<GameStore>((set, get) => ({
           next.narration = [
             ...s.narration,
             { id: lineSeq++, role: "roll", text: entry.detail, kind: entry.kind },
+          ];
+        } else if (DIVIDER_KINDS.has(entry.kind)) {
+          // Turn changes / fight start+end as a quiet divider so the end of a
+          // turn is visible in the chat, not only in the dice log (#3).
+          next.narration = [
+            ...s.narration,
+            { id: lineSeq++, role: "divider", text: entry.detail, kind: entry.kind },
           ];
         }
         return next;

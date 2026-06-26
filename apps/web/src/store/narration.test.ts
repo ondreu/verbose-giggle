@@ -53,6 +53,20 @@ describe("buildNarration (reload persistence, chat + dice rolls)", () => {
     expect(lines.some((l) => l.text.includes("Přesun"))).toBe(false);
   });
 
+  it("surfaces turn-change and combat log kinds as dividers (#3)", () => {
+    const session = {
+      chat: [{ role: "assistant", content: "Boj propuká!", t: "2026-06-26T10:00:00.000Z" }],
+      log: [
+        roll("2026-06-26T10:00:01.000Z", "combat", "Boj začíná."),
+        roll("2026-06-26T10:00:02.000Z", "turn", "Kolo 1 — na tahu Elara"),
+      ],
+    };
+    const lines = buildNarration(session, ids());
+    expect(lines.map((l) => l.role)).toEqual(["dm", "divider", "divider"]);
+    expect(lines[2]).toMatchObject({ role: "divider", kind: "turn" });
+    expect(lines[2]!.text).toContain("na tahu Elara");
+  });
+
   it("keeps chat ahead of rolls recorded in the same instant (stable sort)", () => {
     const t = "2026-06-26T10:00:00.000Z";
     const session = {
