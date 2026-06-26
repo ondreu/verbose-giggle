@@ -21,6 +21,10 @@ export const ChatMessage = z.object({
   content: z.string(),
   name: z.string().optional(),
   tool_call_id: z.string().optional(),
+  /** ISO timestamp of when the message was recorded. Optional for back-compat
+   *  with sessions written before timestamps; used to interleave persisted dice
+   *  rolls (session.log) back into the chat on reload in the right order. */
+  t: z.string().optional(),
 });
 export type ChatMessage = z.infer<typeof ChatMessage>;
 

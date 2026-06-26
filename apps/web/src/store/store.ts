@@ -16,6 +16,45 @@ const ROLL_KINDS = new Set([
   "roll", "check", "save", "attack", "damage", "spell", "death-save", "initiative",
 ]);
 
+/**
+ * Rebuild the chat transcript on reload from the persisted session: the
+ * user/DM messages (`session.chat`) interleaved with the dice rolls
+ * (`session.log`) so skill checks and other roll cards survive reopening the
+ * campaign, not just the live SSE stream. Ordered by the recorded timestamps —
+ * chat messages are stamped at write time (`t`), log entries always carry one.
+ * Messages written before timestamps existed fall back to the previous stamp so
+ * legacy history keeps its relative order.
+ */
+export function buildNarration(
+  session:
+    | { chat?: { role: string; content: string; t?: string }[]; log?: LogEntry[] }
+    | null
+    | undefined,
+  nextId: () => number,
+): NarrationLine[] {
+  if (!session) return [];
+  let lastT = "";
+  const chat = (session.chat ?? [])
+    .filter((m) => m.role === "user" || m.role === "assistant")
+    .map((m) => {
+      if (m.t) lastT = m.t;
+      return {
+        t: m.t ?? lastT,
+        role: (m.role === "assistant" ? "dm" : "player") as NarrationLine["role"],
+        text: m.content,
+        kind: undefined as string | undefined,
+      };
+    });
+  const rolls = (session.log ?? [])
+    .filter((l) => ROLL_KINDS.has(l.kind))
+    .map((l) => ({ t: l.t, role: "roll" as NarrationLine["role"], text: l.detail, kind: l.kind }));
+  // Stable sort (ES2019+) keeps same-timestamp items in source order, so chat
+  // stays ahead of rolls recorded in the same instant.
+  return [...chat, ...rolls]
+    .sort((a, b) => (a.t < b.t ? -1 : a.t > b.t ? 1 : 0))
+    .map((c) => ({ id: nextId(), role: c.role, text: c.text, kind: c.kind }));
+}
+
 interface Cell {
   x: number;
   y: number;
@@ -106,6 +145,11 @@ interface GameStore {
   locations: Record<string, Location>;
   encounters: Record<string, Encounter>;
   narration: NarrationLine[];
+  /** The DM's answer currently streaming in token-by-token (#32), or null when
+   *  no stream is in flight. Rendered as a transient "is writing…" bubble below
+   *  the committed transcript and only committed to `narration` once finalized,
+   *  so a tool-call round's discarded preamble never blinks the chat history. */
+  streamingText: string | null;
   ttsEnabled: boolean;
   ttsProvider: TtsProvider;
   /** True while narration audio is actively playing (drives the stop button). */
@@ -214,10 +258,6 @@ interface GameStore {
 }
 
 let lineSeq = 0;
-// The DM line currently being streamed token-by-token (#32), or null when no
-// stream is in flight. Deltas append to it; `narration` finalizes it; a
-// `narration_discard` (tool-call round) removes it.
-let streamingLineId: number | null = null;
 // Guards the one-shot campaign intro against concurrent re-entry (#31).
 let introInFlight = false;
 // Pending resolver for an in-flight target request (#38).
@@ -238,6 +278,7 @@ export const useGame = create<GameStore>((set, get) => ({
   locations: {},
   encounters: {},
   narration: [],
+  streamingText: null,
   ttsEnabled: initialPrefs.ttsEnabled,
   ttsProvider: initialPrefs.ttsProvider,
   speaking: false,
@@ -289,54 +330,39 @@ export const useGame = create<GameStore>((set, get) => ({
       encounters: data.encounters ?? {},
       models: data.models ?? { current: "", alts: [], pool: [] },
       ttsEnabled: data.campaign?.tts?.enabled ?? false,
-      narration: (data.session?.chat ?? [])
-        .filter((m: { role: string }) => m.role === "user" || m.role === "assistant")
-        .map((m: { role: string; content: string }) => ({
-          id: lineSeq++,
-          role: m.role === "assistant" ? "dm" : "player",
-          text: m.content,
-        })),
+      // Rebuild from chat + persisted dice rolls so skill checks and other roll
+      // cards reappear when reopening the campaign, not only during the live
+      // stream (they were previously only in session.log, never re-rendered).
+      streamingText: null,
+      narration: buildNarration(data.session, () => lineSeq++),
     });
   },
 
   connect: () => {
     const source = new EventSource("/api/events");
     source.addEventListener("ready", () => set({ connected: true }));
-    // A streamed chunk of the DM's answer (#32): start a fresh DM line on the
-    // first chunk, then append to it as more arrive.
+    // A streamed chunk of the DM's answer (#32): accumulate into the transient
+    // streaming buffer (a separate "is writing…" bubble), NOT a committed chat
+    // line — so a tool-call round whose preamble gets discarded never blinks the
+    // visible history.
     source.addEventListener("narration_delta", (e) => {
       const { text } = JSON.parse((e as MessageEvent).data) as { text: string };
-      set((s) => {
-        if (streamingLineId === null) {
-          streamingLineId = lineSeq++;
-          return { narration: [...s.narration, { id: streamingLineId, role: "dm", text }] };
-        }
-        const id = streamingLineId;
-        return {
-          narration: s.narration.map((l) => (l.id === id ? { ...l, text: l.text + text } : l)),
-        };
-      });
+      set((s) => ({ streamingText: (s.streamingText ?? "") + text }));
     });
     // The partial stream was a tool-call round's preamble, not the final answer:
-    // drop the line so only real narration remains (#32).
+    // clear the buffer. Nothing was ever committed, so the transcript is steady
+    // — the user just sees the live bubble reset while the engine works (#32).
     source.addEventListener("narration_discard", () => {
-      if (streamingLineId === null) return;
-      const id = streamingLineId;
-      streamingLineId = null;
-      set((s) => ({ narration: s.narration.filter((l) => l.id !== id) }));
+      set({ streamingText: null });
     });
     source.addEventListener("narration", (e) => {
       const { text } = JSON.parse((e as MessageEvent).data);
-      set((s) => {
-        // Finalize the in-flight streamed line with the authoritative text…
-        if (streamingLineId !== null) {
-          const id = streamingLineId;
-          streamingLineId = null;
-          return { narration: s.narration.map((l) => (l.id === id ? { ...l, text } : l)) };
-        }
-        // …or append a fresh line when nothing was streamed (recap, mock).
-        return { narration: [...s.narration, { id: lineSeq++, role: "dm", text }] };
-      });
+      // Commit the authoritative final text as a real DM line and drop the
+      // transient buffer.
+      set((s) => ({
+        narration: [...s.narration, { id: lineSeq++, role: "dm", text }],
+        streamingText: null,
+      }));
       if (get().ttsEnabled) {
         void speak(text, get().ttsProvider, () => set({ speaking: false }));
         set({ speaking: true });
@@ -382,8 +408,7 @@ export const useGame = create<GameStore>((set, get) => ({
     });
     // The campaign was hot-swapped or rolled back server-side: re-pull everything.
     source.addEventListener("reload", () => {
-      streamingLineId = null;
-      set({ narration: [] });
+      set({ narration: [], streamingText: null });
       void get().hydrate();
       void get().listCampaigns();
       void get().listSnapshots();
