@@ -153,8 +153,13 @@ export function ProviderSettings() {
         </label>
         {imageEnabled && (
           <>
+            <p className="font-log text-xs italic text-subtext0">
+              OpenRouter: zadej kořen API <code>https://openrouter.ai/api/v1</code> (bez <code>/images</code>) a model
+              např. <code>google/gemini-2.5-flash-image</code>. Funguje i Mistral (<code>https://api.mistral.ai/v1</code>)
+              nebo OpenAI-kompatibilní endpoint s <code>/images/generations</code> (DALL·E, FLUX).
+            </p>
             <Field label="Base URL">
-              <input className={INPUT} placeholder="https://api.mistral.ai/v1" value={imageBaseUrl} onChange={(e) => setImageBaseUrl(e.target.value)} />
+              <input className={INPUT} placeholder="https://openrouter.ai/api/v1" value={imageBaseUrl} onChange={(e) => setImageBaseUrl(e.target.value)} />
             </Field>
             <Field label="Model">
               <input className={INPUT} placeholder="výchozí dle poskytovatele" value={imageModel} onChange={(e) => setImageModel(e.target.value)} />
