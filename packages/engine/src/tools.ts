@@ -353,8 +353,9 @@ export const TOOLS: ToolDef[] = [
     name: "start_combat",
     description:
       "Roll initiative and begin combat. You draw the battlefield to match the scene: " +
-      "size the `grid` (w×h) to the space and pick its `shape` (square/hex); use `terrain` " +
+      "size the `grid` (w×h) to the space; use `terrain` " +
       "to draw walls (room outline, pillars), difficult/hazard ground, and cover. " +
+      "The grid tessellation (square/hex) is fixed by the campaign — don't set it. " +
       "ALWAYS provide positions for every participant — place them to match the narrative " +
       "(melee ambush ≈ 1 cell apart, dungeon room ≈ 4–6 cells, open field ≈ 8+ cells). " +
       "Friendly party starts on the left side (low x); hostiles on the right (higher x). " +
@@ -369,7 +370,6 @@ export const TOOLS: ToolDef[] = [
           w: z.number().int(),
           h: z.number().int(),
           cell_ft: z.number().int(),
-          shape: z.enum(["square", "hex"]).optional(),
         })
         .optional(),
       positions: z
@@ -387,16 +387,15 @@ export const TOOLS: ToolDef[] = [
         grid: {
           type: "object",
           description:
-            "Battlefield size and shape — draw it to match the narrated space. " +
+            "Battlefield size — draw it to match the narrated space. " +
             "w×h cells (cramped antechamber ≈ 6×6, corridor ≈ 12×4, room ≈ 10×10, " +
-            "hall/cavern ≈ 16×12+); cell_ft is the scale (usually 5). shape is the " +
-            "tessellation (square or hex). Size the grid to the place — don't put a " +
-            "small room on a huge board.",
+            "hall/cavern ≈ 16×12+); cell_ft is the scale (usually 5). The grid " +
+            "tessellation is fixed by the campaign — size the grid to the place, " +
+            "don't put a small room on a huge board.",
           properties: {
             w: { type: "integer" },
             h: { type: "integer" },
             cell_ft: { type: "integer" },
-            shape: { type: "string", enum: ["square", "hex"] },
           },
           required: ["w", "h", "cell_ft"],
         },

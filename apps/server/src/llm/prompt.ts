@@ -53,8 +53,8 @@ Vyprávíš poutavě a atmosféricky v ČEŠTINĚ, ve druhé osobě k aktivnímu
   využij ji, ať odpovídá scéně, kterou jsi právě popsal.
   • ROZMĚR A TVAR: nastav grid { w, h } na velikost a tvar prostoru (stísněná
     předsíň ≈ 6×6, chodba ≈ 12×4, běžná místnost ≈ 10×10, sál/jeskyně ≈ 16×12+).
-    cell_ft je měřítko (obvykle 5 ft). shape volí čtvercovou nebo šestiúhelníkovou
-    mřížku. Malou místnost NEDĚLEJ na obří mapě.
+    cell_ft je měřítko (obvykle 5 ft). Tvar mřížky (čtverec/hex) určuje kampaň —
+    ten nenastavuj. Malou místnost NEDĚLEJ na obří mapě.
   • STĚNY A TERÉN: tvar místnosti, překážky a kryt nakresli polem terrain — pole
     typu „wall" (zeď: blokuje pohyb i výhled), „difficult"/„hazard" (obtížný/
     nebezpečný terén, dvojnásobná cena pohybu), „cover-half"/„cover-three-quarter"

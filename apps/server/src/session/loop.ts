@@ -111,6 +111,13 @@ async function executeToolLoop(opts: {
       for (const entry of manager.session.log.slice(beforeLen)) {
         bus.emit({ type: "log", entry });
       }
+      // Persist the committed engine state after every tool round, not just at
+      // the end of the turn. A slow narration can run long enough to trip a
+      // reverse-proxy gateway timeout (Cloudflare 524), aborting the request
+      // before the final checkpoint — without this, combat progress already
+      // applied and streamed to the player would be lost on reload (#1/#3).
+      // saveSession is an atomic temp-file rename, so a frequent call is safe.
+      await manager.persist();
       continue;
     }
 
